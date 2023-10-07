@@ -19,23 +19,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "can.h"
-#include "crc.h"
-#include "dma.h"
-#include "fatfs.h"
-#include "lwip.h"
 #include "rtc.h"
-#include "sdio.h"
-#include "spi.h"
 #include "usart.h"
-#include "usb_device.h"
-#include "usb_host.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
-#include "usbd_cdc_if.h"
-#include "eeprma2_m24.h"
 
 #include <stdio.h>
 
@@ -48,15 +37,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
-/* Use USB Device CDC instead of USART1 for debug output */
-/* #define USB_DEBUG */
-
-/* Enable the USB Host stack (USB Disk) */
-/* #define ENABLE_USBHOST */
-
-/* Enable the LWIP Ethernet Stack */
-/* #define ENABLE_ETHERNET */
 
 /* USER CODE END PD */
 
@@ -73,11 +53,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void MX_USB_HOST_Process(void);
-
 /* USER CODE BEGIN PFP */
-
-void MX_EEPRMA2_Check_24C02(void);
 
 /* USER CODE END PFP */
 
@@ -114,33 +90,12 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_CAN1_Init();
   MX_CAN2_Init();
   MX_RTC_Init();
-  MX_SDIO_SD_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
-#ifdef ENABLE_ETHERNET
-  MX_LWIP_Init();
-#endif
-  MX_USB_DEVICE_Init();
-  MX_FATFS_Init();
-  MX_CRC_Init();
-#ifdef ENABLE_USBHOST
-  MX_USB_HOST_Init();
-#endif
-  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
-
-  printf("\r\nInit Complete.\r\n");
-  printf("Checking Storage Devices:\r\n");
-  MX_EEPRMA2_Check_24C02();
-  MX_SPI2_Check_W25Q64();
-  MX_SDIO_SD_Check();
-
-  printf("Checking CAN Devices:\r\n");
-  MX_CAN_Loopback_Check();
 
   /* USER CODE END 2 */
 
@@ -148,14 +103,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-#ifdef ENABLE_ETHERNET
-    MX_LWIP_Process();
-#endif
     /* USER CODE END WHILE */
 
-#ifdef ENABLE_USBHOST
-    MX_USB_HOST_Process();
-#endif
     /* USER CODE BEGIN 3 */
   }
 
@@ -224,64 +173,15 @@ int _write(int file, char *ptr, int len)
 {
     HAL_GPIO_WritePin(GPIOE, LED1_Pin, GPIO_PIN_RESET);
 
-#ifdef USB_DEBUG
-    static uint8_t rc = USBD_OK;
-    bool wait = false;
-
-    /* Wait for terminal to be opened */
-    while (!CDC_Is_Connected())
-    {
-      wait = true;
-    }
-
-    /* If the terminal has just opened, give it some extra time */
-    if (wait)
-    {
-      HAL_Delay(250);
-    }
-
-    /* Send the data, retrying if busy */
-    do {
-        rc = CDC_Transmit_FS((uint8_t*)ptr, len);
-    } while (USBD_BUSY == rc);
-
-    if (USBD_FAIL == rc) {
-        /// NOTE: Should never reach here.
-        /// TODO: Handle this error.
-        return 0;
-    }
-#else
     HAL_StatusTypeDef rc;
     do {
       /* Send the data, retrying if busy */
       rc = HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
     } while (rc == HAL_BUSY);
-#endif
 
     HAL_GPIO_WritePin(GPIOE, LED1_Pin, GPIO_PIN_SET);
 
     return len;
-}
-
-/**
-  * @brief Check for presence of I2C Flash
-  * @retval None
-  */
-void MX_EEPRMA2_Check_24C02(void)
-{
-  int32_t ret = EEPRMA2_M24_Init(EEPRMA2_M24C02_0);
-  if (ret == BSP_ERROR_NONE)
-  {
-    ret = EEPRMA2_M24_IsDeviceReady(EEPRMA2_M24C02_0, 10);
-    if (ret == BSP_ERROR_NONE)
-    {
-      printf("I2C 24C02:    256B\r\n");
-    }
-    else
-    {
-      printf("I2C 24C02:    Error\r\n");
-    }
-  }
 }
 
 /* USER CODE END 4 */

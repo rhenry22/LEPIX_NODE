@@ -45,8 +45,6 @@ void MX_CAN2_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
-HAL_StatusTypeDef MX_CAN_Loopback_Check(void);
-
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus
