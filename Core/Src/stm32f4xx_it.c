@@ -55,13 +55,8 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern ETH_HandleTypeDef heth;
-extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
-extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
 extern CAN_HandleTypeDef hcan1;
 extern CAN_HandleTypeDef hcan2;
-extern DMA_HandleTypeDef hdma_sdio;
-extern SD_HandleTypeDef hsd;
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 /* USER CODE BEGIN EV */
@@ -207,6 +202,19 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles RCC global interrupt.
+  */
+void RCC_IRQHandler(void)
+{
+  /* USER CODE BEGIN RCC_IRQn 0 */
+
+  /* USER CODE END RCC_IRQn 0 */
+  /* USER CODE BEGIN RCC_IRQn 1 */
+
+  /* USER CODE END RCC_IRQn 1 */
+}
+
+/**
   * @brief This function handles CAN1 TX interrupts.
   */
 void CAN1_TX_IRQHandler(void)
@@ -291,62 +299,6 @@ void USART2_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles SDIO global interrupt.
-  */
-void SDIO_IRQHandler(void)
-{
-  /* USER CODE BEGIN SDIO_IRQn 0 */
-
-  /* USER CODE END SDIO_IRQn 0 */
-  HAL_SD_IRQHandler(&hsd);
-  /* USER CODE BEGIN SDIO_IRQn 1 */
-
-  /* USER CODE END SDIO_IRQn 1 */
-}
-
-/**
-  * @brief This function handles DMA2 stream3 global interrupt.
-  */
-void DMA2_Stream3_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA2_Stream3_IRQn 0 */
-
-  /* USER CODE END DMA2_Stream3_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_sdio);
-  /* USER CODE BEGIN DMA2_Stream3_IRQn 1 */
-
-  /* USER CODE END DMA2_Stream3_IRQn 1 */
-}
-
-/**
-  * @brief This function handles Ethernet global interrupt.
-  */
-void ETH_IRQHandler(void)
-{
-  /* USER CODE BEGIN ETH_IRQn 0 */
-
-  /* USER CODE END ETH_IRQn 0 */
-  HAL_ETH_IRQHandler(&heth);
-  /* USER CODE BEGIN ETH_IRQn 1 */
-
-  /* USER CODE END ETH_IRQn 1 */
-}
-
-/**
-  * @brief This function handles Ethernet wake-up interrupt through EXTI line 19.
-  */
-void ETH_WKUP_IRQHandler(void)
-{
-  /* USER CODE BEGIN ETH_WKUP_IRQn 0 */
-
-  /* USER CODE END ETH_WKUP_IRQn 0 */
-  HAL_ETH_IRQHandler(&heth);
-  /* USER CODE BEGIN ETH_WKUP_IRQn 1 */
-
-  /* USER CODE END ETH_WKUP_IRQn 1 */
-}
-
-/**
   * @brief This function handles CAN2 TX interrupts.
   */
 void CAN2_TX_IRQHandler(void)
@@ -400,62 +352,6 @@ void CAN2_SCE_IRQHandler(void)
   /* USER CODE BEGIN CAN2_SCE_IRQn 1 */
 
   /* USER CODE END CAN2_SCE_IRQn 1 */
-}
-
-/**
-  * @brief This function handles USB On The Go FS global interrupt.
-  */
-void OTG_FS_IRQHandler(void)
-{
-  /* USER CODE BEGIN OTG_FS_IRQn 0 */
-
-  /* USER CODE END OTG_FS_IRQn 0 */
-  HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
-  /* USER CODE BEGIN OTG_FS_IRQn 1 */
-
-  /* USER CODE END OTG_FS_IRQn 1 */
-}
-
-/**
-  * @brief This function handles USB On The Go HS End Point 1 Out global interrupt.
-  */
-void OTG_HS_EP1_OUT_IRQHandler(void)
-{
-  /* USER CODE BEGIN OTG_HS_EP1_OUT_IRQn 0 */
-
-  /* USER CODE END OTG_HS_EP1_OUT_IRQn 0 */
-  HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
-  /* USER CODE BEGIN OTG_HS_EP1_OUT_IRQn 1 */
-
-  /* USER CODE END OTG_HS_EP1_OUT_IRQn 1 */
-}
-
-/**
-  * @brief This function handles USB On The Go HS End Point 1 In global interrupt.
-  */
-void OTG_HS_EP1_IN_IRQHandler(void)
-{
-  /* USER CODE BEGIN OTG_HS_EP1_IN_IRQn 0 */
-
-  /* USER CODE END OTG_HS_EP1_IN_IRQn 0 */
-  HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
-  /* USER CODE BEGIN OTG_HS_EP1_IN_IRQn 1 */
-
-  /* USER CODE END OTG_HS_EP1_IN_IRQn 1 */
-}
-
-/**
-  * @brief This function handles USB On The Go HS global interrupt.
-  */
-void OTG_HS_IRQHandler(void)
-{
-  /* USER CODE BEGIN OTG_HS_IRQn 0 */
-
-  /* USER CODE END OTG_HS_IRQn 0 */
-  HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
-  /* USER CODE BEGIN OTG_HS_IRQn 1 */
-
-  /* USER CODE END OTG_HS_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
