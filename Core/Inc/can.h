@@ -44,6 +44,8 @@ void MX_CAN1_Init(void);
 void MX_CAN2_Init(void);
 
 /* USER CODE BEGIN Prototypes */
+HAL_StatusTypeDef MX_CAN_Setup_Receive(CAN_HandleTypeDef *hcan, uint32_t fifo);
+HAL_StatusTypeDef MX_CAN_Transmit(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *hdr, uint8_t* data);
 
 /* USER CODE END Prototypes */
 

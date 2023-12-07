@@ -31,7 +31,7 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -47,6 +47,8 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
+/* #define ESP_FLASH_MODE */
+
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
@@ -54,25 +56,79 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
+void JumpToBootloader(void);
+void stdio_parser(uint8_t *ptr, uint16_t len);
+void comm_session(bool start_stop);
+void emergency_stop(void);
+void trigger_json_update(void);
+void dump_packet(uint8_t *data, uint8_t len);
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define SW1_Pin GPIO_PIN_10
-#define SW1_GPIO_Port GPIOE
-#define SW2_Pin GPIO_PIN_11
-#define SW2_GPIO_Port GPIOE
-#define SW3_Pin GPIO_PIN_12
-#define SW3_GPIO_Port GPIOE
-#define LED1_Pin GPIO_PIN_13
+#define CHADEMO_CP_Pin GPIO_PIN_6
+#define CHADEMO_CP_GPIO_Port GPIOE
+#define EVSE_PP_Pin GPIO_PIN_0
+#define EVSE_PP_GPIO_Port GPIOA
+#define EVSE_CP_Pin GPIO_PIN_1
+#define EVSE_CP_GPIO_Port GPIOA
+#define ADC1_VAC_Pin GPIO_PIN_4
+#define ADC1_VAC_GPIO_Port GPIOA
+#define SPI1_BATT_CS__Pin GPIO_PIN_4
+#define SPI1_BATT_CS__GPIO_Port GPIOC
+#define LEAK_TEST_EN_Pin GPIO_PIN_5
+#define LEAK_TEST_EN_GPIO_Port GPIOC
+#define CHADEMO_LOCK_Pin GPIO_PIN_0
+#define CHADEMO_LOCK_GPIO_Port GPIOB
+#define CHADEMO_SEQ1_Pin GPIO_PIN_1
+#define CHADEMO_SEQ1_GPIO_Port GPIOB
+#define CHADEMO_SEQ2_Pin GPIO_PIN_2
+#define CHADEMO_SEQ2_GPIO_Port GPIOB
+#define CHADEMO_CHARGE_ALLOWED__Pin GPIO_PIN_7
+#define CHADEMO_CHARGE_ALLOWED__GPIO_Port GPIOE
+#define EVSE_CHARGE_EN_Pin GPIO_PIN_8
+#define EVSE_CHARGE_EN_GPIO_Port GPIOE
+#define ESP_FLASH__Pin GPIO_PIN_9
+#define ESP_FLASH__GPIO_Port GPIOE
+#define ESP_EN_Pin GPIO_PIN_10
+#define ESP_EN_GPIO_Port GPIOE
+#define LED1_Pin GPIO_PIN_11
 #define LED1_GPIO_Port GPIOE
-#define LED2_Pin GPIO_PIN_14
+#define LED2_Pin GPIO_PIN_12
 #define LED2_GPIO_Port GPIOE
-#define LED3_Pin GPIO_PIN_15
+#define LED3_Pin GPIO_PIN_13
 #define LED3_GPIO_Port GPIOE
+#define GPIO_INT__Pin GPIO_PIN_14
+#define GPIO_INT__GPIO_Port GPIOE
+#define OD1_EN_Pin GPIO_PIN_10
+#define OD1_EN_GPIO_Port GPIOB
+#define OD2_EN_Pin GPIO_PIN_11
+#define OD2_EN_GPIO_Port GPIOB
+#define OD3_EN_Pin GPIO_PIN_12
+#define OD3_EN_GPIO_Port GPIOB
+#define GPIO1_Pin GPIO_PIN_13
+#define GPIO1_GPIO_Port GPIOB
+#define GPIO2_Pin GPIO_PIN_14
+#define GPIO2_GPIO_Port GPIOB
+#define GPIO3_Pin GPIO_PIN_15
+#define GPIO3_GPIO_Port GPIOB
+#define ISO_TEST_EN_Pin GPIO_PIN_6
+#define ISO_TEST_EN_GPIO_Port GPIOC
+#define TEST_HV_EN_Pin GPIO_PIN_13
+#define TEST_HV_EN_GPIO_Port GPIOA
+#define HV_EN_Pin GPIO_PIN_14
+#define HV_EN_GPIO_Port GPIOA
 #define RS485_TX_RX__Pin GPIO_PIN_7
 #define RS485_TX_RX__GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
+
+#define LED_GPIO_Port GPIOE
+
+#define ADC_EVSE_PP     (0)
+#define ADC_BATT_CURR   (1)
+
+#define ERROR_LEN       (128)
 
 /* USER CODE END Private defines */
 

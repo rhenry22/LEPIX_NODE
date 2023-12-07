@@ -16,6 +16,9 @@
   *
   ******************************************************************************
   */
+#include <stdio.h>
+#include "solax.h"
+
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "can.h"
@@ -42,10 +45,10 @@ void MX_CAN1_Init(void)
   hcan1.Init.Prescaler = 6;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan1.Init.TimeSeg1 = CAN_BS1_6TQ;
-  hcan1.Init.TimeSeg2 = CAN_BS2_7TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_11TQ;
+  hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan1.Init.TimeTriggeredMode = DISABLE;
-  hcan1.Init.AutoBusOff = DISABLE;
+  hcan1.Init.AutoBusOff = ENABLE;
   hcan1.Init.AutoWakeUp = DISABLE;
   hcan1.Init.AutoRetransmission = DISABLE;
   hcan1.Init.ReceiveFifoLocked = DISABLE;
@@ -55,6 +58,11 @@ void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
+
+  if (HAL_OK != MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0))
+  {
+    Error_Handler();
+  }
 
   /* USER CODE END CAN1_Init 2 */
 
@@ -74,10 +82,10 @@ void MX_CAN2_Init(void)
   hcan2.Init.Prescaler = 6;
   hcan2.Init.Mode = CAN_MODE_NORMAL;
   hcan2.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan2.Init.TimeSeg1 = CAN_BS1_6TQ;
-  hcan2.Init.TimeSeg2 = CAN_BS2_7TQ;
+  hcan2.Init.TimeSeg1 = CAN_BS1_11TQ;
+  hcan2.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan2.Init.TimeTriggeredMode = DISABLE;
-  hcan2.Init.AutoBusOff = DISABLE;
+  hcan2.Init.AutoBusOff = ENABLE;
   hcan2.Init.AutoWakeUp = DISABLE;
   hcan2.Init.AutoRetransmission = DISABLE;
   hcan2.Init.ReceiveFifoLocked = DISABLE;
@@ -87,6 +95,11 @@ void MX_CAN2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN2_Init 2 */
+
+  if (HAL_OK != MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1))
+  {
+    Error_Handler();
+  }
 
   /* USER CODE END CAN2_Init 2 */
 
@@ -122,13 +135,13 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
     /* CAN1 interrupt Init */
-    HAL_NVIC_SetPriority(CAN1_TX_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(CAN1_TX_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN1_TX_IRQn);
-    HAL_NVIC_SetPriority(CAN1_RX0_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(CAN1_RX0_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN1_RX0_IRQn);
-    HAL_NVIC_SetPriority(CAN1_RX1_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(CAN1_RX1_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN1_RX1_IRQn);
-    HAL_NVIC_SetPriority(CAN1_SCE_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(CAN1_SCE_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
   /* USER CODE BEGIN CAN1_MspInit 1 */
 
@@ -159,13 +172,13 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* CAN2 interrupt Init */
-    HAL_NVIC_SetPriority(CAN2_TX_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(CAN2_TX_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN2_TX_IRQn);
-    HAL_NVIC_SetPriority(CAN2_RX0_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(CAN2_RX0_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN2_RX0_IRQn);
-    HAL_NVIC_SetPriority(CAN2_RX1_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(CAN2_RX1_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN2_RX1_IRQn);
-    HAL_NVIC_SetPriority(CAN2_SCE_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(CAN2_SCE_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(CAN2_SCE_IRQn);
   /* USER CODE BEGIN CAN2_MspInit 1 */
 
@@ -232,5 +245,97 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+/**
+  * @brief Setup CAN Filter and enable controller
+  * @retval HAL_StatusTypeDef
+  */
+HAL_StatusTypeDef MX_CAN_Setup_Receive(CAN_HandleTypeDef *hcan, uint32_t fifo)
+{
+  HAL_StatusTypeDef ret = HAL_ERROR;
+
+  CAN_FilterTypeDef  sFilterConfig;
+
+  /* Setup the CAN filter (and assign RX FIFO) */
+  if (hcan == &hcan1)
+    sFilterConfig.FilterBank = 0;
+  else
+    sFilterConfig.FilterBank = 14;
+
+  sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+  sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
+  sFilterConfig.FilterIdHigh = 0x0000;
+  sFilterConfig.FilterIdLow = 0x0000;
+  sFilterConfig.FilterMaskIdHigh = 0x0000;
+  sFilterConfig.FilterMaskIdLow = 0x0000;
+  sFilterConfig.FilterActivation = ENABLE;
+  sFilterConfig.SlaveStartFilterBank = 14;
+
+  sFilterConfig.FilterFIFOAssignment = fifo;
+
+  ret = HAL_CAN_ConfigFilter(hcan, &sFilterConfig);
+  if(ret != HAL_OK)
+  {
+    printf("CAN Filter setup failed (%d)\r\n", ret);
+    return ret;
+  }
+
+  /* Start the CAN controller */
+  ret = HAL_CAN_Start(hcan);
+  if (ret != HAL_OK)
+  {
+    printf("CAN Start failed (%d:%ld)\r\n", ret, hcan->ErrorCode);
+    return ret;
+  }
+
+  return ret;
+}
+
+/**
+  * @brief  Transmit a CAN message
+  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified CAN.
+  * @param  hdr pointer to a CAN_TxHeaderTypeDef structure that contains the CAN header data.
+  * @param  data pointer to a data array sized to match the header length field.
+  * @retval HAL_StatusTypeDef
+  */
+HAL_StatusTypeDef MX_CAN_Transmit(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *hdr, uint8_t* data)
+{
+  HAL_StatusTypeDef ret = HAL_OK;
+  uint32_t mailbox;
+  uint32_t timeout = HAL_GetTick() + 10;
+
+  /* Wait for a free slot */
+  while(HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0)
+  {
+    if (HAL_GetTick() > timeout)
+    {
+      ret = HAL_TIMEOUT;
+      break;
+    }
+  }
+
+  if (ret == HAL_OK)
+  {
+    /* Request transmission */
+    ret = HAL_CAN_AddTxMessage(hcan, hdr, data, &mailbox);
+  }
+
+  return ret;
+}
+
+/**
+  * @brief  Rx FIFO 1 message pending callback.
+  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified CAN.
+  * @retval None
+  */
+void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+  if (hcan == &hcan2)
+  {
+    solax_kick();
+  }
+}
 
 /* USER CODE END 1 */

@@ -58,6 +58,15 @@ defined in linker script */
   .weak  Reset_Handler
   .type  Reset_Handler, %function
 Reset_Handler:  
+/* Hack to boot to DFU */
+  ldr r0, =0x20000000
+  ldr r1, =0xB007DF00
+  ldr r2, [r0, #0]
+  str r0, [r0, #0]
+  cmp r2, r1
+  beq Boot_DFU  
+
+/* Normal Boot */
   ldr   sp, =_estack     /* set stack pointer */
 
 /* Copy the data segment initializers from flash to SRAM */  
@@ -99,6 +108,13 @@ LoopFillZerobss:
   bl  main
   bx  lr    
 .size  Reset_Handler, .-Reset_Handler
+
+
+Boot_DFU:
+  ldr r0, =0x1FFF0000
+  ldr sp, [r0, #0]
+  ldr r0, [r0, #4]
+  bx r0
 
 /**
  * @brief  This is the code that gets called when the processor receives an 

@@ -18,16 +18,24 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
+#include "adc.h"
 #include "can.h"
-#include "rtc.h"
+#include "dma.h"
+#include "i2c.h"
+#include "iwdg.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
+#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include <stdio.h>
+#include "usbd_cdc_if.h"
 
+#include "evse.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,8 +61,9 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-
+void JumpToBootloader(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -90,27 +99,38 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_CAN1_Init();
-  MX_CAN2_Init();
-  MX_RTC_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_CAN1_Init();
+  MX_CAN2_Init();
+  MX_ADC1_Init();
+  MX_I2C1_Init();
+  MX_SPI1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* Call init function for freertos objects (in freertos.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
 
   /* Something went wrong */
   NVIC_SystemReset();
-  
+
   /* USER CODE END 3 */
 }
 
@@ -163,6 +183,20 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /**
+  * @brief Print the contents of a packet in HEX
+  * @param  data: pointer to data
+  * @param  len: length of data
+  * @retval None
+  */
+void dump_packet(uint8_t *data, uint8_t len)
+{
+  int i;
+  for (i=0; i<len; ++i)
+    printf("0x%02X, ", data[i]);
+  printf("\n");
+}
+
+/**
   * @brief Override for printf output
   * @param  file: pointer to the source file name
   * @param  ptr: pointer to data to write
@@ -171,20 +205,74 @@ void SystemClock_Config(void)
   */
 int _write(int file, char *ptr, int len)
 {
-    HAL_GPIO_WritePin(GPIOE, LED1_Pin, GPIO_PIN_RESET);
+#ifndef ESP_FLASH_MODE
+  /* If USB is connected, send to USB */
+  if (CDC_Is_Connected())
+  {
+    /* Send the data */
+    CDC_Transmit_FS((uint8_t*)ptr, len, 10);
+  }
 
-    HAL_StatusTypeDef rc;
-    do {
-      /* Send the data, retrying if busy */
-      rc = HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
-    } while (rc == HAL_BUSY);
+  /* Send Data to Serial */
+  HAL_UART_Write_UART1((uint8_t *)ptr, len, 100);
+#endif
 
-    HAL_GPIO_WritePin(GPIOE, LED1_Pin, GPIO_PIN_SET);
+  return len;
+}
 
-    return len;
+/**
+  * @brief  Reset and boot into DFU
+  * @retval Does not return
+  */
+void JumpToBootloader(void)
+{
+  volatile uint32_t *magic = (volatile uint32_t *)0x20000000;
+  *magic = 0xB007DF00;
+
+  __disable_irq();
+  NVIC_SystemReset();
+}
+
+/**
+  * @brief  Input Capture callback in non blocking mode
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim == &htim2)
+  {
+    evse_tim_CaptureCallback(htim);
+  }
 }
 
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM1 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM1) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  if (htim == &htim2)
+  {
+    evse_tim_PeriodElapsedCallback(htim);
+  }
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
@@ -195,9 +283,8 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
-  {
-  }
+
+  emergency_stop();
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -212,6 +299,8 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
+  printf("{\"controller\":[{\"timestamp\":%ld,\"status\":-1,\"message\":\"Assert Failed Failed file %s on line %ld.\"}]\n", HAL_GetTick(), file, line);
+
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
