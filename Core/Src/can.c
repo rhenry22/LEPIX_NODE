@@ -16,6 +16,8 @@
   *
   ******************************************************************************
   */
+#include <stdio.h>
+
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "can.h"
@@ -232,5 +234,72 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+/**
+  * @brief Setup CAN Filter and enable controller
+  * @retval HAL_StatusTypeDef
+  */
+HAL_StatusTypeDef MX_CAN_Setup_Receive(CAN_HandleTypeDef *hcan, uint32_t fifo)
+{
+  HAL_StatusTypeDef ret = HAL_ERROR;
+
+  CAN_FilterTypeDef  sFilterConfig;
+
+  /* Setup the CAN filter (and assign RX FIFO) */  
+  sFilterConfig.FilterBank = 0;
+  sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+  sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
+  sFilterConfig.FilterIdHigh = 0x0000;
+  sFilterConfig.FilterIdLow = 0x0000;
+  sFilterConfig.FilterMaskIdHigh = 0x0000;
+  sFilterConfig.FilterMaskIdLow = 0x0000;
+  sFilterConfig.FilterActivation = ENABLE;
+  sFilterConfig.SlaveStartFilterBank = 14;
+  
+  sFilterConfig.FilterFIFOAssignment = fifo;
+
+  ret = HAL_CAN_ConfigFilter(hcan, &sFilterConfig);
+  if(ret != HAL_OK)
+  {
+    printf("CAN Filter setup failed (%d)\r\n", ret);
+    return ret;
+  }
+
+  /* Start the CAN controller */
+  ret = HAL_CAN_Start(hcan);
+  if (ret != HAL_OK)
+  {
+    printf("CAN Start failed (%d)\r\n", ret);
+    return ret;
+  }
+
+  return ret;
+}
+
+/**
+  * @brief  Transmit a CAN message
+  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified CAN.
+  * @param  hdr pointer to a CAN_TxHeaderTypeDef structure that contains the CAN header data.
+  * @param  data pointer to a data array sized to match the header length field.
+  * @retval HAL_StatusTypeDef
+  */
+HAL_StatusTypeDef MX_CAN_Transmit(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *hdr, uint8_t* data)
+{
+  HAL_StatusTypeDef ret = HAL_ERROR;
+  uint32_t mailbox;
+
+  /* Wait for a free slot */
+  while(HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0) {}
+
+  /* Request transmission */
+  ret = HAL_CAN_AddTxMessage(hcan, hdr, data, &mailbox);
+  if (ret != HAL_OK)
+  {
+    printf("CAN Queue TX failed (%d)\r\n", ret);
+  }
+
+  return ret;
+}
 
 /* USER CODE END 1 */

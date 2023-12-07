@@ -1,0 +1,151 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+
+#include "tim.h"
+
+#include "sensor.h"
+#include "main.h"
+#include "evse.h"
+
+#define PP_UNPLUGGED_MIN      (2700)
+#define PP_PRESSED_MIN        (2200)
+#define PP_INSERTED_MIN       (1200)
+#define PP_CHECK_INTERVAL     (100)
+
+static uint32_t last_pp_check = 0;
+static EVSE_PP pp = EVSE_PP_NONE;
+
+static uint32_t cp_active = 0;
+static uint8_t cp_pwm = 0;
+static uint16_t max_current = 0;
+
+/**
+  * @brief  Period elapsed callback in non-blocking mode
+  * @param  htim TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim == &htim2)
+  {
+    cp_pwm = 0;
+    cp_active = 0;
+    max_current = 0;
+    HAL_GPIO_TogglePin(LED3_GPIO_Port, EVSE_Pin);
+  }
+}
+
+/**
+  * @brief  Input Capture callback in non-blocking mode
+  * @param  htim TIM IC handle
+  * @retval None
+  */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim == &htim2)
+  {
+    uint32_t time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
+
+    if (GPIO_PIN_SET == HAL_GPIO_ReadPin(EVSE_CP_GPIO_Port, EVSE_CP_Pin))
+    {
+      if (cp_active != 0)
+      {
+        cp_pwm = 100 * cp_active / time;
+        cp_active = 0;
+        htim->Instance->CNT = 0;
+
+        // Only apply if we have a valid length PWM cycle (1kHz)
+        if (time > 900 && time < 1100)
+        {
+          if (cp_pwm >= 11)
+          {
+            /*
+            * 6A = 10%
+            * 80A = 96%
+            */
+            max_current = 6 + 74 * (cp_pwm - 11) / 86;
+          }
+          else
+          {
+            max_current = 0;
+          }
+        }
+      }
+    }
+    else
+    {
+      cp_active = time;
+    }
+  }
+}
+
+
+/**
+  * @brief  Perform initialisation of evse interface
+  * @param  None
+  * @retval bool true: Success, false: Failure
+  */
+bool evse_init(void)
+{
+  // Start the CP PWM timer
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
+
+  return true;
+}
+
+/**
+  * @brief  Get the maximum current allowed by the EVSE
+  * @param  current Pointer to variable to receive current value
+  * @retval None
+  */
+void evse_get_max_current(uint8_t *current)
+{
+  if (current)
+    *current = max_current;
+}
+
+/**
+  * @brief  Get the PP (connector) signal state
+  * @param  None
+  * @retval EVSE_PP enum with the state
+  */
+EVSE_PP evse_get_pp(void)
+{
+  uint32_t val;
+  
+  if (last_pp_check + PP_CHECK_INTERVAL < HAL_GetTick())
+  {
+    last_pp_check = HAL_GetTick();
+
+    val = sensor_get_value(SENSOR_EVSE_PP);
+    
+    if (val == UINT32_MAX)
+      pp = EVSE_PP_ERROR;
+    else if (val > PP_UNPLUGGED_MIN)
+    {
+      pp = EVSE_PP_NONE;
+      HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
+    }
+    else if (val > PP_PRESSED_MIN)
+    {
+      pp = EVSE_PP_PRESSED;
+      HAL_GPIO_TogglePin(LED3_GPIO_Port, EVSE_Pin);
+    }
+    else if (val > PP_INSERTED_MIN)
+    {
+      if (max_current == 0)
+      {
+        pp = EVSE_PP_INSERTED;
+      }
+      else
+      {
+        pp = EVSE_PP_POWERED;
+        HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
+      }
+    }
+  }
+
+  return pp;
+}
