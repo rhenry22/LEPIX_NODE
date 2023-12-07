@@ -1,3 +1,14 @@
+/** @file sensor.c
+ *  @brief Module to interface with various sensors
+ *
+ *  This module provides a layer to collect sensor data and convert it
+ *  to a usable unit value.
+ *  Includes INA219 on I2C, MAX22530 ADC on SPI and built in ADC of the STM32.
+ *
+ *  @author Richard Taylor <richard@artaylor.co.uk>
+ *  @bug No known bugs.
+ */
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>

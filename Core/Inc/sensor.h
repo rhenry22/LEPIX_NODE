@@ -1,3 +1,10 @@
+/** @file sensor.h
+ *  @brief Function prototypes for sensor interface
+ *
+ *  @author Richard Taylor <richard@artaylor.co.uk>
+ *  @bug No known bugs.
+ */
+
 #ifndef __SENSOR_H__
 #define __SENSOR_H__
 

@@ -1,3 +1,17 @@
+/** @file evse.c
+ *  @brief Functions to interact with EVSE
+ *
+ *  This contains functions and logic to determine
+ *  the state of an EVSE interface, request it to 
+ *  turn on, and report the maximum current capability.
+ * 
+ *  Inspired by the description of Type 2 connectors here:
+ *  https://www.elso.sk/en/blog/technologies/evse-charging-of-electric-vehicles
+ *
+ *  @author Richard Taylor <richard@artaylor.co.uk>
+ *  @bug No known bugs.
+ */
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -16,9 +30,10 @@
 static uint32_t last_pp_check = 0;
 static EVSE_PP pp = EVSE_PP_NONE;
 
+static uint32_t cp_first_rise = 0;
 static uint32_t cp_active = 0;
-static uint8_t cp_pwm = 0;
-static uint16_t max_current = 0;
+static uint32_t cp_pwm = 0;
+static uint32_t max_current = 0;
 
 /**
   * @brief  Period elapsed callback in non-blocking mode
@@ -51,26 +66,35 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
     {
       if (cp_active != 0)
       {
-        cp_pwm = 100 * cp_active / time;
-        cp_active = 0;
         htim->Instance->CNT = 0;
-
+        cp_pwm = 100 * (cp_active - cp_first_rise) / (time - cp_first_rise);
+        cp_active = 0;
+        cp_first_rise = 0;
+        
         // Only apply if we have a valid length PWM cycle (1kHz)
         if (time > 900 && time < 1100)
         {
-          if (cp_pwm >= 11)
+          if (cp_pwm >= 10)
           {
             /*
             * 6A = 10%
-            * 80A = 96%
+            * 48A = 80%
+            * 
             */
-            max_current = 6 + 74 * (cp_pwm - 11) / 86;
+            if (cp_pwm <= 80)
+              max_current = 6 + (48 - 6) * (cp_pwm - 9) / (80 - 10);
+            else
+              max_current = 48 + (80 - 48) * (cp_pwm - 9) / (96 - 80);
           }
           else
           {
             max_current = 0;
           }
         }
+      }
+      else
+      {
+        cp_first_rise = time;
       }
     }
     else

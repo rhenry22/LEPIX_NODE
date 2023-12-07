@@ -1,3 +1,16 @@
+/** @file chademo.c
+ *  @brief Functions to interact with ChaDeMo connection
+ *
+ *  This contains logic and CAN bus message data to communicate with a 
+ *  Chademo 1.0 Vehicle.
+ *  It also includes a state machine to control the Analog and Digital handshake.
+ * 
+ *  Inspired by the description of Type 2 connectors here:
+ *  https://www.elso.sk/en/blog/technologies/evse-charging-of-electric-vehicles
+ *
+ *  @author Richard Taylor <richard@artaylor.co.uk>
+ */
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>

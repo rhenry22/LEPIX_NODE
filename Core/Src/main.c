@@ -75,6 +75,14 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+static void jump_to_dfu(void)
+{
+  /* Drop us into DFU mode */
+  //RCC->APB2ENR |= RCC_APB2ENR_SYSCFGCOMPEN;
+  __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
+  NVIC_SystemReset();
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -230,18 +238,23 @@ int main(void)
         case EVSE_PP_INSERTED:
           /* Enable the CP Line */
           /* This tells the EVSE to start charging (supply power) */
-          HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
+          //HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
         break;
 
         default:
         case EVSE_PP_NONE:
-        case EVSE_PP_PRESSED:
+        //case EVSE_PP_PRESSED:
           /* Update the inverter max (blocking) */
           max_current = 0;
           solax_set_max_ac_current(0);
 
           /* Disable the CP line */
           HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
+        break;
+
+
+        case EVSE_PP_PRESSED:
+          jump_to_dfu();
         break;
       }
     }
@@ -352,11 +365,6 @@ int _write(int file, char *ptr, int len)
         rc = CDC_Transmit_FS((uint8_t*)ptr, len);
     } while (USBD_BUSY == rc);
 
-    if (USBD_FAIL == rc) {
-        /// NOTE: Should never reach here.
-        /// TODO: Handle this error.
-        return 0;
-    }
 #else
     HAL_StatusTypeDef rc;
     do {

@@ -215,7 +215,7 @@ $(BUILD_DIR):
 	mkdir $@		
 
 flash:
-	dfu-util -a0 -s 0x8000000 -D $(BUILD_DIR)/$(TARGET).bin -R
+	dfu-util -a0 -D $(BUILD_DIR)/$(TARGET).bin -s 0x8000000:leave
 #######################################
 # clean up
 #######################################
