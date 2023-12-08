@@ -22,9 +22,9 @@
 #include "main.h"
 #include "evse.h"
 
-#define PP_UNPLUGGED_MIN      (2700)
-#define PP_PRESSED_MIN        (2200)
-#define PP_INSERTED_MIN       (1200)
+#define PP_UNPLUGGED_MIN      (2800)
+#define PP_PRESSED_MIN        (2400)
+#define PP_INSERTED_MIN       (1400)
 #define PP_CHECK_INTERVAL     (100)
 
 static uint32_t last_pp_check = 0;
@@ -159,13 +159,9 @@ EVSE_PP evse_get_pp(void)
     }
     else if (val > PP_INSERTED_MIN)
     {
-      if (max_current == 0)
+      pp = EVSE_PP_INSERTED;
+      if (max_current > 0)
       {
-        pp = EVSE_PP_INSERTED;
-      }
-      else
-      {
-        pp = EVSE_PP_POWERED;
         HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
       }
     }
