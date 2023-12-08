@@ -42,12 +42,12 @@ void MX_CAN1_Init(void)
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
   hcan1.Init.Prescaler = 6;
-  hcan1.Init.Mode = CAN_MODE_NORMAL;
+  hcan1.Init.Mode = CAN_MODE_SILENT;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan1.Init.TimeSeg1 = CAN_BS1_6TQ;
-  hcan1.Init.TimeSeg2 = CAN_BS2_7TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_11TQ;
+  hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan1.Init.TimeTriggeredMode = DISABLE;
-  hcan1.Init.AutoBusOff = DISABLE;
+  hcan1.Init.AutoBusOff = ENABLE;
   hcan1.Init.AutoWakeUp = DISABLE;
   hcan1.Init.AutoRetransmission = DISABLE;
   hcan1.Init.ReceiveFifoLocked = DISABLE;
@@ -76,10 +76,10 @@ void MX_CAN2_Init(void)
   hcan2.Init.Prescaler = 6;
   hcan2.Init.Mode = CAN_MODE_NORMAL;
   hcan2.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan2.Init.TimeSeg1 = CAN_BS1_6TQ;
-  hcan2.Init.TimeSeg2 = CAN_BS2_7TQ;
+  hcan2.Init.TimeSeg1 = CAN_BS1_11TQ;
+  hcan2.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan2.Init.TimeTriggeredMode = DISABLE;
-  hcan2.Init.AutoBusOff = DISABLE;
+  hcan2.Init.AutoBusOff = ENABLE;
   hcan2.Init.AutoWakeUp = DISABLE;
   hcan2.Init.AutoRetransmission = DISABLE;
   hcan2.Init.ReceiveFifoLocked = DISABLE;
@@ -246,7 +246,11 @@ HAL_StatusTypeDef MX_CAN_Setup_Receive(CAN_HandleTypeDef *hcan, uint32_t fifo)
   CAN_FilterTypeDef  sFilterConfig;
 
   /* Setup the CAN filter (and assign RX FIFO) */  
-  sFilterConfig.FilterBank = 0;
+  if (hcan == &hcan1)
+    sFilterConfig.FilterBank = 0;
+  else
+    sFilterConfig.FilterBank = 14;
+
   sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
   sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
   sFilterConfig.FilterIdHigh = 0x0000;
@@ -288,18 +292,17 @@ HAL_StatusTypeDef MX_CAN_Transmit(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *
 {
   HAL_StatusTypeDef ret = HAL_ERROR;
   uint32_t mailbox;
+  uint32_t timeout = HAL_GetTick() + 10;
 
   /* Wait for a free slot */
-  while(HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0) {}
-
-  /* Request transmission */
-  ret = HAL_CAN_AddTxMessage(hcan, hdr, data, &mailbox);
-  if (ret != HAL_OK)
+  while(HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0)
   {
-    printf("CAN Queue TX failed (%d)\r\n", ret);
+    if (HAL_GetTick() > timeout)
+      return HAL_TIMEOUT;
   }
 
-  return ret;
+  /* Request transmission */
+  return HAL_CAN_AddTxMessage(hcan, hdr, data, &mailbox);
 }
 
 /* USER CODE END 1 */

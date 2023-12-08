@@ -4,315 +4,586 @@
 #include <string.h>
 
 #include "can.h"
+#include "sensor.h"
+#include "chademo.h"
 #include "solax.h"
 
-#define BATTERY_WH_MAX \
-  24000  //Battery size in Wh (Maximum value for most inverters is 60000 [60kWh], you can use larger batteries but do not set value over 60000!
-#define ABSOLUTE_MAX_VOLTAGE (96 * 4.135)
-#define ABSOLUTE_MIN_VOLTAGE (96 * 3.135)
+/* Battery size in Wh (Maximum value for most inverters is 60000 [60kWh], 
+ * you can use larger batteries but do not set value over 60000! 
+ */
+#define BATTERY_WH_MAX    (24000)
+#define CELL_MAX_VOLTAGE  (4135)
+#define CELL_MIN_VOLTAGE  (3135)
+#define NUM_CELLS         (96)
 
-typedef enum _inverter_state
-{
-    INVERTER_STANDBY,
-    INVERTER_INACTIVE,
-    INVERTER_DARKSTART,
-    INVERTER_ACTIVE,
-    INVERTER_FAULT,
-    INVERTER_UPDATING
-} INVERTER_STATE;
+#define ABSOLUTE_MAX_VOLTAGE (NUM_CELLS * CELL_MAX_VOLTAGE / 1000)
+#define ABSOLUTE_MIN_VOLTAGE (NUM_CELLS * CELL_MIN_VOLTAGE / 1000)
 
-// Common inverter parameters
-uint16_t capacity_Wh_startup = BATTERY_WH_MAX;
-uint16_t max_power = 40960;                   // 41kW
-uint16_t max_voltage = ABSOLUTE_MAX_VOLTAGE;  // If higher charging is not possible (goes into forced discharge)
-uint16_t min_voltage = ABSOLUTE_MIN_VOLTAGE;  // If lower Gen24 disables battery
-uint16_t battery_voltage = 3700;
-uint16_t battery_current = 0;
-uint16_t SOC = 5000;                              // SOC 0-100.00% // Updates later on from CAN
-uint16_t StateOfHealth = 9900;                    // SOH 0-100.00% // Updates later on from CAN
-uint16_t capacity_Wh = BATTERY_WH_MAX;            // Updates later on from CAN
-uint16_t remaining_capacity_Wh = BATTERY_WH_MAX;  // Updates later on from CAN
-uint16_t max_target_discharge_power = 0;          // 0W (0W > restricts to no discharge) // Updates later on from CAN
-uint16_t max_target_charge_power = 4312;  // 4.3kW (during charge), both 307&308 can be set (>0) at the same time 
-                                          // Updates later on from CAN. Max value is 30000W
-uint16_t temperature_max = 50;     // Reads from battery later
-uint16_t temperature_min = 60;     // Reads from battery later
-uint16_t bms_char_dis_status;      // 0 idle, 1 discharging, 2, charging
-uint16_t bms_status = INVERTER_ACTIVE;      // ACTIVE - [0..5]<>[STANDBY,INACTIVE,DARKSTART,ACTIVE,FAULT,UPDATING]
-uint16_t stat_batt_power = 0;      // Power going in/out of battery
-uint16_t cell_max_voltage = 3700;  // Stores the highest cell voltage value in the system
-uint16_t cell_min_voltage = 3700;  // Stores the minimum cell voltage value in the system
+#define SOLAX_TIMEOUT     (5000)
+
+#define MSG_1871_STATUS     (1)
+#define MSG_1871_CONTACTOR  (3)
 
 typedef enum _solax_state
 {
   SOLAX_BATTERY_ANNOUNCE,
   SOLAX_WAITING_FOR_CONTACTOR,
+  SOLAX_CONTACTOR_CLOSING,
   SOLAX_CONTACTOR_CLOSED,
-  SOLAX_FAULT_SOLAX,
+  SOLAX_FAULT,
   SOLAX_UPDATING_FW
 } SOLAX_STATE;
 
-struct solax_data
+struct _solax_data
 {
-  SOLAX_STATE state;
-  uint16_t max_charge_rate_amp;
-  uint16_t max_discharge_rate_amp;
-  uint16_t temperature_average;
-  unsigned long LastFrameTime;
-  int number_of_batteries;
-};
-
-struct solax_message
-{
-  uint32_t id;
-  uint8_t data[8];
-};
-
-static struct solax_message solax_1801 = {0x1801, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};
-static struct solax_message solax_1872 = {0x1872, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};  //BMS_Limits
-static struct solax_message solax_1873 = {0x1873, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};  //BMS_PackData
-static struct solax_message solax_1874 = {0x1874, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};  //BMS_CellData
-static struct solax_message solax_1875 = {0x1875, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};  //BMS_Status
-static struct solax_message solax_1876 = {0x1876, {0x0, 0x0, 0xE2, 0x0C, 0x0, 0x0, 0xD7, 0x0C}};  //BMS_PackTemps
-static struct solax_message solax_1877 = {0x1877, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};
-static struct solax_message solax_1878 = {0x1878, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};  //BMS_PackStats
-static struct solax_message solax_1879 = {0x1879, {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};
-static struct solax_message solax_1881 = {0x1881, {0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};  // E.g.: 0 6 S B M S F A
-static struct solax_message solax_1882 = {0x1882, {0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}};  // E.g.: 0 2 3 A B 0 5 2
-static struct solax_message solax_100A001 = {0x100A001, {}};
-
-static struct solax_data solax_data;
-
-static HAL_StatusTypeDef solax_send_message(struct solax_message *msg)
-{
-  CAN_TxHeaderTypeDef TxHeader;
-
-  TxHeader.DLC = 8;
-  TxHeader.IDE = CAN_ID_EXT;
-  TxHeader.ExtId = msg->id;
-
-  return MX_CAN_Transmit(&hcan1, &TxHeader, msg->data);
-}
-
-/**
-  * @brief  Process CAN2 Solax data
-  * @retval true if TX work is pending
-  */
-static bool Solax_Process_RX(void)
-{
-  CAN_RxHeaderTypeDef RxHeader;
-  uint8_t data[8];
-  bool ret = false;
-
-  HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_RESET);
-
-  while (HAL_CAN_GetRxFifoFillLevel(&hcan2, CAN_RX_FIFO1) > 0)
+  struct
   {
-    /* Read the message */
-    if (HAL_OK == HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &RxHeader, data))
+    struct 
     {
-      // ToDo: Process the data
+      uint8_t frame_id;
+      uint8_t data[7];
+    } msg_1871;
+  } inverter;
+
+  struct
+  {
+    struct _bms_answer
+    {
+      uint16_t data[4];
+    } msg_1801;
+ 
+    struct _bms_limits
+    {
+      uint16_t slave_voltage_max; /* Voltage x10 V */
+      uint16_t slave_voltage_min; /* Voltage x10 V */
+      uint16_t charge_max;        /* Current x10 A */
+      uint16_t discharge_max;     /* Current x10 A */
+    } msg_1872;
+
+    struct _bms_pack_data
+    {
+      uint16_t voltage; /* Voltage x10 V */
+      int16_t current;  /* Current x10 A */
+      uint16_t soc;     /* % */
+      uint16_t energy;  /* Energy x100 kWh (12.34kWh)*/
+    } msg_1873;
+
+    struct _bms_cell_data
+    {
+      uint16_t cell_temp_max; /* Temp x10 C */
+      uint16_t cell_temp_min; /* Temp x10 C */
+      uint16_t cell_mv_max;   /* mV / 100 */
+      uint16_t cell_mv_min;   /* mV / 100 */
+    } msg_1874;
+
+    struct _bms_status
+    {
+      uint16_t pack_temp; /* Temp x10 C */
+      uint16_t num_batts; /* Number of batteries (7) */
+      uint16_t contactor; /* Contactor on / off (0x1 / 0x0) */
+      uint16_t reserved;
+    } msg_1875;
+
+    struct _bms_pack_temps
+    {
+      uint16_t reserved;
+      uint16_t cell_mv_max;   /* mV */
+      uint16_t reserved2;
+      uint16_t cell_mv_min;   /* mV */
+    } msg_1876;
+
+    struct _bms_version
+    {
+      uint16_t reserved;
+      uint16_t reserved2;
+      uint16_t id;  /* Battery Type? (0x50) */
+      uint16_t data;  /* FW Version? (0x0222) */
+    } msg_1877;
+
+    struct _bms_pack_stats
+    {
+      uint16_t pack_voltage_max;  /* Voltage x10 V */
+      uint16_t reserved;
+      uint32_t wh_total;
+    } msg_1878;
+
+    struct
+    {
+      char serial[8];
+    } msg_1881;
+
+    struct 
+    {
+      char serial[8];
+    } msg_1882;
+
+    struct _bms_announce
+    {
+      /* Empty (DLC = 0) */
+    } msg_100A001;
+
+  } bms;
+};
+
+struct _solax_data solax_data = {
+  .bms = {
+
+    /* BMS_Answer
+     * Unknown contents. 
+     * Response announcing that battery will be connected.
+     */
+    .msg_1801 = {
+      .data = {0x0002, 0x0001, 0x0001}
+    },
+  
+    /* BMS_Limits */
+    .msg_1872 = {
+      .slave_voltage_max = ABSOLUTE_MAX_VOLTAGE / 100,
+      .slave_voltage_min = ABSOLUTE_MIN_VOLTAGE / 100
+    },
+
+    /* BMS_CellData */
+    .msg_1874 = {
+      .cell_mv_max = CELL_MAX_VOLTAGE / 100,
+      .cell_mv_min = CELL_MIN_VOLTAGE / 100,
+      .cell_temp_max = 200,
+      .cell_temp_min = 160
+    },
+
+    /* BMS_Status */
+    .msg_1875 = {
+      .pack_temp = 180,
+      .num_batts = 7, // 0?
+      .contactor = 0
+    },
+
+    /* BMS_PackTemps (Cell voltages) */
+    .msg_1876 = {
+      .reserved = 1
+    },
+
+    /* BMS_Version */
+    .msg_1877 = {
+      .id = 0x50,
+      .data = 0x0222
+    },
+
+    /* BMS_PackStats */
+    .msg_1878 = {
+      .pack_voltage_max = ABSOLUTE_MAX_VOLTAGE / 100,
+      .wh_total = BATTERY_WH_MAX
+    },
+
+    /* BMS_Serial */
+    .msg_1881 = { .serial = { 0x00, 0x35, 0x53, 0x42, 0x4D, 0x53, 0x46, 0x41 }},
+    .msg_1882 = { .serial = { 0x00, 0x31, 0x33, 0x41, 0x42, 0x30, 0x35, 0x32 }},
+
+    /* The following will be updated once ChaDeMo starts up */
+
+    /* BMS_Limits */
+    .msg_1872 = {
+      .charge_max = 1,
+      .discharge_max = 1
+    },
+
+    /* BMS_PackData */ 
+    .msg_1873 = {
+      .voltage = 3800,
+      .current = 0,
+      .soc = 50,
+      .energy = BATTERY_WH_MAX / 10 / 2
+    },
+
+    /* BMS_PackTemps (Cell voltages) */
+    .msg_1876 = {
+      .cell_mv_max = 3700,
+      .cell_mv_min = 3700
     }
   }
+};
 
-  HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_SET);
+static SOLAX_STATE state = SOLAX_BATTERY_ANNOUNCE;  /* BMS state machine */
+static uint16_t max_ac_power = 1000;                /* Maximum current limit advertised by EVSE */
+static uint32_t t_zero_set = 0;                     /* Time at which current request set to zero (debug / check inverter response) */
+static uint32_t last_update = 0;                    /* Last time we saw a CAN message */
+static uint32_t last_time_update = 0;               /* Last time we saw frame 0x03 */
+static uint16_t max_charge_current = 0;             /* Max DC charge current (A x10) */
+static uint16_t max_discharge_current = 0;          /* Max DC discharge current (A x10) */
+
+static HAL_StatusTypeDef solax_send_message(uint32_t id, uint8_t *data, uint8_t len)
+{
+  CAN_TxHeaderTypeDef TxHeader;
+  HAL_StatusTypeDef ret;
+
+  TxHeader.DLC = len;
+  TxHeader.IDE = CAN_ID_EXT;
+  TxHeader.ExtId = id;
+
+  ret = MX_CAN_Transmit(&hcan2, &TxHeader, data);
 
   return ret;
 }
 
-void solax_process(void)
+static void solax_send_standard_response(void)
 {
-
+  solax_send_message(0x1872, (uint8_t*)&solax_data.bms.msg_1872, 8);
+  solax_send_message(0x1873, (uint8_t*)&solax_data.bms.msg_1873, 8);
+  solax_send_message(0x1874, (uint8_t*)&solax_data.bms.msg_1874, 8);
+  solax_send_message(0x1875, (uint8_t*)&solax_data.bms.msg_1875, 8);
+  solax_send_message(0x1876, (uint8_t*)&solax_data.bms.msg_1876, 8);
+  solax_send_message(0x1877, (uint8_t*)&solax_data.bms.msg_1877, 8);
+  solax_send_message(0x1878, (uint8_t*)&solax_data.bms.msg_1878, 8);
 }
 
-void solax_set_max_ac_current(uint8_t current)
+static void solax_update_values(void)
 {
-  // ToDo: We need to apply this ASAP!
-  // Tell the inverter to stop any output when 0
-  // Need to decide whether to keep EPS powered up?
+  uint32_t voltage;
+  uint32_t current;
 
-  // ToDo: Block this function until we're within the limit
-  // This will be used by the EVSE and ChaDeMo logic to clear locks where appropriate.
+  /* Update Measured Values */
+  voltage = sensor_get_value(SENSOR_BATT_VOLTAGE);
+  current = sensor_get_value(SENSOR_BATT_CURRENT);
 
-  // Timeout ~50ms max?
+  /* BMS_PackData */
+  solax_data.bms.msg_1873.voltage = voltage;
+  solax_data.bms.msg_1873.current = current;
 
-}
-
-
-void solax_set_max_dc_chg_power(uint32_t power)
-{
-
-}
-
-void solax_set_max_dc_dis_power(uint32_t power)
-{
+  /* BMS_PackTemps (Cell voltages) */
+  solax_data.bms.msg_1876.cell_mv_max = (voltage / NUM_CELLS) + 40;
+  solax_data.bms.msg_1876.cell_mv_min = (voltage / NUM_CELLS) - 40;
   
-}
-
-
+  // ToDo: Add some form of temperature monitoring / reporting
 #if 0
-void update_values_can_solax() {  //This function maps all the values fetched from battery CAN to the correct CAN messages
-  // If not receiveing any communication from the inverter, open contactors and return to battery announce state
-  if (millis() - LastFrameTime >= SolaxTimeout) {
-    inverterAllowsContactorClosing = false;
-    STATE = BATTERY_ANNOUNCE;
-  }
-  //Calculate the required values
-  temperature_average = ((temperature_max + temperature_min) / 2);
-
-  //max_target_charge_power (30000W max)
-  if (SOC > 9999)  //99.99%
-  {                //Additional safety incase SOC% is 100, then do not charge battery further
-    max_charge_rate_amp = 0;
-  } else {  //We can pass on the battery charge rate (in W) to the inverter (that takes A)
-    if (max_target_charge_power >= 30000) {
-      max_charge_rate_amp = 75;  //Incase battery can take over 30kW, cap value to 75A
-    } else {                     //Calculate the W value into A
-      max_charge_rate_amp = (max_target_charge_power / (battery_voltage * 0.1));  // P/U = I
-    }
-  }
-
-  //max_target_discharge_power (30000W max)
-  if (SOC < 100)  //1.00%
-  {               //Additional safety incase SOC% is below 1, then do not charge battery further
-    max_discharge_rate_amp = 0;
-  } else {  //We can pass on the battery discharge rate to the inverter
-    if (max_target_discharge_power >= 30000) {
-      max_discharge_rate_amp = 75;  //Incase battery can be charged with over 30kW, cap value to 75A
-    } else {                        //Calculate the W value into A
-      max_discharge_rate_amp = (max_target_discharge_power / (battery_voltage * 0.1));  // P/U = I
-    }
-  }
-
-  //Put the values into the CAN messages
-  //BMS_Limits
-  SOLAX_1872.data.u8[0] = (uint8_t)max_voltage;  //TODO: scaling OK?
-  SOLAX_1872.data.u8[1] = (max_voltage >> 8);
-  SOLAX_1872.data.u8[2] = (uint8_t)min_voltage;  //TODO: scaling OK?
-  SOLAX_1872.data.u8[3] = (min_voltage >> 8);
-  SOLAX_1872.data.u8[4] = (uint8_t)(max_charge_rate_amp * 10);  //TODO: scaling OK?
-  SOLAX_1872.data.u8[5] = ((max_charge_rate_amp * 10) >> 8);
-  SOLAX_1872.data.u8[6] = (uint8_t)(max_discharge_rate_amp * 10);  //TODO: scaling OK?
-  SOLAX_1872.data.u8[7] = ((max_discharge_rate_amp * 10) >> 8);
-
-  //BMS_PackData
-  SOLAX_1873.data.u8[0] = (uint8_t)battery_voltage;  // OK
-  SOLAX_1873.data.u8[1] = (battery_voltage >> 8);
-  SOLAX_1873.data.u8[2] = (int8_t)battery_current;  // OK, Signed (Active current in Amps x 10)
-  SOLAX_1873.data.u8[3] = (battery_current >> 8);
-  SOLAX_1873.data.u8[4] = (uint8_t)(SOC / 100);  //SOC (100.00%)
-  //SOLAX_1873.data.u8[5] = //Seems like this is not required? Or shall we put SOC decimals here?
-  SOLAX_1873.data.u8[6] = (uint8_t)(remaining_capacity_Wh / 100);  //TODO: scaling OK?
-  SOLAX_1873.data.u8[7] = ((remaining_capacity_Wh / 100) >> 8);
-
-  //BMS_CellData
-  SOLAX_1874.data.u8[0] = (uint8_t)temperature_max;
-  SOLAX_1874.data.u8[1] = (temperature_max >> 8);
-  SOLAX_1874.data.u8[2] = (uint8_t)temperature_min;
-  SOLAX_1874.data.u8[3] = (temperature_min >> 8);
-  SOLAX_1874.data.u8[4] =
-      (uint8_t)(cell_max_voltage);  //TODO: scaling OK? Supposed to be alarm trigger absolute cell max?
-  SOLAX_1874.data.u8[5] = (cell_max_voltage >> 8);
-  SOLAX_1874.data.u8[6] =
-      (uint8_t)(cell_min_voltage);  //TODO: scaling OK? Supposed to be alarm trigger absolute cell min?
-  SOLAX_1874.data.u8[7] = (cell_min_voltage >> 8);
-
   //BMS_Status
   SOLAX_1875.data.u8[0] = (uint8_t)temperature_average;
   SOLAX_1875.data.u8[1] = (temperature_average >> 8);
-  SOLAX_1875.data.u8[2] = (uint8_t)0;  // Number of slave batteries
-  SOLAX_1875.data.u8[4] = (uint8_t)0;  // Contactor Status 0=off, 1=on.
+#endif
 
-  //BMS_PackTemps (strange name, since it has voltages?)
-  SOLAX_1876.data.u8[2] = (uint8_t)cell_max_voltage;  //TODO: scaling OK?
-  SOLAX_1876.data.u8[3] = (cell_max_voltage >> 8);
+  /* Ensure we're within EVSE limits */
+  {
+    uint32_t req_current;
+    uint32_t req_power;
 
-  SOLAX_1876.data.u8[6] = (uint8_t)cell_min_voltage;  //TODO: scaling OK?
-  SOLAX_1876.data.u8[7] = (cell_min_voltage >> 8);
+    /* Charge */
+    req_current = max_charge_current;
+    req_power = voltage * req_current;
+    if (req_power > max_ac_power)
+      req_current = max_ac_power / voltage;
 
-  //Unknown
-  SOLAX_1877.data.u8[4] = (uint8_t)0x50;  // Battery type
-  SOLAX_1877.data.u8[6] = (uint8_t)0x22;  // Firmware version?
-  SOLAX_1877.data.u8[7] =
-      (uint8_t)0x02;  // The above firmware version applies to:02 = Master BMS, 10 = S1, 20 = S2, 30 = S3, 40 = S4
+    solax_data.bms.msg_1872.charge_max = req_current;
 
-  //BMS_PackStats
-  SOLAX_1878.data.u8[0] = (uint8_t)(battery_voltage);  //TODO: should this be max or current voltage?
-  SOLAX_1878.data.u8[1] = ((battery_voltage) >> 8);
+    /* Discharge */
+    req_current = max_discharge_current;
+    req_power = voltage * req_current;
+    if (req_power > max_ac_power)
+      req_current = max_ac_power / voltage;
 
-  SOLAX_1878.data.u8[4] = (uint8_t)capacity_Wh;  //TODO: scaling OK?
-  SOLAX_1878.data.u8[5] = (capacity_Wh >> 8);
+    solax_data.bms.msg_1872.discharge_max = req_current;
+  }
 
-  // BMS_Answer
-  SOLAX_1801.data.u8[0] = 2;
-  SOLAX_1801.data.u8[2] = 1;
-  SOLAX_1801.data.u8[4] = 1;
+  /* Check SoC and adjust charge rate if needed */
+  if (solax_data.bms.msg_1873.soc >= 95)
+    solax_data.bms.msg_1872.charge_max = 0;
+
+  if (solax_data.bms.msg_1873.soc <= 20)
+    solax_data.bms.msg_1872.discharge_max = 0;
 }
 
-void receive_can_solax(CAN_frame_t rx_frame) {
-  if (rx_frame.MsgID == 0x1871 && rx_frame.data.u8[0] == (0x01) ||
-      rx_frame.MsgID == 0x1871 && rx_frame.data.u8[0] == (0x02)) {
-    LastFrameTime = millis();
-    switch (STATE) {
-      case (BATTERY_ANNOUNCE):
-        Serial.println("Solax Battery State: Announce");
-        inverterAllowsContactorClosing = false;
-        SOLAX_1875.data.u8[4] = (0x00);  // Inform Inverter: Contactor 0=off, 1=on.
-        for (int i = 0; i <= number_of_batteries; i++) {
-          CAN_WriteFrame(&SOLAX_1872);
-          CAN_WriteFrame(&SOLAX_1873);
-          CAN_WriteFrame(&SOLAX_1874);
-          CAN_WriteFrame(&SOLAX_1875);
-          CAN_WriteFrame(&SOLAX_1876);
-          CAN_WriteFrame(&SOLAX_1877);
-          CAN_WriteFrame(&SOLAX_1878);
+static void solax_update_state(void)
+{
+  /* Update the contactor state */
+  if (chademo_get_state() == CHADEMO_STATE_ON)
+    solax_data.bms.msg_1875.contactor = 1;
+  else
+    solax_data.bms.msg_1875.contactor = 0;
+
+  solax_send_standard_response();
+
+  if (solax_data.inverter.msg_1871.data[MSG_1871_STATUS] != 0x0001)
+  {
+    state = SOLAX_FAULT;
+    printf("Solax: Unhandled Inverter Status: %d\n", 
+      solax_data.inverter.msg_1871.data[MSG_1871_STATUS]);
+    chademo_stop();
+  }
+
+  switch (state) {
+    case SOLAX_BATTERY_ANNOUNCE:
+      printf("Solax: Battery State: Announce\n");
+
+      for (int i = 0; i < solax_data.bms.msg_1875.num_batts; i++) {
+        solax_send_standard_response();      
+      }
+      /* BMS Announce */
+      solax_send_message(0x100A001, (uint8_t*)&solax_data.bms.msg_100A001, 0);
+
+      if (solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR] == 0x0001)
+      {
+        /* Message from the inverter to proceed to contactor closing */
+        chademo_start();
+        state = SOLAX_WAITING_FOR_CONTACTOR;
+      }
+    break;
+
+    case SOLAX_WAITING_FOR_CONTACTOR:
+      printf("Solax: Battery State: Waiting for Contactor\n");
+
+      /* Announce that the battery will be connected */
+      solax_send_message(0x1801, (uint8_t*)&solax_data.bms.msg_1801, 8);
+      state = SOLAX_CONTACTOR_CLOSING;
+      break;
+
+    case SOLAX_CONTACTOR_CLOSING:
+      if (solax_data.bms.msg_1875.contactor == 1)
+      {
+        printf("Solax: Battery State: Contactor Closed\n");
+        state = SOLAX_CONTACTOR_CLOSED;
+      }
+    break;
+
+    case SOLAX_CONTACTOR_CLOSED:
+      if (solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR] == 0)
+      {
+        /* Message from the inverter to open contactor */
+        printf("Solax: Battery State: Inverter Requests Open Contactor\n");
+        state = SOLAX_BATTERY_ANNOUNCE;
+        chademo_stop();
+      }
+    break;
+
+    case SOLAX_FAULT:
+    case SOLAX_UPDATING_FW:
+    break;
+  }
+}
+
+static void solax_process_frame(void)
+{
+  /* Process the frame */
+  switch (solax_data.inverter.msg_1871.frame_id)
+  {
+    case 0x01:
+    case 0x02:
+      /* These are the frames that count */
+      last_update = HAL_GetTick();
+
+      /* Make sure our response messages are up to date. */
+      if (HAL_GetTick() > last_update + 20)
+        solax_update_values();
+
+      /* Update the state machine */
+      solax_update_state();
+    break;
+
+    case 0x03:
+      if (solax_data.inverter.msg_1871.data[0] == 0x06)
+      {
+        if (HAL_GetTick() > last_time_update + 1000)
+        {
+          last_time_update = HAL_GetTick();
+          /* Time information from Inverter */
+          printf("Solax: Time: %04d/%02d/%02d %02d:%02d:%02d\n", 
+            solax_data.inverter.msg_1871.data[1] + 2000,
+            solax_data.inverter.msg_1871.data[2],
+            solax_data.inverter.msg_1871.data[3],
+            solax_data.inverter.msg_1871.data[4],
+            solax_data.inverter.msg_1871.data[5],
+            solax_data.inverter.msg_1871.data[6]);
         }
-        CAN_WriteFrame(&SOLAX_100A001);  //BMS Announce
-        // Message from the inverter to proceed to contactor closing
-        // Byte 4 changes from 0 to 1
-        if (rx_frame.data.u64 == Contactor_Close_Payload)
-          STATE = WAITING_FOR_CONTACTOR;
+      }
+    break;
+
+    case 0x05:
+      /* Send BMS IDs */
+      solax_send_message(0x1881, (uint8_t*)&solax_data.bms.msg_1881, 8);
+      solax_send_message(0x1882, (uint8_t*)&solax_data.bms.msg_1882, 8);
+    break;
+
+    default:
+      printf("Solax: 1871 frame 0x%02X received from inverter.\n",
+        solax_data.inverter.msg_1871.frame_id);
+    break;
+  }
+}
+
+/**
+  * @brief  Process CAN2 Solax data
+  * @param  None
+  * @retval None
+  */
+void solax_process(void)
+{
+  CAN_RxHeaderTypeDef RxHeader;
+  uint8_t data[8];
+  uint8_t msg_limit = 10;
+
+  while (HAL_CAN_GetRxFifoFillLevel(&hcan2, CAN_RX_FIFO1) > 0)
+  {
+    HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_RESET);
+
+    if (msg_limit-- == 0)
+      break;
+
+    /* Read the message */
+    if (HAL_OK == HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &RxHeader, data))
+    {
+      if (RxHeader.IDE != CAN_ID_EXT)
+      {
+        printf("ERROR: Unexpected CAN message: 0x%04lX, len %ld\n", RxHeader.StdId, RxHeader.DLC);
+        continue;
+      }
+
+#if 0
+      {
+        int i;
+        printf("Solax Packet: ID: 0x%02lX\nData: ", RxHeader.ExtId);
+        for (i=0; i<RxHeader.DLC; ++i)
+        {
+          printf("0x%02X ", data[i]);
+        }
+        printf("\n");
+      }
+#endif
+
+      switch (RxHeader.ExtId)
+      {
+        case 0x1871:
+          memcpy(&solax_data.inverter.msg_1871, data, 8);
+          solax_process_frame();
         break;
 
-      case (WAITING_FOR_CONTACTOR):
-        SOLAX_1875.data.u8[4] = (0x00);  // Inform Inverter: Contactor 0=off, 1=on.
-        CAN_WriteFrame(&SOLAX_1872);
-        CAN_WriteFrame(&SOLAX_1873);
-        CAN_WriteFrame(&SOLAX_1874);
-        CAN_WriteFrame(&SOLAX_1875);
-        CAN_WriteFrame(&SOLAX_1876);
-        CAN_WriteFrame(&SOLAX_1877);
-        CAN_WriteFrame(&SOLAX_1878);
-        CAN_WriteFrame(&SOLAX_1801);  // Announce that the battery will be connected
-        STATE = CONTACTOR_CLOSED;     // Jump to Contactor Closed State
-        Serial.println("Solax Battery State: Contactor Closed");
+        default:
+          printf("Unhandled CAN message from Inverter: 0x%08lX, len %ld\n", RxHeader.ExtId, RxHeader.DLC);
         break;
-
-      case (CONTACTOR_CLOSED):
-        inverterAllowsContactorClosing = true;
-        SOLAX_1875.data.u8[4] = (0x01);  // Inform Inverter: Contactor 0=off, 1=on.
-        CAN_WriteFrame(&SOLAX_1872);
-        CAN_WriteFrame(&SOLAX_1873);
-        CAN_WriteFrame(&SOLAX_1874);
-        CAN_WriteFrame(&SOLAX_1875);
-        CAN_WriteFrame(&SOLAX_1876);
-        CAN_WriteFrame(&SOLAX_1877);
-        CAN_WriteFrame(&SOLAX_1878);
-        // Message from the inverter to open contactor
-        // Byte 4 changes from 1 to 0
-        if (rx_frame.data.u64 == Contactor_Open_Payload)
-          STATE = BATTERY_ANNOUNCE;
-        break;
+      }
     }
   }
 
-  if (rx_frame.MsgID == 0x1871 && rx_frame.data.u64 == __builtin_bswap64(0x0500010000000000)) {
-    CAN_WriteFrame(&SOLAX_1881);
-    CAN_WriteFrame(&SOLAX_1882);
-    Serial.println("1871 05-frame received from inverter");
+  /* Shut down if we timeout receiving messages */
+  if (HAL_GetTick() > last_update + SOLAX_TIMEOUT)
+  {
+    state = SOLAX_BATTERY_ANNOUNCE;
+    chademo_stop();
   }
-  if (rx_frame.MsgID == 0x1871 && rx_frame.data.u8[0] == (0x03)) {
-    Serial.println("1871 03-frame received from inverter");
-  }
+
+  HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_SET);
 }
-#endif
+
+/**
+  * @brief  Set the maximum current to be drawn from the EVSE
+  * @param  current Max current in Amps
+  * @retval None
+  */
+void solax_set_max_ac_current(uint8_t current)
+{
+  uint32_t power_dc;
+
+  max_ac_power = current * 240;
+
+  /* Make sure we limit DC charge power to the EVSE limit */
+  power_dc = solax_data.bms.msg_1872.charge_max * solax_data.bms.msg_1873.voltage;
+  if (power_dc > max_ac_power)
+    solax_data.bms.msg_1872.charge_max = (max_ac_power / solax_data.bms.msg_1873.voltage) * 10;
+
+  /* Make sure we limit DC discharge power to the EVSE limit */
+  power_dc = solax_data.bms.msg_1872.discharge_max * solax_data.bms.msg_1873.voltage;
+  if (power_dc > max_ac_power)
+    solax_data.bms.msg_1872.discharge_max = (max_ac_power / solax_data.bms.msg_1873.voltage) * 10;
+
+  if (current == 0)
+    t_zero_set = HAL_GetTick();
+
+  // ToDo: We need to apply this ASAP!
+
+  /* Tell the inverter to stop any output when 0
+   * Need to decide whether to keep EPS powered up?
+   *
+   * ToDo: Block this function until we're within the limit
+   * This will be used by the EVSE and ChaDeMo logic to clear locks where appropriate.
+   *
+   * Timeout ~50ms max?
+   *
+   * Will be applied on the next CAN message sequence...
+   */
+}
+
+
+/**
+  * @brief  Set the maximum current to be put into the battery
+  * @param  current Max current (A x10)
+  * @retval None
+  */
+void solax_set_max_dc_chg_current(uint16_t current)
+{
+  max_charge_current = current;
+}
+
+/**
+  * @brief  Set the maximum current to be taken from the battery
+  * @param  current Max current (A x10)
+  * @retval None
+  */
+void solax_set_max_dc_dis_current(uint16_t current)
+{
+  max_discharge_current = current;
+}
+
+/**
+  * @brief  Set the Battery voltage Target
+  * @param  voltage Battery voltage in V x10
+  * @retval None
+  */
+void solax_set_battery_voltage_tgt(uint16_t voltage)
+{
+  solax_data.bms.msg_1872.slave_voltage_max = voltage;
+}
+
+/**
+  * @brief  Set the maximum Battery voltage
+  * @param  voltage Battery voltage in V x10
+  * @retval None
+  */
+void solax_set_battery_voltage_max(uint16_t voltage)
+{
+  solax_data.bms.msg_1878.pack_voltage_max = voltage;
+}
+
+/**
+  * @brief  Set the minimum Battery voltage
+  * @param  voltage Battery voltage in V x10
+  * @retval None
+  */
+void solax_set_battery_voltage_min(uint16_t voltage)
+{
+  solax_data.bms.msg_1872.slave_voltage_min = voltage;
+}
+
+/**
+  * @brief  Set the maximum (full) battery capacity
+  * @param  energy  Battery full capacity in Wh
+  * @retval None
+  */
+void solax_set_battery_capacity_max(uint32_t energy)
+{
+  solax_data.bms.msg_1878.wh_total = energy;
+}
+
+/**
+  * @brief  Set the remaining battery capacity
+  * @param  energy  Battery energy remaining in Wh
+  * @retval None
+  */
+void solax_set_battery_capacity(uint32_t energy)
+{
+  solax_data.bms.msg_1873.energy = energy / 10;
+}
+
+/**
+  * @brief  Set the Battery SoC
+  * @param  soc     Battery SoC in % x1
+  * @retval None
+  */
+void solax_set_battery_soc(uint16_t soc)
+{
+  solax_data.bms.msg_1873.soc = soc;
+}

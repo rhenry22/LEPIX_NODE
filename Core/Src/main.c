@@ -51,7 +51,9 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-//#define BOARD_TEST_MODE
+#define ENABLE_EVSE
+#define ENABLE_CHADEMO
+#define ENABLE_SOLAX
 
 /* USER CODE END PD */
 
@@ -63,6 +65,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static bool error = false;
 
 /* USER CODE END PV */
 
@@ -78,9 +81,39 @@ void SystemClock_Config(void);
 static void jump_to_dfu(void)
 {
   /* Drop us into DFU mode */
-  //RCC->APB2ENR |= RCC_APB2ENR_SYSCFGCOMPEN;
   __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
   NVIC_SystemReset();
+}
+
+/**
+  * @brief  Forcibly shut everything down
+  * @retval None
+  */
+void emergency_stop(void)
+{
+  /* Turn Off EVSE */
+  HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
+
+  /* Force ChaDeMo contactors off */
+  HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
+
+  /* Force Leak Test Off */
+  HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
+
+  while(1)
+  {
+    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+    HAL_Delay(500);
+
+    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
+    HAL_Delay(500);
+  }
 }
 
 /* USER CODE END 0 */
@@ -94,11 +127,6 @@ int main(void)
   /* USER CODE BEGIN 1 */
   EVSE_PP pp_prev = EVSE_PP_NONE;
   uint8_t max_current = 0;
-
-
-#ifdef BOARD_TEST_MODE
-  uint32_t val, i, val2, val3;
-#endif
 
   /* USER CODE END 1 */
 
@@ -133,59 +161,33 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0);
-  MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO0);
-
-  printf("\n\nInitializing...\n");
-
-  if (!sensor_init() || !evse_init())
+  MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1);
+  
+  if (!sensor_init())
   {
-    printf("ERROR: Failed to initialise sensors or EVSE.\n");
-
-    while(1)
-    {
-      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
-      HAL_Delay(500);
-
-      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
-      HAL_Delay(500);
-    }
+    printf("ERROR: Failed to initialise sensors.\n");
+    error = true;
   }
 
-#ifdef BOARD_TEST_MODE
-  while (1)
+#ifdef ENABLE_EVSE
+  if (!evse_init())
   {
-    HAL_Delay(100);
-  }
-
-
-  HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
-  HAL_Delay(2000);
-
-  val = sensor_get_value(SENSOR_HV_TEST_CURRENT);
-
-  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
-  HAL_Delay(2000);
-
-  val2 = sensor_get_value(SENSOR_HV_TEST_CURRENT);
-
-  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-
-  if (val2 > val + 500)
-  {
-    printf("Insulation Test: Failed\n");
-  }
-  else
-  {
-    printf("Insulation Test: Passed\n");
+    printf("ERROR: Failed to initialise EVSE interface.\n");
+    error = true;
   }
 #endif
+
+#ifdef ENABLE_CHADEMO
+  if (!chademo_init())
+  {
+    printf("ERROR: Failed to initialise ChaDeMo interface.\n");
+    error = true;
+  }
+#endif
+
+  if (!error)
+    printf("\n\nInitialized OK\n");
+
 
   /* USER CODE END 2 */
 
@@ -195,65 +197,48 @@ int main(void)
   {
     EVSE_PP pp;
 
-#ifdef BOARD_TEST_MODE
+    /* Catch any errors and EStop */
+    if (error)
+    {
+      emergency_stop();
+    }
 
-    /* Test the LEDs and Relays */
-    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);
-    HAL_Delay(500);
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_SET);
-    HAL_Delay(500);
-    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_SET);
-    HAL_Delay(500);
-
-    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
-
-    printf("LEDs:       Tested\n");
-    printf("RELAYs:     Tested\n");
-
-    HAL_Delay(1000);
-
-    NVIC_SystemReset();
-#else
+#ifdef ENABLE_CHADEMO
     /* Process any ChaDeMo work */
     chademo_process();
+#endif
 
+#ifdef ENABLE_SOLAX
     /* Process any Inverter work */
     solax_process();
+#endif
 
+#ifdef ENABLE_EVSE
     /* Check the EVSE PP Line Status */
     pp = evse_get_pp();
     if (pp != pp_prev)
     {
       pp_prev = pp;
+
       switch (pp)
       {
         case EVSE_PP_INSERTED:
           /* Enable the CP Line */
           /* This tells the EVSE to start charging (supply power) */
-          //HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
+          HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
         break;
 
         default:
         case EVSE_PP_NONE:
-        //case EVSE_PP_PRESSED:
-          /* Update the inverter max (blocking) */
-          max_current = 0;
-          solax_set_max_ac_current(0);
-
           /* Disable the CP line */
           HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
         break;
 
-
         case EVSE_PP_PRESSED:
+          /* Update the inverter max */
+          max_current = 0;
+          solax_set_max_ac_current(0);
+
           jump_to_dfu();
         break;
       }
@@ -272,11 +257,19 @@ int main(void)
 
         printf("EVSE Max Current: %d A\n", max_current);
 
+#ifdef ENABLE_SOLAX
         /* Update the inverter max. */
         solax_set_max_ac_current(max_current);
+#endif
+
+#ifdef ENABLE_CHADEMO
+        /* Update ChaDeMo max */
+        chademo_set_max_power(240 * max_current);
+#endif
       }
     }
 #endif
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -387,9 +380,8 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
-  {
-  }
+
+  emergency_stop();
   /* USER CODE END Error_Handler_Debug */
 }
 

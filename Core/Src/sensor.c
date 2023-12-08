@@ -88,15 +88,15 @@ uint32_t sensor_get_value(SENSOR_SOURCE src)
 
   switch (src)
   {
-    case SENSOR_BATT_VOLTAGE:
+    case SENSOR_BATT_VOLTAGE: // V x10
     {
       uint16_t val;
       if (HAL_OK == MAX22530_read_register(MAX22530_ADC1, &val))
-        ret = (uint32_t)val * MAX22530_VREF / 4096 * (5 + 1500) / 5 / 1000;
+        ret = (uint32_t)val * MAX22530_VREF / 4096 * (5 + 1500) * 10 / 5 / 1000;
     }
     break;
 
-    case SENSOR_ACC_CURRENT:
+    case SENSOR_ACC_CURRENT: // uA
     {
       uint16_t reg;      
       ina219_read_reg(INA219_ACC_ADDR, 0x04, &reg);
@@ -104,7 +104,7 @@ uint32_t sensor_get_value(SENSOR_SOURCE src)
     }
     break;
 
-    case SENSOR_HV_TEST_CURRENT:
+    case SENSOR_HV_TEST_CURRENT: // uA
     {
       uint32_t i;
       uint32_t val;
@@ -122,18 +122,19 @@ uint32_t sensor_get_value(SENSOR_SOURCE src)
     }
     break;
 
-    case SENSOR_BATT_CURRENT:
+    case SENSOR_BATT_CURRENT: // A x10
       ret = MX_ADC1_Get_Sample(ADC_BATT_CURR);
       ret = (ret * 3300) / 4096;
     break;
 
-    case SENSOR_EVSE_PP:
+    case SENSOR_EVSE_PP: // mV
       ret = MX_ADC1_Get_Sample(ADC_EVSE_PP);
       ret = (ret * 3300) / 4096;
     break;
 
-    case SENSOR_MIDPOINT:
+    case SENSOR_MIDPOINT: // mV
       ret = MX_ADC1_Get_Sample(ADC_MIDPOINT);
+      ret = (ret * 3300) / 4096;
     break;
 
     default:
