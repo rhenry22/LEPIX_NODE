@@ -19,7 +19,6 @@
  *  
  *  Calibrate Earth Leakage to >50kOhm threshold value
  *  Monitor lock soleniod current and set CONN Lock flag to zero if it fails.
- *  Watchdog timer!
  *  
  *  @author Richard Taylor <richard@artaylor.co.uk>
  */
