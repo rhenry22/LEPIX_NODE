@@ -85,8 +85,8 @@ void emergency_stop(void);
 #define EVSE_CHARGE_EN_GPIO_Port GPIOE
 #define ESP_FLASH__Pin GPIO_PIN_9
 #define ESP_FLASH__GPIO_Port GPIOE
-#define ESP_RST__Pin GPIO_PIN_10
-#define ESP_RST__GPIO_Port GPIOE
+#define ESP_EN_Pin GPIO_PIN_10
+#define ESP_EN_GPIO_Port GPIOE
 #define LED1_Pin GPIO_PIN_11
 #define LED1_GPIO_Port GPIOE
 #define LED2_Pin GPIO_PIN_12

@@ -106,6 +106,7 @@ uint32_t sensor_get_value(SENSOR_SOURCE src)
 
     case SENSOR_HV_TEST_CURRENT: // uA
     {
+#if 0
       uint32_t i;
       uint32_t val;
 
@@ -119,6 +120,11 @@ uint32_t sensor_get_value(SENSOR_SOURCE src)
         HAL_Delay(1);
       }
       ret = val * (1000 * INA219_HV_CURRENT_LSB);
+#else
+      uint16_t reg;      
+      ina219_read_reg(INA219_HV_ADDR, 0x04, &reg);
+      ret = reg * (1000000 * INA219_HV_CURRENT_LSB);
+#endif
     }
     break;
 

@@ -290,7 +290,7 @@ HAL_StatusTypeDef MX_CAN_Setup_Receive(CAN_HandleTypeDef *hcan, uint32_t fifo)
   */
 HAL_StatusTypeDef MX_CAN_Transmit(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *hdr, uint8_t* data)
 {
-  HAL_StatusTypeDef ret = HAL_ERROR;
+  HAL_StatusTypeDef ret = HAL_OK;
   uint32_t mailbox;
   uint32_t timeout = HAL_GetTick() + 10;
 
@@ -298,11 +298,19 @@ HAL_StatusTypeDef MX_CAN_Transmit(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *
   while(HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0)
   {
     if (HAL_GetTick() > timeout)
-      return HAL_TIMEOUT;
+    {
+      ret = HAL_TIMEOUT;
+      break;
+    }
   }
 
-  /* Request transmission */
-  return HAL_CAN_AddTxMessage(hcan, hdr, data, &mailbox);
+  if (ret == HAL_OK)
+  {
+    /* Request transmission */
+    ret = HAL_CAN_AddTxMessage(hcan, hdr, data, &mailbox);
+  }
+
+  return ret;
 }
 
 /* USER CODE END 1 */

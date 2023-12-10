@@ -78,12 +78,14 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+#if 0
 static void jump_to_dfu(void)
 {
   /* Drop us into DFU mode */
   __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
   NVIC_SystemReset();
 }
+#endif
 
 /**
   * @brief  Forcibly shut everything down
@@ -188,6 +190,8 @@ int main(void)
   if (!error)
     printf("\n\nInitialized OK\n");
 
+  /* Power Up ESP8266 */
+  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
 
   /* USER CODE END 2 */
 
@@ -238,8 +242,7 @@ int main(void)
           /* Update the inverter max */
           max_current = 0;
           solax_set_max_ac_current(0);
-
-          jump_to_dfu();
+          chademo_stop();
         break;
       }
     }
@@ -268,7 +271,9 @@ int main(void)
 #endif
       }
     }
-#endif
+#endif // ENABLE_EVSE
+
+    HAL_UART_Process_ESP();
 
     /* USER CODE END WHILE */
 
@@ -338,6 +343,7 @@ void SystemClock_Config(void)
 int _write(int file, char *ptr, int len)
 {
 #if 1
+#if 0
     static uint8_t rc = USBD_OK;
     bool wait = false;
 
@@ -365,7 +371,7 @@ int _write(int file, char *ptr, int len)
       rc = HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
     } while (rc == HAL_BUSY);
 #endif
-
+#endif
     return len;
 }
 

@@ -16,11 +16,18 @@
   *
   ******************************************************************************
   */
+#include "usbd_cdc_if.h"
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
+
+static uint8_t SerialRxChar;
+static uint8_t rx_r = 0;
+static uint8_t rx_w = 0;
+static uint8_t SerialRxBuffer[APP_TX_DATA_SIZE*2];
+static uint32_t last_pkt = 0;
 
 /* USER CODE END 0 */
 
@@ -192,5 +199,57 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+void HAL_UART_Setup_ESP(void)
+{
+  HAL_UART_Receive_IT(&huart1, &SerialRxChar, 1);
+}
+
+/* Called for each serial byte received */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    uint8_t d = rx_w - rx_r;
+
+    /* If we're empty, reset to the start of the buffer. */
+    if (rx_r > 0) {
+        if (d == 0) {
+            rx_r = 0;
+            rx_w = 0;
+        }
+    }
+
+    if (rx_w < APP_TX_DATA_SIZE*2) {
+        SerialRxBuffer[rx_w] = SerialRxChar;
+        rx_w++;
+    }
+
+    last_pkt = HAL_GetTick();
+
+    /* Queue the next read */
+    HAL_UART_Receive_IT(&huart1, &SerialRxChar, 1);
+}
+
+void HAL_UART_Process_ESP(void)
+{
+  uint8_t bytes = rx_w - rx_r;
+  uint32_t timeout = HAL_GetTick() + 10;
+
+  if (bytes > 0)
+  {
+    if ( (bytes >= APP_TX_DATA_SIZE) || (HAL_GetTick() >= (last_pkt + 1)) )
+    {
+      bytes = MIN(bytes, APP_TX_DATA_SIZE);
+      if (CDC_Is_Connected())
+      {
+        while (CDC_Transmit_FS(&SerialRxBuffer[rx_r], bytes) == USBD_BUSY)
+        {
+          if (HAL_GetTick() > timeout)
+            break;
+        }
+      }
+      rx_r += bytes;
+    }
+  }
+}
 
 /* USER CODE END 1 */

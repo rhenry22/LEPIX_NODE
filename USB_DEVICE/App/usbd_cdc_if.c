@@ -22,6 +22,7 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
+#include "usart.h"
 
 /* USER CODE END INCLUDE */
 
@@ -94,6 +95,14 @@ uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
 uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
+
+USBD_CDC_LineCodingTypeDef linecoding =
+{
+  115200, /* baud rate*/
+  0x00,   /* stop bits-1*/
+  0x00,   /* parity - none*/
+  0x08    /* nb. of bits 8*/
+};
 
 /* USER CODE END PRIVATE_VARIABLES */
 
@@ -182,27 +191,24 @@ static int8_t CDC_DeInit_FS(void)
   */
 static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 {
+  int8_t ret = USBD_OK;
+
   /* USER CODE BEGIN 5 */
   switch(cmd)
   {
     case CDC_SEND_ENCAPSULATED_COMMAND:
-
     break;
 
     case CDC_GET_ENCAPSULATED_RESPONSE:
-
     break;
 
     case CDC_SET_COMM_FEATURE:
-
     break;
 
     case CDC_GET_COMM_FEATURE:
-
     break;
 
     case CDC_CLEAR_COMM_FEATURE:
-
     break;
 
   /*******************************************************************************/
@@ -223,36 +229,85 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   /* 6      | bDataBits  |   1   | Number Data bits (5, 6, 7, 8 or 16).          */
   /*******************************************************************************/
     case CDC_SET_LINE_CODING:
+      linecoding.bitrate    = (uint32_t)(pbuf[0] | (pbuf[1] << 8) | \
+                                         (pbuf[2] << 16) | (pbuf[3] << 24));
+      linecoding.format     = pbuf[4];
+      linecoding.paritytype = pbuf[5];
+      linecoding.datatype   = pbuf[6];
 
+
+      huart1.Init.BaudRate = linecoding.bitrate;
+      huart1.Init.StopBits = linecoding.format;
+      huart1.Init.Parity = linecoding.paritytype;
+
+      HAL_UART_DeInit(&huart1);
+      if (HAL_UART_Init(&huart1) == HAL_OK)
+      {
+        HAL_UART_Setup_ESP();
+      }
+      is_connected = true;
     break;
 
     case CDC_GET_LINE_CODING:
-
+      pbuf[0] = (uint8_t)(linecoding.bitrate);
+      pbuf[1] = (uint8_t)(linecoding.bitrate >> 8);
+      pbuf[2] = (uint8_t)(linecoding.bitrate >> 16);
+      pbuf[3] = (uint8_t)(linecoding.bitrate >> 24);
+      pbuf[4] = linecoding.format;
+      pbuf[5] = linecoding.paritytype;
+      pbuf[6] = linecoding.datatype;
     break;
 
     case CDC_SET_CONTROL_LINE_STATE:
     {
       USBD_SetupReqTypedef * req = (USBD_SetupReqTypedef *)pbuf;
-      if ((req->wValue & 0x0001) != 0)
+
+      /* DTR */
+      if ((req->wValue & 0x01) != 0)
       {
+#ifndef ESP_FLASH_MODE
         is_connected = true;
+#else
+        /* Put ESP8266 into Flash Mode (GPIO0 Low) */
+        HAL_GPIO_WritePin(ESP_FLASH__GPIO_Port, ESP_FLASH__Pin, GPIO_PIN_RESET);
+#endif
       }
       else
       {
+#ifndef ESP_FLASH_MODE
         is_connected = false;
+#else
+        /* Take ESP8266 out of Flash Mode (GPIO0 HighZ) */
+        HAL_GPIO_WritePin(ESP_FLASH__GPIO_Port, ESP_FLASH__Pin, GPIO_PIN_SET);
+#endif
       }
+
+
+#ifdef ESP_FLASH_MODE
+      /* RTS */
+      if ((req->wValue & 0x02) != 0)
+      {
+        /* Power Down (Reset) ESP8266 */
+        HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_RESET);
+      }
+      else
+      {
+        /* Power Up ESP8266 */
+        HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+      }
+#endif
     }
     break;
 
     case CDC_SEND_BREAK:
-
+      NVIC_SystemReset();
     break;
 
-  default:
+    default:
     break;
   }
 
-  return (USBD_OK);
+  return (ret);
   /* USER CODE END 5 */
 }
 
@@ -273,10 +328,24 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   */
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
+  int8_t ret = USBD_OK;
+
   /* USER CODE BEGIN 6 */
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
-  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-  return (USBD_OK);
+  HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_RESET);
+
+  if (HAL_UART_Transmit(&huart1, Buf, *Len, 250) != HAL_OK)
+  {
+    ret = USBD_BUSY;
+  }
+  else
+  {
+    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
+    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  }
+
+  HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_SET);
+
+  return ret;
   /* USER CODE END 6 */
 }
 
@@ -294,13 +363,19 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
 {
   uint8_t result = USBD_OK;
+
   /* USER CODE BEGIN 7 */
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
   if (hcdc->TxState != 0){
-    return USBD_BUSY;
+    result = USBD_BUSY;
   }
-  USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
-  result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+
+  if (result == USBD_OK)
+  {
+    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
+    result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+  }
+
   /* USER CODE END 7 */
   return result;
 }

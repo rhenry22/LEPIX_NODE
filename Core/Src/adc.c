@@ -24,7 +24,7 @@
 #include <stdio.h>
 
 #define NUM_SAMPLES 4
-#define MAX_SAMPLE_AGE 20
+#define MAX_SAMPLE_AGE 50
 
 static uint32_t last_sample = 0;
 static uint16_t samples[NUM_SAMPLES] = {0};

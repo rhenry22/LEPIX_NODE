@@ -45,6 +45,9 @@ void MX_USART2_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
+void HAL_UART_Setup_ESP(void);
+void HAL_UART_Process_ESP(void);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

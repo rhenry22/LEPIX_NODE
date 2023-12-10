@@ -20,6 +20,7 @@
 #define ABSOLUTE_MIN_VOLTAGE (NUM_CELLS * CELL_MIN_VOLTAGE / 1000)
 
 #define SOLAX_TIMEOUT     (5000)
+#define SOLAX_UPDATE_RATE (50)
 
 #define MSG_1871_STATUS     (1)
 #define MSG_1871_CONTACTOR  (3)
@@ -153,7 +154,7 @@ struct _solax_data solax_data = {
     /* BMS_Status */
     .msg_1875 = {
       .pack_temp = 180,
-      .num_batts = 7, // 0?
+      .num_batts = 0, // 7?
       .contactor = 0
     },
 
@@ -224,15 +225,24 @@ static HAL_StatusTypeDef solax_send_message(uint32_t id, uint8_t *data, uint8_t 
   return ret;
 }
 
-static void solax_send_standard_response(void)
+static HAL_StatusTypeDef solax_send_standard_response(void)
 {
-  solax_send_message(0x1872, (uint8_t*)&solax_data.bms.msg_1872, 8);
-  solax_send_message(0x1873, (uint8_t*)&solax_data.bms.msg_1873, 8);
-  solax_send_message(0x1874, (uint8_t*)&solax_data.bms.msg_1874, 8);
-  solax_send_message(0x1875, (uint8_t*)&solax_data.bms.msg_1875, 8);
-  solax_send_message(0x1876, (uint8_t*)&solax_data.bms.msg_1876, 8);
-  solax_send_message(0x1877, (uint8_t*)&solax_data.bms.msg_1877, 8);
-  solax_send_message(0x1878, (uint8_t*)&solax_data.bms.msg_1878, 8);
+  HAL_StatusTypeDef ret;
+  ret = solax_send_message(0x1872, (uint8_t*)&solax_data.bms.msg_1872, 8);
+  if (HAL_OK == ret)
+    ret = solax_send_message(0x1873, (uint8_t*)&solax_data.bms.msg_1873, 8);
+  if (HAL_OK == ret)
+    ret = solax_send_message(0x1874, (uint8_t*)&solax_data.bms.msg_1874, 8);
+  if (HAL_OK == ret)
+    ret = solax_send_message(0x1875, (uint8_t*)&solax_data.bms.msg_1875, 8);
+  if (HAL_OK == ret)
+    ret = solax_send_message(0x1876, (uint8_t*)&solax_data.bms.msg_1876, 8);
+  if (HAL_OK == ret)
+    ret = solax_send_message(0x1877, (uint8_t*)&solax_data.bms.msg_1877, 8);
+  if (HAL_OK == ret)
+    ret = solax_send_message(0x1878, (uint8_t*)&solax_data.bms.msg_1878, 8);
+
+  return ret;
 }
 
 static void solax_update_values(void)
@@ -289,15 +299,15 @@ static void solax_update_values(void)
     solax_data.bms.msg_1872.discharge_max = 0;
 }
 
-static void solax_update_state(void)
+static HAL_StatusTypeDef solax_update_state(void)
 {
+  HAL_StatusTypeDef ret;
+
   /* Update the contactor state */
-  if (chademo_get_state() == CHADEMO_STATE_ON)
+  if (chademo_is_contactor_closed())
     solax_data.bms.msg_1875.contactor = 1;
   else
     solax_data.bms.msg_1875.contactor = 0;
-
-  solax_send_standard_response();
 
   if (solax_data.inverter.msg_1871.data[MSG_1871_STATUS] != 0x0001)
   {
@@ -305,15 +315,19 @@ static void solax_update_state(void)
     printf("Solax: Unhandled Inverter Status: %d\n", 
       solax_data.inverter.msg_1871.data[MSG_1871_STATUS]);
     chademo_stop();
+    ret = HAL_ERROR;
   }
+
+  ret = solax_send_standard_response();
 
   switch (state) {
     case SOLAX_BATTERY_ANNOUNCE:
       printf("Solax: Battery State: Announce\n");
 
-      for (int i = 0; i < solax_data.bms.msg_1875.num_batts; i++) {
-        solax_send_standard_response();      
-      }
+      //for (int i = 0; i < solax_data.bms.msg_1875.num_batts; i++) {
+      //  solax_send_standard_response();      
+      //}
+
       /* BMS Announce */
       solax_send_message(0x100A001, (uint8_t*)&solax_data.bms.msg_100A001, 0);
 
@@ -334,6 +348,7 @@ static void solax_update_state(void)
       break;
 
     case SOLAX_CONTACTOR_CLOSING:
+      /* Stay in this state until ChaDeMo completes connection */
       if (solax_data.bms.msg_1875.contactor == 1)
       {
         printf("Solax: Battery State: Contactor Closed\n");
@@ -355,6 +370,8 @@ static void solax_update_state(void)
     case SOLAX_UPDATING_FW:
     break;
   }
+
+  return ret;
 }
 
 static void solax_process_frame(void)
@@ -368,7 +385,7 @@ static void solax_process_frame(void)
       last_update = HAL_GetTick();
 
       /* Make sure our response messages are up to date. */
-      if (HAL_GetTick() > last_update + 20)
+      if (HAL_GetTick() > last_update + SOLAX_UPDATE_RATE)
         solax_update_values();
 
       /* Update the state machine */
@@ -421,9 +438,6 @@ void solax_process(void)
   {
     HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_RESET);
 
-    if (msg_limit-- == 0)
-      break;
-
     /* Read the message */
     if (HAL_OK == HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &RxHeader, data))
     {
@@ -433,7 +447,7 @@ void solax_process(void)
         continue;
       }
 
-#if 0
+#ifdef DEBUG_SOLAX
       {
         int i;
         printf("Solax Packet: ID: 0x%02lX\nData: ", RxHeader.ExtId);
@@ -457,6 +471,9 @@ void solax_process(void)
         break;
       }
     }
+
+    if (msg_limit-- == 0)
+      break;
   }
 
   /* Shut down if we timeout receiving messages */
@@ -492,19 +509,6 @@ void solax_set_max_ac_current(uint8_t current)
 
   if (current == 0)
     t_zero_set = HAL_GetTick();
-
-  // ToDo: We need to apply this ASAP!
-
-  /* Tell the inverter to stop any output when 0
-   * Need to decide whether to keep EPS powered up?
-   *
-   * ToDo: Block this function until we're within the limit
-   * This will be used by the EVSE and ChaDeMo logic to clear locks where appropriate.
-   *
-   * Timeout ~50ms max?
-   *
-   * Will be applied on the next CAN message sequence...
-   */
 }
 
 
