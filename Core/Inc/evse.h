@@ -16,5 +16,6 @@ typedef enum
 bool evse_init(void);
 void evse_get_max_current(uint8_t *current);
 EVSE_PP evse_get_pp(void);
+void evse_json_update(void);
 
 #endif /* __SENSOR_H__ */

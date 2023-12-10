@@ -33,7 +33,7 @@ static EVSE_PP pp = EVSE_PP_NONE;
 static uint32_t cp_first_rise = 0;
 static uint32_t cp_active = 0;
 static uint32_t cp_pwm = 0;
-static uint32_t max_current = 0;
+static uint32_t max_current = 0;      /* Maximum Current (A x1) */
 
 /**
   * @brief  Period elapsed callback in non-blocking mode
@@ -121,7 +121,7 @@ bool evse_init(void)
 
 /**
   * @brief  Get the maximum current allowed by the EVSE
-  * @param  current Pointer to variable to receive current value
+  * @param  current Pointer to variable to receive current (A x1)
   * @retval None
   */
 void evse_get_max_current(uint8_t *current)
@@ -169,3 +169,18 @@ EVSE_PP evse_get_pp(void)
 
   return pp;
 }
+
+/**
+  * @brief  Send JSON message with EVSE Data
+  * @retval None
+  */
+void evse_json_update(void)
+{
+  printf("{\"evse\":[");
+
+  printf("{\"pp\":%d, \"max_current\":%ld}",
+         pp,
+         max_current);
+
+  printf("]}\n");
+  }

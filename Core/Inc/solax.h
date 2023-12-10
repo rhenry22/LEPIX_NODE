@@ -18,5 +18,7 @@ void solax_set_battery_capacity_max(uint32_t energy);
 void solax_set_battery_capacity(uint32_t energy);
 void solax_set_battery_soc(uint16_t soc);
 
+void solax_json_update(void);
+
 #endif /* _SOLAX_H_ */
 

@@ -55,6 +55,8 @@
 #define ENABLE_CHADEMO
 #define ENABLE_SOLAX
 
+#define JSON_UPDATE_TIME    (5000)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -66,6 +68,7 @@
 
 /* USER CODE BEGIN PV */
 static bool error = false;
+static uint32_t last_json_update = 0;  /* Last time we saw frame 0x03 */
 
 /* USER CODE END PV */
 
@@ -164,17 +167,21 @@ int main(void)
 
   MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0);
   MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1);
-  
+
+  /* Power Up ESP8266 */
+  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+  HAL_Delay(2000);
+
   if (!sensor_init())
   {
-    printf("ERROR: Failed to initialise sensors.\n");
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise sensors.\"}]\n");
     error = true;
   }
 
 #ifdef ENABLE_EVSE
   if (!evse_init())
   {
-    printf("ERROR: Failed to initialise EVSE interface.\n");
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise EVSE interface.\"}]\n");
     error = true;
   }
 #endif
@@ -182,16 +189,13 @@ int main(void)
 #ifdef ENABLE_CHADEMO
   if (!chademo_init())
   {
-    printf("ERROR: Failed to initialise ChaDeMo interface.\n");
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise ChaDeMo interface.\"}]\n");
     error = true;
   }
 #endif
 
   if (!error)
-    printf("\n\nInitialized OK\n");
-
-  /* Power Up ESP8266 */
-  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+    printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
 
   /* USER CODE END 2 */
 
@@ -258,8 +262,6 @@ int main(void)
       {
         max_current = current;
 
-        printf("EVSE Max Current: %d A\n", max_current);
-
 #ifdef ENABLE_SOLAX
         /* Update the inverter max. */
         solax_set_max_ac_current(max_current);
@@ -274,6 +276,16 @@ int main(void)
 #endif // ENABLE_EVSE
 
     HAL_UART_Process_ESP();
+
+    /* Send regular JSON messages */
+    if (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME)
+    {
+      last_json_update = HAL_GetTick();
+      printf("{\"controller\":[{\"timestamp\":%ld,\"status\":0,\"message\":\"Heartbeat\"}]\n", HAL_GetTick());
+      evse_json_update();
+      solax_json_update();
+      chademo_json_update();
+    }
 
     /* USER CODE END WHILE */
 
@@ -342,36 +354,26 @@ void SystemClock_Config(void)
   */
 int _write(int file, char *ptr, int len)
 {
-#if 1
-#if 0
     static uint8_t rc = USBD_OK;
-    bool wait = false;
 
-    /* Wait for terminal to be opened */
-    while (!CDC_Is_Connected())
+    /* If USB is connected, send to USB */
+    if (CDC_Is_Connected())
     {
-      wait = true;
-    }
-
-    /* If the terminal has just opened, give it some extra time */
-    if (wait)
-    {
-      HAL_Delay(250);
-    }
-
-    /* Send the data, retrying if busy */
-    do {
-        rc = CDC_Transmit_FS((uint8_t*)ptr, len);
-    } while (USBD_BUSY == rc);
-
-#else
-    HAL_StatusTypeDef rc;
-    do {
       /* Send the data, retrying if busy */
-      rc = HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
-    } while (rc == HAL_BUSY);
-#endif
-#endif
+      do {
+          rc = CDC_Transmit_FS((uint8_t*)ptr, len);
+      } while (USBD_BUSY == rc);
+    }
+    else
+    {
+      /* Send Data to Serial */
+      HAL_StatusTypeDef rc;
+      do {
+        /* Send the data, retrying if busy */
+        rc = HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
+      } while (rc == HAL_BUSY);
+    }
+
     return len;
 }
 
@@ -402,6 +404,8 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
+  printf("{\"controller\":[{\"timestamp\":%ld,\"status\":-1,\"message\":\"Assert Failed Failed file %s on line %ld.\"}]\n", HAL_GetTick(), file, line);
+
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */

@@ -13,7 +13,6 @@
  *  Requires SC and Isolation detection (not just earth leakage)
  *  Emergency Stop button (Red, latching)
  *  Start / Stop buttons (Blue, Green, illuminated)
- *  Store Errors for future diagnostics
  *  Separate CPU for Inverter Control and Interface. 
  *  Analog handshake should go via connector lock detection and inverter shutoff in HW 
  *  (i.e. separate from CPU)
@@ -21,7 +20,6 @@
  *  Calibrate Earth Leakage to >50kOhm threshold value
  *  Monitor lock soleniod current and set CONN Lock flag to zero if it fails.
  *  Watchdog timer!
- *  Heartbeat with values
  *  
  *  @author Richard Taylor <richard@artaylor.co.uk>
  */
@@ -65,6 +63,8 @@
 #define MSG109_BATT_INCOMPAT  (1 << 3)
 #define MSG109_CHG_MALFUNC    (1 << 4)
 #define MSG109_CHG_STOPPED    (1 << 5)
+
+#define ERROR_LEN             (128)
 
 struct can_data
 {
@@ -191,7 +191,9 @@ static bool k_perm = false;         // Vehicle Charge permission state (K line o
 
 static uint32_t state_time = 0;     // Time that the last state transition happened
 
-static bool contactor_closed = false; // Whether we have potentially live DC
+static bool contactor_closed = false;       /* Whether we have potentially live DC */
+
+static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
 
 /* For chademo v2.0 only */
 static struct chademo_message chademo_118 = {0x118, {0x10, 0x64, 0x00, 0xB0, 0x00, 0x1E, 0x00, 0x8F}};
@@ -202,6 +204,9 @@ static struct chademo_message chademo_209 = {0x209, {0x02, 0x00, 0x00, 0x00, 0x0
 static HAL_StatusTypeDef chademo_send_message(uint32_t id, uint8_t* data)
 {
   CAN_TxHeaderTypeDef TxHeader;
+
+  /* Make sure we clear the header to default */
+  memset(&TxHeader, 0, sizeof(TxHeader));
 
   TxHeader.DLC = 8;
   TxHeader.StdId = id;
@@ -223,8 +228,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
   switch (new_state)
   {
     case CHADEMO_STATE_OFF:
-      printf("ChaDeMo: Off (Connector Unlocked).\n");
-
       /* This forcibly opens the contactors, so if current is not zero there is a welding risk. */
       HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
@@ -248,29 +251,23 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       if (chademo_state == CHADEMO_STATE_OFF)
       {
         /* Signal to the vehicle that we're ready to start */
-        printf("ChaDeMo: Start.\n");
         HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_SET);
         chademo_transition_state(CHADEMO_STATE_PARAM_CHK);
         update_state = false;
       }
       else
       {
-        printf("ChaDeMo: User Stopped charge.\n");
         chademo_transition_state(CHADEMO_STATE_STOP);
         update_state = false;
       }
     break;
 
     case CHADEMO_STATE_PARAM_CHK:
-      printf("ChaDeMo: Checking parameters.\n");
       // ToDo: CAN CHG before Physical charge == fault
       // ToDo: Physical Charge before sending first CAN data == fault
     break;
 
     case CHADEMO_STATE_PERM_OK:
-      printf("ChaDeMo: Lock Plug and Start insulation test.\n");
-      printf("ChaDeMo: Max Battery Voltage: %dV\n", can_data.vehicle.msgid_100.max_battery_voltage);
-
       /* Lock the connector */
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);      
       can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
@@ -283,7 +280,8 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       if ((sensor_get_value(SENSOR_BATT_VOLTAGE) > 100) || 
           !(can_data.vehicle.msgid_102.status & (STATUS_CONTACTOR_OPEN)))
       {
-        printf("ChaDeMo: ERROR: More than 10V present on battery lines.\n");
+        snprintf(last_error, ERROR_LEN,
+                 "More than 10V present on battery lines.");
         chademo_transition_state(CHADEMO_STATE_ERROR);
         update_state = false;
       }
@@ -313,14 +311,13 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       /* Check that HV Test current is below threshold */
       if (leak_current > leak_base + LEAKAGE_CURRENT_MAX)
       {
-        printf("ChaDeMo: ERROR: Earth leakage test failed. Aborting.\n");
+        snprintf(last_error, ERROR_LEN,
+                 "Earth leakage test failed. Aborting.");
         chademo_transition_state(CHADEMO_STATE_ERROR);
         update_state = false;
       }
       else
       {
-        printf("ChaDeMo: Insulation test pass, enable HV contactors.\n");
-
         contactor_closed = true;
         HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_SET);
 
@@ -331,18 +328,14 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     break;
 
     case CHADEMO_STATE_BATT_CHECK:
-      printf("ChaDeMo: Check for Battery Voltage.\n");
     break;
 
     case CHADEMO_STATE_ON:
-      printf("ChaDeMo: Charging!\n");
       can_data.charger.msgid_109.fault_status |= MSG109_CHARGE;
       can_data.charger.msgid_109.fault_status &= ~MSG109_CHG_STOPPED;
     break;
 
     case CHADEMO_STATE_STOP:
-      printf("ChaDeMo: Stop (Current Check).\n");
-
       /* Tell the inverter to stop */
       solax_set_max_dc_chg_current(0);
       solax_set_max_dc_dis_current(0);
@@ -352,16 +345,13 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     break;
 
     case CHADEMO_STATE_WELD_CHECK:
-      printf("ChaDeMo: Stop (Weld Check).\n");
     break;
 
     case CHADEMO_STATE_WAIT_K:
     case CHADEMO_STATE_WAIT_CONTACTOR:
-      printf("ChaDeMo: Waiting for Vehicle to finish up.\n");
     break;
 
     case CHADEMO_STATE_ERROR:
-      printf("ChaDeMo: Error :-(.\n");
     break;
   }
 
@@ -406,7 +396,8 @@ static void chademo_check_vehicle_permission(void)
 
     if (phy_ok != can_ok)
     {
-      printf("ChaDeMo: ERROR: Inconsistency seen between Phys and CAN permission signals\n");
+      snprintf(last_error, ERROR_LEN,
+               "Inconsistency seen between Phys and CAN permission signals");
       can_data.charger.msgid_109.fault_status |= MSG109_CHG_MALFUNC;
       chademo_transition_state(CHADEMO_STATE_STOP);
     }
@@ -441,7 +432,7 @@ static void chademo_process_can(void)
     {
       if (RxHeader.IDE != CAN_ID_STD)
       {
-        printf("ChaDeMo: ERROR: Unexpected CAN message\n");
+        snprintf(last_error, ERROR_LEN, "Unexpected Ext CAN message");
         continue;
       }
 
@@ -511,7 +502,8 @@ static void chademo_process_can(void)
           break;
 
         default:
-          printf("ChaDeMo: Unknown Message: 0x%02lX\n", RxHeader.StdId);
+          snprintf(last_error, ERROR_LEN,
+                   "Unknown Message: 0x%02lX", RxHeader.StdId);
           break;
       }
     }
@@ -533,8 +525,9 @@ void chademo_send_responses(void)
     if ( can_data.vehicle.msgid_102.faults || 
         (can_data.vehicle.msgid_102.status & (STATUS_NOT_PARKED | STATUS_MALFUNCTION)) )
     {
-      printf("ChaDeMo: Aborting Charge. Vehicle Faults: 0x%02X, Status: 0x%02X\n", 
-            can_data.vehicle.msgid_102.faults, 
+      snprintf(last_error, ERROR_LEN,
+            "Aborting Charge. Vehicle Faults: 0x%02X, Status: 0x%02X",
+            can_data.vehicle.msgid_102.faults,
             can_data.vehicle.msgid_102.status);
 
       chademo_transition_state(CHADEMO_STATE_ERROR);
@@ -655,6 +648,8 @@ void chademo_process(void)
     case CHADEMO_STATE_PARAM_CHK:
       if (HAL_GetTick() > state_time + CHADEMO_CAN_TIMEOUT)
       {
+        snprintf(last_error, ERROR_LEN,
+                 "Timed out waiting for CAN messages from Vehicle");
         /* No need for full shut down sequence, no HV involved yet */
         chademo_transition_state(CHADEMO_STATE_OFF);
       }
@@ -669,6 +664,7 @@ void chademo_process(void)
         }
         else
         {
+          snprintf(last_error, ERROR_LEN, "Battery incompatible");
           can_data.charger.msgid_109.fault_status |= MSG109_BATT_INCOMPAT;
           chademo_transition_state(CHADEMO_STATE_STOP);
         }
@@ -694,7 +690,8 @@ void chademo_process(void)
       }
       else if (HAL_GetTick() > state_time + CHADEMO_BATTV_TIMEOUT)
       {
-        printf("ChaDeMo: ERROR: Timeout waiting for battery voltage to appear.\n");
+        snprintf(last_error, ERROR_LEN,
+                 "Timeout waiting for battery voltage to appear.");
         can_data.charger.msgid_109.fault_status |= MSG109_CHG_MALFUNC | MSG109_FAULT;
         chademo_transition_state(CHADEMO_STATE_ERROR);
       }
@@ -707,25 +704,29 @@ void chademo_process(void)
 
       if (!chg_perm)
       {
-        printf("ChaDeMo: Charge Permission Revoked\n");
+        snprintf(last_error, ERROR_LEN,
+                 "Charge Permission Revoked");
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
       if (voltage > can_data.charger.msgid_108.threshold_voltage)
       {
-        printf("ChaDeMo: Maximum Voltage (%ldV) Reached.\n", voltage);
+        snprintf(last_error, ERROR_LEN,
+                 "Maximum Voltage (%ldV) Reached.", voltage);
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
       if (voltage < can_data.vehicle.msgid_200.min_discharge_voltage)
       {
-        printf("ChaDeMo: Minimum Voltage (%ldV) Reached.\n", voltage);
+        snprintf(last_error, ERROR_LEN,
+                 "Minimum Voltage (%ldV) Reached.", voltage);
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
       if (soc < can_data.vehicle.msgid_200.min_discharge_level)
       {
-        printf("ChaDeMo: Minimum SoC (%d%%) Reached.\n", soc);
+        snprintf(last_error, ERROR_LEN,
+                 "Minimum SoC (%d%%) Reached.", soc);
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
     }
@@ -736,12 +737,12 @@ void chademo_process(void)
       /* Wait for current to drop below 5A (Sensor is A x10) */
       if (sensor_get_value(SENSOR_BATT_CURRENT) <= CHADEMO_STOP_CURRENT)
       {
-        printf("ChaDeMo: Current dropped to < 5A.\n");
         chademo_transition_state(CHADEMO_STATE_WELD_CHECK);
       }
       else if (HAL_GetTick() > state_time + CHADEMO_STOP_TIMEOUT)
       {
-        printf("ChaDeMo: ERROR: Timeout waiting for current to drop to < 5A.\n");
+        snprintf(last_error, ERROR_LEN,
+                "Timeout waiting for current to drop to < 5A.");
         can_data.charger.msgid_109.fault_status |= MSG109_CHG_MALFUNC | MSG109_FAULT;
         chademo_transition_state(CHADEMO_STATE_ERROR);
       }
@@ -757,7 +758,8 @@ void chademo_process(void)
       }
       else if (HAL_GetTick() > state_time + CHADEMO_BATTV_TIMEOUT)
       {
-        printf("ChaDeMo: ERROR: Welding Fault Detected, not Unlocking!\n");
+        snprintf(last_error, ERROR_LEN,
+                 "Welding Fault Detected, not Unlocking!");
         can_data.charger.msgid_109.fault_status |= MSG109_FAULT;
         chademo_transition_state(CHADEMO_STATE_ERROR);
       }
@@ -780,7 +782,8 @@ void chademo_process(void)
       }
       if (HAL_GetTick() > state_time + CHADEMO_STOP_TIMEOUT)
       {
-        printf("ChaDeMo: ERROR: Gave up waiting for Vehicle\n");
+        snprintf(last_error, ERROR_LEN,
+                 "Gave up waiting for Vehicle");
         chademo_transition_state(CHADEMO_STATE_OFF);
       }
     break;
@@ -803,7 +806,8 @@ void chademo_process(void)
   if (chademo_state == CHADEMO_STATE_ON && 
       HAL_GetTick() > (last_update + CHADEMO_CAN_TIMEOUT))
   {
-      printf("ChaDeMo: ERROR: CAN message timeout. Aborting.\n");
+      snprintf(last_error, ERROR_LEN,
+               "CAN message timeout. Aborting.");
       chademo_transition_state(CHADEMO_STATE_ERROR);
   }
 }
@@ -860,4 +864,24 @@ void chademo_set_max_power(uint16_t power)
 bool chademo_is_contactor_closed(void)
 {
   return contactor_closed;
+}
+
+/**
+  * @brief  Send JSON message with ChaDeMo Data
+  * @retval None
+  */
+void chademo_json_update(void)
+{
+  printf("{\"chademo\":[");
+
+  printf("{\"state\":%d, \"voltage\":%d, \"current\":%d}",
+         chademo_state,
+         can_data.charger.msgid_109.charger_voltage,
+         can_data.charger.msgid_109.charger_current);
+
+         //can_data.vehicle.msgid_100.max_battery_voltage
+
+  printf(",{\"last_error\":\"%s\"}", last_error);
+
+  printf("]}\n");
 }

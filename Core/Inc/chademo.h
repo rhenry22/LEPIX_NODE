@@ -30,5 +30,7 @@ void chademo_start(void);
 void chademo_set_max_power(uint16_t power);
 bool chademo_is_contactor_closed(void);
 
+void chademo_json_update(void);
+
 #endif /* _CHADEMO_H_ */
 
