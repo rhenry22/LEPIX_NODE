@@ -33,7 +33,6 @@ extern "C" {
 /* USER CODE END Includes */
 
 extern UART_HandleTypeDef huart1;
-
 extern UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN Private defines */
@@ -45,8 +44,9 @@ void MX_USART2_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
-void HAL_UART_Setup_ESP(void);
-void HAL_UART_Process_ESP(void);
+void HAL_UART_Setup_UART1(void);
+void HAL_UART_Setup_UART2(void);
+void HAL_UART_Process(void);
 
 /* USER CODE END Prototypes */
 

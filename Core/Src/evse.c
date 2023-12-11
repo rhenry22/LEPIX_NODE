@@ -47,7 +47,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     cp_pwm = 0;
     cp_active = 0;
     max_current = 0;
-    HAL_GPIO_TogglePin(LED3_GPIO_Port, EVSE_Pin);
+    //HAL_GPIO_TogglePin(LED3_GPIO_Port, EVSE_Pin);
   }
 }
 
@@ -137,33 +137,27 @@ void evse_get_max_current(uint8_t *current)
   */
 EVSE_PP evse_get_pp(void)
 {
-  uint32_t val;
+  int32_t val;
   
   if (last_pp_check + PP_CHECK_INTERVAL < HAL_GetTick())
   {
     last_pp_check = HAL_GetTick();
 
-    val = sensor_get_value(SENSOR_EVSE_PP);
-    
-    if (val == UINT32_MAX)
+    if (HAL_OK != sensor_get_value(SENSOR_EVSE_PP, &val))
+    {
       pp = EVSE_PP_ERROR;
+    }
     else if (val > PP_UNPLUGGED_MIN)
     {
       pp = EVSE_PP_NONE;
-      HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
     }
     else if (val > PP_PRESSED_MIN)
     {
       pp = EVSE_PP_PRESSED;
-      HAL_GPIO_TogglePin(LED3_GPIO_Port, EVSE_Pin);
     }
     else if (val > PP_INSERTED_MIN)
     {
       pp = EVSE_PP_INSERTED;
-      if (max_current > 0)
-      {
-        HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
-      }
     }
   }
 

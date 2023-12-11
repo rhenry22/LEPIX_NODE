@@ -58,7 +58,7 @@ static HAL_StatusTypeDef ina219_write_reg(uint8_t addr, uint8_t reg, uint16_t da
   * @param  data pointer to data storage for read
   * @retval HAL_StatusTypeDef
   */
-HAL_StatusTypeDef ina219_read_reg(uint8_t addr, uint8_t reg, uint16_t *data)
+HAL_StatusTypeDef ina219_read_reg(uint8_t addr, uint8_t reg, int16_t *data)
 {
   HAL_StatusTypeDef ret = HAL_OK;
   uint8_t buf[2];
@@ -85,7 +85,7 @@ HAL_StatusTypeDef ina219_read_reg(uint8_t addr, uint8_t reg, uint16_t *data)
   */
 bool ina219_init(uint8_t addr, uint16_t cal)
 {
-  uint16_t data;
+  int16_t data;
   bool ret = false;
   HAL_StatusTypeDef halRet;
 

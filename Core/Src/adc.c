@@ -205,12 +205,18 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
   last_sample = HAL_GetTick();
 }
 
-uint32_t MX_ADC1_Get_Sample(uint8_t channel)
+/**
+  * @brief  Get value of specified ADC channel
+  * @param  channel Channel to read
+  * @param  val Pointer to read value
+  * @retval HAL_StatusTypeDef HAL_OK on success
+  */
+HAL_StatusTypeDef MX_ADC1_Get_Sample(uint8_t channel, uint16_t *val)
 {
   uint32_t timeout;
 
   if (channel >= NUM_SAMPLES)
-    return UINT32_MAX;
+    return HAL_ERROR;
 
   if (HAL_GetTick() > (last_sample + MAX_SAMPLE_AGE))
   {
@@ -218,9 +224,8 @@ uint32_t MX_ADC1_Get_Sample(uint8_t channel)
     ret = HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_SAMPLES);
     if(ret != HAL_OK)
     {
-      /* Start Conversation Error */
-      printf("ADC: Error starting DMA (%d)\n", ret);
-      return UINT32_MAX;
+      /* Start Conversion Error */
+      return ret;
     }
 
     /* Wait for Conversion / Timeout */
@@ -229,14 +234,15 @@ uint32_t MX_ADC1_Get_Sample(uint8_t channel)
     {
       if (HAL_GetTick() > timeout)
       {
-        printf("ADC: Timeout waiting for conversion\n");
-        return UINT32_MAX;
+        return HAL_TIMEOUT;
       }
     }
-
   }
 
-  return samples[channel];
+  if (val)
+    *val = samples[channel];
+
+  return HAL_OK;
 }
 
 /* USER CODE END 1 */

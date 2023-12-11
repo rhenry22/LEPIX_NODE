@@ -42,7 +42,7 @@ void MX_ADC1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
-uint32_t MX_ADC1_Get_Sample(uint8_t channel);
+HAL_StatusTypeDef MX_ADC1_Get_Sample(uint8_t channel, uint16_t *val);
 
 /* USER CODE END Prototypes */
 

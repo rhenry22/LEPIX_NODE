@@ -1,3 +1,18 @@
+/** @file solax.c
+ *  @brief Module to interface with Solax / FoxESS Inverters
+ *
+ *  This module provides a layer to run a statemachine emulating a BMS to use
+ *  with the Solax / FoxESS inverters.
+ * 
+ *  Inspired by: 
+ *    https://github.com/rand12345/solax_can_bus
+ *  and
+ *    https://github.com/dalathegreat/BYD-Battery-Emulator-For-Gen24
+ * 
+ *  @author Richard Taylor <richard@artaylor.co.uk>
+ *  @bug No known bugs.
+ */
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -262,12 +277,12 @@ static HAL_StatusTypeDef solax_send_standard_response(void)
 
 static void solax_update_values(void)
 {
-  uint32_t voltage;
-  uint32_t current;
+  int32_t voltage;
+  int32_t current;
 
   /* Update Measured Values */
-  voltage = sensor_get_value(SENSOR_BATT_VOLTAGE);
-  current = sensor_get_value(SENSOR_BATT_CURRENT);
+  sensor_get_value(SENSOR_BATT_VOLTAGE, &voltage);
+  sensor_get_value(SENSOR_BATT_CURRENT, &current);
 
   /* BMS_PackData */
   solax_data.bms.msg_1873.voltage = voltage;

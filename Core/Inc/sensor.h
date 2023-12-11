@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "stm32f4xx_hal.h"
 
 typedef enum
 {
@@ -27,6 +28,6 @@ typedef enum
 } SENSOR_SOURCE;
 
 bool sensor_init(void);
-uint32_t sensor_get_value(SENSOR_SOURCE src);
+HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val);
 
 #endif /* __SENSOR_H__ */

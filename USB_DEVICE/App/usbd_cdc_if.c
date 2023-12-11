@@ -240,10 +240,12 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
       huart1.Init.StopBits = linecoding.format;
       huart1.Init.Parity = linecoding.paritytype;
 
+      /* De-Init and apply the new settings */
       HAL_UART_DeInit(&huart1);
       if (HAL_UART_Init(&huart1) == HAL_OK)
       {
-        HAL_UART_Setup_ESP();
+        /* Need to kick off DMA transfer again */
+        HAL_UART_Setup_UART1();
       }
       is_connected = true;
     break;

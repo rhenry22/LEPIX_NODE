@@ -42,6 +42,8 @@
 #include "chademo.h"
 #include "solax.h"
 
+#include "modbus.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +59,8 @@
 #define ENABLE_SOLAX
 
 #define JSON_UPDATE_TIME    (5000)
+
+#define MB_SLAVE_ADDRESS	  (1)
 
 /* USER CODE END PD */
 
@@ -75,6 +79,8 @@ static uint32_t last_json_update = 0;  /* Last time we saw frame 0x03 */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -201,6 +207,12 @@ int main(void)
   }
 #endif
 
+  if (!modbus_init(MB_SLAVE_ADDRESS, &mb_read_cb))
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Modbus interface.\"}]\n");
+    error = true;
+  }
+
   if (!error)
     printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
 
@@ -244,10 +256,11 @@ int main(void)
         break;
 
         default:
+
         case EVSE_PP_NONE:
           /* Disable the CP line */
           HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
-        break;
+        /* break; */  /* Deliberate fall through */
 
         case EVSE_PP_PRESSED:
           /* Update the inverter max */
@@ -282,19 +295,28 @@ int main(void)
     }
 #endif // ENABLE_EVSE
 
-    HAL_UART_Process_ESP();
+    /* Process Serial Data */
+    HAL_UART_Process();
 
     /* Send regular JSON messages */
     if (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME)
     {
       last_json_update = HAL_GetTick();
-      printf("{\"controller\":[{\"timestamp\":%ld,\"status\":0,\"message\":\"Heartbeat\"}]\n", HAL_GetTick());
+      printf("{\"controller\":[");
       evse_json_update();
+      printf(",");
       solax_json_update();
+      printf(",");
       chademo_json_update();
+      printf(",{\"timestamp\":%ld,\"status\":0,\"message\":\"Heartbeat\"}]\n", HAL_GetTick());
     }
 
     HAL_IWDG_Refresh(&hiwdg);
+
+    /* Re-purpose the EVSE LED to show when we're busy */
+    HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
+    __WFI();
+    HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
 
     /* USER CODE END WHILE */
 
@@ -305,6 +327,52 @@ int main(void)
   NVIC_SystemReset();
   
   /* USER CODE END 3 */
+}
+
+/**
+  * @brief Modbus Read Callback
+  * @param type Modbus function type
+  * @param reg Register to read
+  * @param len Number of registers to read
+  * @retval None
+  */
+void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len)
+{
+  
+	switch (type)
+	{
+		case MB_READ_HOLDING:
+			switch (reg)
+			{
+				case 12:	// Current Power (W)
+					modbus_resp_begin(MB_READ_HOLDING, sizeof(int32_t));
+					modbus_resp_float((float)chademo_get_power());
+				break;
+
+
+				case 0x2004:	// Current Power (KW)
+					modbus_resp_begin(MB_READ_HOLDING, sizeof(int32_t));
+					modbus_resp_float((float)chademo_get_power() / 1000.0f);
+				break;
+
+				case 70: 	// Frequency (Hz)
+				case 0x200E: 	// Frequency (Hz)
+					modbus_resp_begin(MB_READ_HOLDING, sizeof(int32_t));
+					modbus_resp_float(50.0f);
+				break;
+
+				default:
+					modbus_resp_begin(0x80 | type, MB_ERR_ILLEGAL_ADDRESS);
+				break;
+			}
+		break;
+
+		default:
+			modbus_resp_begin(0x80 | type, MB_ERR_ILLEGAL_FUNCTION);
+		break;
+	}
+
+	modbus_resp_end();
 }
 
 /**
