@@ -182,7 +182,7 @@ struct can_data
 };
 
 static uint32_t last_update = 0;            /* Last time we saw a CAN message */
-static CHADEMO_STATE chademo_state;         /* State Machine State */
+static CHADEMO_STATE chademo_state = 0;     /* State Machine State */
 static uint32_t leak_base;                  /* Baseline (Off) current of leakage HV module */
 static struct can_data can_data;            /* Structure holding all CAN message data */
 
@@ -235,6 +235,9 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
   state_time = HAL_GetTick();
 
+  /* Make sure we notify watchers ASAP */
+  trigger_json_update();
+
   switch (new_state)
   {
     case CHADEMO_STATE_OFF:
@@ -242,7 +245,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
       contactor_closed = false;
-
 
       /* These should already be off, but can be used as an emergency stop */
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
@@ -929,7 +931,7 @@ int32_t chademo_get_power(void)
   */
 void chademo_json_update(void)
 {
-  printf("{\"chademo\":{\n    ");
+  printf("\"chademo\":{\n    ");
     printf("\"charger\":{\n      ");
       printf("\"0x108\":{\"threshold_voltage\":%d, \"available_voltage\":%d, \"available_current\":%d},\n      ",
             can_data.charger.msgid_108.threshold_voltage,
@@ -958,10 +960,8 @@ void chademo_json_update(void)
             can_data.vehicle.msgid_200.max_discharge_current,
             can_data.vehicle.msgid_200.min_discharge_level,
             can_data.vehicle.msgid_200.max_remaining_capacity);
-      printf("\"0x201\":{\"available_energy\":%d}",
+      printf("\"0x201\":{\"available_energy\":%d}},\n    ",
             can_data.vehicle.msgid_201.available_energy);
-    printf("}},\n    ");
-
     printf("\"state\":%d, \"last_error\":\"%s\"", chademo_state, last_error);
   printf("}");
 }

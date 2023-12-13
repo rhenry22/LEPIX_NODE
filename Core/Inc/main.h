@@ -55,6 +55,7 @@ void Error_Handler(void);
 /* USER CODE BEGIN EFP */
 
 void emergency_stop(void);
+void trigger_json_update(void);
 
 /* USER CODE END EFP */
 

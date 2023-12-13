@@ -58,7 +58,7 @@
 #define ENABLE_CHADEMO
 #define ENABLE_SOLAX
 
-#define JSON_UPDATE_TIME    (5000)
+#define JSON_UPDATE_TIME    (120000)
 
 #define MB_SLAVE_ADDRESS	  (1)
 
@@ -131,6 +131,15 @@ void emergency_stop(void)
     HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
     for (i=0; i<1000000; ++i);
   }
+}
+
+/**
+  * @brief  Trigger an update of the JSON output.
+  * @retval None
+  */
+void trigger_json_update(void)
+{
+  last_json_update = 0;
 }
 
 /* USER CODE END 0 */
@@ -299,16 +308,23 @@ int main(void)
     HAL_UART_Process();
 
     /* Send regular JSON messages */
-    if (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME)
+    if ((last_json_update == 0) || 
+        (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME))
     {
-      last_json_update = HAL_GetTick();
-      printf("{\"controller\":[\n  ");
+      int32_t acc_current;
+
+      sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
+
+      printf("{\"controller\":{\n  ");
       evse_json_update();
       printf(",\n  ");
       solax_json_update();
       printf(",\n  ");
       chademo_json_update();
-      printf(",\n  {\"timestamp\":%ld,\"status\":0,\"message\":\"Heartbeat\"}\n]}\n", HAL_GetTick());
+      printf(",\n  \"timestamp\":%ld,\"status\":0,\"acc_current\":%d\n}}\n", 
+              HAL_GetTick(), acc_current / 1000);
+
+      last_json_update = HAL_GetTick();
     }
 
     HAL_IWDG_Refresh(&hiwdg);

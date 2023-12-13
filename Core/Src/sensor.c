@@ -99,7 +99,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
       uint16_t tmp;
       ret = MAX22530_read_register(MAX22530_ADC1, &tmp);
       if (ret == HAL_OK)
-        *val = (int32_t)val * MAX22530_VREF / 4096 * (5 + 1500) * 10 / 5 / 1000;
+        *val = (int32_t)tmp * MAX22530_VREF / 4096 * (4.7 + 1500) * 10 / 4.7 / 1000;
     }
     break;
 

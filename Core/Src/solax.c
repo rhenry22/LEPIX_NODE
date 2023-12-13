@@ -340,6 +340,7 @@ static void solax_update_values(void)
 static HAL_StatusTypeDef solax_update_state(void)
 {
   HAL_StatusTypeDef ret = HAL_OK;
+  SOLAX_STATE s = state;
 
   /* Update the contactor state */
   if (chademo_is_contactor_closed())
@@ -416,6 +417,9 @@ static HAL_StatusTypeDef solax_update_state(void)
       break;
     }
   }
+
+  if (s != state)
+    trigger_json_update();
 
   return ret;
 }
@@ -517,10 +521,10 @@ void solax_process(void)
   }
 
   /* Shut down if we timeout receiving messages */
-  if (HAL_GetTick() > last_update + SOLAX_TIMEOUT)
+  if (HAL_GetTick() > last_update + SOLAX_TIMEOUT && (state > SOLAX_BATTERY_ANNOUNCE))
   {
-    state = SOLAX_BATTERY_ANNOUNCE;
     chademo_stop();
+    state = SOLAX_BATTERY_ANNOUNCE;
   }
 
   HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_SET);
@@ -632,7 +636,7 @@ void solax_set_battery_soc(uint16_t soc)
   */
 void solax_json_update(void)
 {
-  printf("{\"solax\":{");
+  printf("\"solax\":{");
 
   printf("\"state\":%d, \"max_chg_current\":%d.%d, \"max_dis_current\":%d.%d",
          state,
@@ -641,7 +645,12 @@ void solax_json_update(void)
          solax_data.bms.msg_1872.discharge_max/10,
          solax_data.bms.msg_1872.discharge_max%10);
 
-  printf(", \"last_error\":\"%s\"", last_error);
+  printf(", \"voltage\":%d.%d, \"current\":%d.%d, \"last_error\":\"%s\"", 
+          solax_data.bms.msg_1873.voltage / 10,
+          solax_data.bms.msg_1873.voltage % 10,
+          solax_data.bms.msg_1873.current / 10,
+          solax_data.bms.msg_1873.current % 10,
+          last_error);
 
   /* Time information from Inverter */
   printf(", \"date\":\"%04d/%02d/%02d\", \"time\":\"%02d:%02d:%02d\"",
@@ -651,6 +660,5 @@ void solax_json_update(void)
     solax_data.inverter.msg_1871_3.data[4],
     solax_data.inverter.msg_1871_3.data[5],
     solax_data.inverter.msg_1871_3.data[6]);
-
-  printf("}}");
+  printf("}");
 }
