@@ -170,11 +170,11 @@ EVSE_PP evse_get_pp(void)
   */
 void evse_json_update(void)
 {
-  printf("{\"evse\":[");
+  printf("{\"evse\":{");
 
-  printf("{\"pp\":%d, \"max_current\":%ld}",
+  printf("\"pp\":%d, \"max_current\":%ld",
          pp,
          max_current);
 
-  printf("]}\n");
+  printf("}}");
   }

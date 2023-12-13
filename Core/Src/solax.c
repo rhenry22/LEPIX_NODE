@@ -208,8 +208,8 @@ struct _solax_data solax_data = {
 
     /* BMS_Limits */
     .msg_1872 = {
-      .charge_max = 15,
-      .discharge_max = 15
+      .charge_max = 0,
+      .discharge_max = 0
     },
 
     /* BMS_PackData */ 
@@ -229,7 +229,7 @@ struct _solax_data solax_data = {
 };
 
 static SOLAX_STATE state = SOLAX_BATTERY_ANNOUNCE;  /* BMS state machine */
-static uint16_t max_ac_power = 1000;                /* Maximum current limit advertised by EVSE (W x1) */
+static uint16_t max_ac_power = 0;                /* Maximum current limit advertised by EVSE (W x1) */
 static uint32_t t_zero_set = 0;                     /* Time at which current request set to zero (debug / check inverter response) */
 static uint32_t last_update = 0;                    /* Last time we saw a CAN message */
 static uint16_t max_charge_current = 0;             /* Max DC charge current (A x10) */
@@ -632,17 +632,19 @@ void solax_set_battery_soc(uint16_t soc)
   */
 void solax_json_update(void)
 {
-  printf("{\"solax\":[");
+  printf("{\"solax\":{");
 
-  printf("{\"state\":%d, \"max_chg_current\":%d, \"max_dis_current\":%d}",
+  printf("\"state\":%d, \"max_chg_current\":%d.%d, \"max_dis_current\":%d.%d",
          state,
-         solax_data.bms.msg_1872.charge_max,
-         solax_data.bms.msg_1872.discharge_max);
+         solax_data.bms.msg_1872.charge_max/10,
+         solax_data.bms.msg_1872.charge_max%10,
+         solax_data.bms.msg_1872.discharge_max/10,
+         solax_data.bms.msg_1872.discharge_max%10);
 
-  printf(",{\"last_error\":\"%s\"}", last_error);
+  printf(", \"last_error\":\"%s\"", last_error);
 
   /* Time information from Inverter */
-  printf(",{\"date\":\"%04d/%02d/%02d\", \"time\":\"%02d:%02d:%02d\"}",
+  printf(", \"date\":\"%04d/%02d/%02d\", \"time\":\"%02d:%02d:%02d\"",
     solax_data.inverter.msg_1871_3.data[1] + 2000,
     solax_data.inverter.msg_1871_3.data[2],
     solax_data.inverter.msg_1871_3.data[3],
@@ -650,5 +652,5 @@ void solax_json_update(void)
     solax_data.inverter.msg_1871_3.data[5],
     solax_data.inverter.msg_1871_3.data[6]);
 
-  printf("]}\n");
+  printf("}}");
 }

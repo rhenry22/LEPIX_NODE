@@ -302,13 +302,13 @@ int main(void)
     if (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME)
     {
       last_json_update = HAL_GetTick();
-      printf("{\"controller\":[");
+      printf("{\"controller\":[\n  ");
       evse_json_update();
-      printf(",");
+      printf(",\n  ");
       solax_json_update();
-      printf(",");
+      printf(",\n  ");
       chademo_json_update();
-      printf(",{\"timestamp\":%ld,\"status\":0,\"message\":\"Heartbeat\"}]\n", HAL_GetTick());
+      printf(",\n  {\"timestamp\":%ld,\"status\":0,\"message\":\"Heartbeat\"}\n]}\n", HAL_GetTick());
     }
 
     HAL_IWDG_Refresh(&hiwdg);

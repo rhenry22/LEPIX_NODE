@@ -181,7 +181,7 @@ struct can_data
   } charger;
 };
 
-static uint32_t last_update;                /* Last time we saw a CAN message */
+static uint32_t last_update = 0;            /* Last time we saw a CAN message */
 static CHADEMO_STATE chademo_state;         /* State Machine State */
 static uint32_t leak_base;                  /* Baseline (Off) current of leakage HV module */
 static struct can_data can_data;            /* Structure holding all CAN message data */
@@ -221,14 +221,14 @@ static HAL_StatusTypeDef chademo_send_message(uint32_t id, uint8_t* data)
 }
 
 /**
-  * @brief  Update the ChaDeMo State Machine
-  * @param  state The new state to transition to
+  * @brief  Perform immediate actions associated with a state transition.
+  *         Any delayed transitions must be handled in chademo_process() instead.
+  *         Must not call itself!
+  * @param  state The new state
   * @retval None
   */
 static void chademo_transition_state(CHADEMO_STATE new_state)
 {
-  bool update_state = true;
-
   /* Used for Sensor reads */
   int32_t val;
   HAL_StatusTypeDef ret;
@@ -264,27 +264,15 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         {
           /* Signal to the vehicle that we're ready to start */
           HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_SET);
-          chademo_transition_state(CHADEMO_STATE_PARAM_CHK);
-          update_state = false;
-        }
-        else
-        {
-          chademo_transition_state(CHADEMO_STATE_STOP);
-          update_state = false;
         }
       }
     break;
 
     case CHADEMO_STATE_PARAM_CHK:
-      // ToDo: CAN CHG before Physical charge == fault
-      // ToDo: Physical Charge before sending first CAN data == fault
-    break;
-
-    case CHADEMO_STATE_PERM_OK:
     {
       uint32_t max_current = 0;
 
-      /* These values are on only allowed to change during Parameter checking */
+      /* These values are only allowed to change during Parameter checking */
 
       /* Set the Threshold Voltage */
       can_data.charger.msgid_108.threshold_voltage = 
@@ -298,6 +286,13 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         max_current = max_evse_power / can_data.vehicle.msgid_100.max_battery_voltage;
       can_data.charger.msgid_108.available_charger_current = max_current;
 
+      // ToDo: CAN CHG before Physical charge == fault
+      // ToDo: Physical Charge before sending first CAN data == fault
+    }
+    break;
+
+    case CHADEMO_STATE_PERM_OK:
+    {
       /* Lock the connector */
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);      
       can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
@@ -308,8 +303,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       {
         snprintf(last_error, ERROR_LEN,
                  "Pre-contactor close battery check failed. More than 10V present.");
-        chademo_transition_state(CHADEMO_STATE_ERROR);
-        update_state = false;
+        new_state = CHADEMO_STATE_ERROR;
       }
       else
       {
@@ -335,8 +329,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         {
           snprintf(last_error, ERROR_LEN,
                   "Failed to get baseline leakage current.");
-          chademo_transition_state(CHADEMO_STATE_ERROR);
-          update_state = false;
+          new_state = CHADEMO_STATE_ERROR;
         }
     }
     break;
@@ -356,16 +349,14 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       {
         snprintf(last_error, ERROR_LEN,
                  "Earth leakage test failed.");
-        chademo_transition_state(CHADEMO_STATE_ERROR);
-        update_state = false;
+        new_state = CHADEMO_STATE_ERROR;
       }
       else
       {
         contactor_closed = true;
         HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_SET);
 
-        chademo_transition_state(CHADEMO_STATE_BATT_CHECK);
-        update_state = false;
+        new_state = CHADEMO_STATE_BATT_CHECK;
       }
     }
     break;
@@ -388,23 +379,14 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     break;
 
     case CHADEMO_STATE_WELD_CHECK:
-    break;
-
     case CHADEMO_STATE_WAIT_K:
     case CHADEMO_STATE_WAIT_CONTACTOR:
-    break;
-
     case CHADEMO_STATE_ERROR:
-      errored = true;
-      chademo_transition_state(CHADEMO_STATE_STOP);
-      update_state = false;
+      /* Nothing to do here, handled in chademo_process() */
     break;
   }
 
-  if (update_state)
-  {
-    chademo_state = new_state;
-  }
+  chademo_state = new_state;
 }
 
 /**
@@ -666,7 +648,8 @@ bool chademo_init(void)
 }
 
 /**
-  * @brief  Receive ChaDeMo data
+  * @brief  Process ChaDeMo CAN data and drive time based
+  *         state machine transitions.
   * @retval None
   */
 void chademo_process(void)
@@ -689,12 +672,8 @@ void chademo_process(void)
     measured_power = measured_voltage * measured_current / 100;
   }
 
-  /* If we've started, respond to CAN messages */
-  if (chademo_state >= CHADEMO_STATE_START)
-  {
-    /* Send any response messages */
-    chademo_send_responses();
-  }
+  /* Send any response messages (only if any received) */
+  chademo_send_responses();
 
   /* Check the Vehicle Permission GPIO */
   chademo_check_vehicle_permission();
@@ -702,12 +681,32 @@ void chademo_process(void)
   /* Time based state machine transitions */
   switch (chademo_state)
   {
+    case CHADEMO_STATE_OFF:
+      last_update = 0;
+    break;
+
+    case CHADEMO_STATE_START:
+      if (HAL_GetTick() > state_time + CHADEMO_CAN_TIMEOUT)
+      {
+        snprintf(last_error, ERROR_LEN,
+                 "Timed out waiting for CAN messages from Vehicle");
+        /* No need for full shut down sequence, no HV involved yet */
+        chademo_transition_state(CHADEMO_STATE_OFF);
+      }
+
+      /* Check that we're receiving CAN messages and update our limits */
+      if (last_update > 0)
+      {
+        chademo_transition_state(CHADEMO_STATE_PARAM_CHK);
+      }
+    break;
+
     /* Wait for vehicle to grant permission */
     case CHADEMO_STATE_PARAM_CHK:
       if (HAL_GetTick() > state_time + CHADEMO_CAN_TIMEOUT)
       {
         snprintf(last_error, ERROR_LEN,
-                 "Timed out waiting for CAN messages from Vehicle");
+                 "Timed out waiting for Vehicle Permission");
         /* No need for full shut down sequence, no HV involved yet */
         chademo_transition_state(CHADEMO_STATE_OFF);
       }
@@ -724,7 +723,7 @@ void chademo_process(void)
         {
           snprintf(last_error, ERROR_LEN, "Battery incompatible");
           can_data.charger.msgid_109.fault_status |= MSG109_BATT_INCOMPAT;
-          chademo_transition_state(CHADEMO_STATE_STOP);
+          chademo_transition_state(CHADEMO_STATE_OFF);
         }
       }
     break;
@@ -739,6 +738,9 @@ void chademo_process(void)
     case CHADEMO_STATE_INS_TEST_BASE:
       if (HAL_GetTick() > state_time + 1000)
         chademo_transition_state(CHADEMO_STATE_INS_TEST);
+    break;
+
+    case CHADEMO_STATE_INS_TEST:
     break;
 
     case CHADEMO_STATE_BATT_CHECK:
@@ -845,8 +847,10 @@ void chademo_process(void)
         chademo_transition_state(CHADEMO_STATE_OFF);
       }
     break;
-    
-    default:
+
+    case CHADEMO_STATE_ERROR:
+      errored = true;
+      chademo_transition_state(CHADEMO_STATE_STOP);
     break;
   }
 
@@ -925,40 +929,39 @@ int32_t chademo_get_power(void)
   */
 void chademo_json_update(void)
 {
-  printf("{\"chademo\":[{\"charger\":{[");
-  printf("{\"charger\":{[");
-  printf("{\"0x108\":{\"threshold\":%d, \"voltage\":%d, \"current\":%d}},",
-         can_data.charger.msgid_108.threshold_voltage,
-         can_data.charger.msgid_108.available_charger_voltage,
-         can_data.charger.msgid_108.available_charger_current);
-  printf("{\"0x109\":{\"voltage\":%d, \"current\":%d, \"power\":%ld, \"fault_status\":%d}}",
-         can_data.charger.msgid_109.charger_voltage,
-         can_data.charger.msgid_109.charger_current,
-         measured_power,
-         can_data.charger.msgid_109.fault_status);
-  printf("]},");
+  printf("{\"chademo\":{\n    ");
+    printf("\"charger\":{\n      ");
+      printf("\"0x108\":{\"threshold_voltage\":%d, \"available_voltage\":%d, \"available_current\":%d},\n      ",
+            can_data.charger.msgid_108.threshold_voltage,
+            can_data.charger.msgid_108.available_charger_voltage,
+            can_data.charger.msgid_108.available_charger_current);
+      printf("\"0x109\":{\"voltage\":%d, \"current\":%d, \"power\":%ld, \"fault_status\":%d}",
+            can_data.charger.msgid_109.charger_voltage,
+            can_data.charger.msgid_109.charger_current,
+            measured_power,
+            can_data.charger.msgid_109.fault_status);
+    printf("},\n    ");
 
-  printf("{\"vehicle\":{[");
-  printf("{\"0x100\":{\"max_voltage\":%d}},",
-         can_data.vehicle.msgid_100.max_battery_voltage);
-  printf("{\"0x101\":{\"rated_capacity\":%d}},",
-         can_data.vehicle.msgid_101.rated_battery_capacity);
-  printf("{\"0x102\":{\"target_voltage\":%d, \"charge_current\":%d, \"faults\":0x%02X, \"status\":0x%02X, \"soc\":%d}},",
-         can_data.vehicle.msgid_102.target_battery_voltage,
-         can_data.vehicle.msgid_102.charge_current_requested,
-         can_data.vehicle.msgid_102.faults,
-         can_data.vehicle.msgid_102.status,
-         can_data.vehicle.msgid_102.charge_rate);
-  printf("{\"0x200\":{\"min_voltage\":%d, \"max_current\":%d, \"min_soc\":%d, \"capacity\":%d}}",
-         can_data.vehicle.msgid_200.min_discharge_voltage,
-         can_data.vehicle.msgid_200.max_discharge_current,
-         can_data.vehicle.msgid_200.min_discharge_level,
-         can_data.vehicle.msgid_200.max_remaining_capacity);
-  printf("{\"0x201\":{\"available_energy\":%d}}",
-         can_data.vehicle.msgid_201.available_energy);
-  printf("]},");
+    printf("\"vehicle\":{\n      ");
+      printf("\"0x100\":{\"max_voltage\":%d},\n      ",
+            can_data.vehicle.msgid_100.max_battery_voltage);
+      printf("\"0x101\":{\"rated_capacity\":%d},\n      ",
+            can_data.vehicle.msgid_101.rated_battery_capacity);
+      printf("\"0x102\":{\"target_voltage\":%d, \"charge_current\":%d, \"faults\":%d, \"status\":%d, \"soc\":%d},\n      ",
+            can_data.vehicle.msgid_102.target_battery_voltage,
+            can_data.vehicle.msgid_102.charge_current_requested,
+            can_data.vehicle.msgid_102.faults,
+            can_data.vehicle.msgid_102.status,
+            can_data.vehicle.msgid_102.charge_rate);
+      printf("\"0x200\":{\"min_voltage\":%d, \"max_current\":%d, \"min_soc\":%d, \"capacity\":%d},\n      ",
+            can_data.vehicle.msgid_200.min_discharge_voltage,
+            can_data.vehicle.msgid_200.max_discharge_current,
+            can_data.vehicle.msgid_200.min_discharge_level,
+            can_data.vehicle.msgid_200.max_remaining_capacity);
+      printf("\"0x201\":{\"available_energy\":%d}",
+            can_data.vehicle.msgid_201.available_energy);
+    printf("}},\n    ");
 
-  printf("{\"state\":%d, \"last_error\":\"%s\"}", chademo_state, last_error);
-
-  printf("]}\n");
+    printf("\"state\":%d, \"last_error\":\"%s\"", chademo_state, last_error);
+  printf("}");
 }
