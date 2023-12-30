@@ -247,7 +247,9 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
         /* Need to kick off DMA transfer again */
         HAL_UART_Setup_UART1();
       }
+#ifdef ESP_FLASH_MODE
       is_connected = true;
+#endif
     break;
 
     case CDC_GET_LINE_CODING:
@@ -335,6 +337,27 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   /* USER CODE BEGIN 6 */
   HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_RESET);
 
+  if (*Len == 1)
+  {
+    switch (Buf[0])
+    {
+      case '1':
+        chademo_start();
+      break;
+      
+      case '2':
+        chademo_stop();
+      break;
+      
+      case '3':
+        HAL_NVIC_SystemReset();
+      break;
+
+      default:
+      break;
+    }
+  }
+
   if (HAL_UART_Transmit(&huart1, Buf, *Len, 250) != HAL_OK)
   {
     ret = USBD_BUSY;
@@ -362,20 +385,33 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   * @param  Len: Number of data to be sent (in bytes)
   * @retval USBD_OK if all operations are OK else USBD_FAIL or USBD_BUSY
   */
-uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
+uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len, uint32_t timeout)
 {
   uint8_t result = USBD_OK;
+  uint32_t t = HAL_GetTick() + timeout;
 
-  /* USER CODE BEGIN 7 */
-  USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
-  if (hcdc->TxState != 0){
-    result = USBD_BUSY;
-  }
-
-  if (result == USBD_OK)
+  if (is_connected)
   {
-    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
-    result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+    USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+
+    /* USER CODE BEGIN 7 */
+    while (hcdc->TxState != 0 && HAL_GetTick() < t);
+
+    if (hcdc->TxState != 0){
+      result = USBD_BUSY;
+      is_connected = false;
+    }
+
+    if (result == USBD_OK)
+    {
+      USBD_CDC_SetTxBuffer(&hUsbDeviceFS, Buf, Len);
+      result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+    }
+
+    if (result != USBD_OK)
+    {
+      is_connected = false;
+    }
   }
 
   /* USER CODE END 7 */

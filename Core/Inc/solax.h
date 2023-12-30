@@ -2,7 +2,8 @@
 #define _SOLAX_H_
 
 #define SOLAX_MAXIMUM_SUPPORTED_VOLTAGE (450)
-#define SOLAX_MAXIMUM_SUPPORTED_CURRENT (16)    // 40, but only have a 16A fuse!
+#define SOLAX_MINIMUM_SUPPORTED_VOLTAGE (288)
+#define SOLAX_MAXIMUM_SUPPORTED_CURRENT (40)
 
 void solax_process(void);
 

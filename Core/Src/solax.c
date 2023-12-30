@@ -42,8 +42,6 @@
 #define MSG_1871_STATUS     (1)
 #define MSG_1871_CONTACTOR  (3)
 
-#define ERROR_LEN           (128)
-
 typedef enum _solax_state
 {
   SOLAX_BATTERY_ANNOUNCE,
@@ -322,6 +320,8 @@ static void solax_update_values(void)
     req_power = voltage * req_current / 100;
     if (req_power > max_ac_power)
       req_current = (100 * max_ac_power) / voltage;
+    
+    solax_data.bms.msg_1872.discharge_max = req_current;
   }
   else
   {

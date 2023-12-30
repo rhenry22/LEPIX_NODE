@@ -10,14 +10,14 @@
  * 
  *  ToDo: 
  *  Requires a user interface to show charging status and start / stop charging
- *  Requires Short Circuit and Isolation detection (not just earth leakage)
+ *  Requires Short Circuit and Isolation detection (100KOhm min) not just earth leakage
  *  Emergency Stop button (Red, latching)
  *  Start / Stop buttons (Blue, Green, illuminated)
  *  Separate CPU for Inverter Control and Interface (technically OK?)
  *  Analog handshake should go via connector lock detection and inverter shutoff in HW 
  *  (i.e. separate from CPU)
  *  
- *  Calibrate Earth Leakage to >50kOhm threshold value
+ *  Check and Calibrate Earth Leakage threshold value (lower than 100 Ω/V)
  *  Monitor lock soleniod current and set CONN Lock flag to zero if it fails.
  *  
  *  Copyright (c) 2023 ARTaylor.co.uk.
@@ -30,22 +30,24 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "usbd_cdc_if.h"  // for MIN
+#include "usbd_cdc_if.h"  /* for MIN */
 #include "can.h"
 #include "chademo.h"
 #include "solax.h"
 #include "sensor.h"
 
-#define DEBUG_CAN
+//#define DEBUG_CAN
 
-#define MEASUREMENT_INTERVAL  (50)
+#define MESSAGE_INTERVAL      (100)
 
 #define DEBOUNCE_TIME         (50)
 #define CHADEMO_CAN_TIMEOUT   (10000)
-#define LEAKAGE_CURRENT_MAX   (500)
+#define LEAKAGE_CURRENT_MAX   (250 * 500 / 5)  /* 100Ohm/V == 500kOhm == 250uA (@ 500V)*/
+#define LEAK_TEST_TIME        (1000)  /* Between 200ms and 1000ms */
 #define STOP_CURRENT          (50)    /* 5A (x10) */
-#define BATT_CHECK_TIMEOUT    (1000)
-#define STOP_TIMEOUT          (5000)
+#define BATT_CHECK_TIMEOUT    (5000)
+#define STOP_TIMEOUT          (10000) /* How long to wait for current to drop */
+#define DEFAULT_MIN_SOC       (25)
 
 #define CONTACTOR_CLOSED_V    (500)
 #define CONTACTOR_OPEN_V      (100)
@@ -63,6 +65,11 @@
 #define STATUS_CONTACTOR_OPEN (1 << 3)
 #define STATUS_CHG_STOP       (1 << 4)
 
+#define STATUS_CHG_V2X_1      (1 << 5)
+#define STATUS_CHG_V2X_2      (1 << 6)
+#define STATUS_CHG_V2X_COMPAT (1 << 7)
+
+
 /* MSG ID 0x109 Bits */
 #define MSG109_CHARGE         (1 << 0)
 #define MSG109_FAULT          (1 << 1)
@@ -71,35 +78,32 @@
 #define MSG109_CHG_MALFUNC    (1 << 4)
 #define MSG109_CHG_STOPPED    (1 << 5)
 
-#define ERROR_LEN             (128)
-
-struct can_data
+struct can_data 
 {
-  bool std_data;
-  bool v2x_data;
-
   struct _vehicle
   {
-    struct
+    struct __attribute__((packed))
     {
-        uint8_t reserved[4];
+        uint8_t min_charge_current;     /* Minimum charge current (A x1) 0: unused */
+        uint8_t reserved[1];
+        uint16_t min_battery_voltage;   /* Minimum voltage for V2X (V x1?) 0: unused */
         uint16_t max_battery_voltage;   /* Maximum voltage (V x1) */
         uint8_t charge_rate_indication; /* Const 100 (100%) */
         uint8_t reserved2;
     } msgid_100;
 
-    struct
+    struct __attribute__((packed))
     {
         uint8_t reserved;
         uint8_t max_charging_time_10s;
         uint8_t max_charging_time_1min;
         uint8_t estimated_charge_time_1min;
         uint8_t reserved2;
-        uint16_t rated_battery_capacity;  /* Capacity when full (0.1kWh) */
+        uint16_t rated_battery_capacity;  /* Capacity when full (0.1kWh) includes SoH factor? */
         uint8_t reserved3;
     } msgid_101;
 
-    struct
+    struct __attribute__((packed))
     {
         uint8_t chademo_version;
         uint16_t target_battery_voltage;  /* Target Voltage (V x1) */
@@ -107,26 +111,26 @@ struct can_data
         uint8_t faults;
         uint8_t status;
         uint8_t charge_rate;              /* Battery SoC (% x1) */
-        uint8_t reserved;
+        uint8_t pad[1];
     } msgid_102;
 
     /* Chademo v2.0 only */
-    struct
+    struct __attribute__((packed))
     {
         uint8_t status;
         uint8_t pad[7];
     } msgid_110;
 
-    struct
+    struct __attribute__((packed))
     {
         uint8_t max_discharge_current;    /* Max Discharge (A x1) */
-        uint16_t min_discharge_voltage;   /* Min Voltage (V x1) */
-        uint8_t min_discharge_level;      /* Min SoC (% x1) */
-        uint8_t max_remaining_capacity;   /* Max Available SoC? */
-        uint8_t pad[3];
+        uint16_t min_discharge_voltage;   /* Min Voltage (V x1?) 0: unused */
+        uint8_t min_discharge_level;      /* Min SoC or kWh (% x1) 0: unused */
+        uint8_t max_remaining_capacity;   /* Max Available capacity with which the vehicle permits (dis?)charging */
+        uint8_t pad[3];                   /* Data here, need more info (0x00, 0x45, 0xb9) */
     } msgid_200;
 
-    struct
+    struct __attribute__((packed))
     {
         uint8_t v2x_sequence_num;
         uint16_t estimated_discharge_time;
@@ -134,7 +138,7 @@ struct can_data
         uint8_t pad[3];
     } msgid_201;
 
-    struct
+    struct __attribute__((packed))
     {
         uint8_t manufacturer_code;
         uint8_t pad[7];
@@ -143,40 +147,48 @@ struct can_data
 
   struct _charger
   {
-    struct
+    struct __attribute__((packed))
     {
-        uint8_t welding_detection;            /* 0x00: Not Supported, else supported */
+        uint8_t welding_detection;            /* 0x00: Not Supported, 0x01: Supported */
         uint16_t available_charger_voltage;   /* V x1 */
         uint8_t available_charger_current;    /* A x1 */
-        uint16_t threshold_voltage;           /* Fault Threshold Voltage (Max) V x1 */
+        uint16_t threshold_voltage;           /* Fault Threshold Voltage Max (V x1) */
         uint8_t pad[2];
     } msgid_108;
 
-    struct
+    struct __attribute__((packed))
     {
-        uint8_t chademo_version;
+        uint8_t chademo_version;              /* ChaDeMo Version supported (0x02) */
         uint16_t charger_voltage;             /* Battery voltage (V x1) */
-        uint8_t charger_current;              /* Battery voltage (A x1) */
-        uint8_t reserved;
+        uint8_t charger_current;              /* Battery current (A x1) */
+        uint8_t reserved;                     /* 0x01 when V2X? */
         uint8_t fault_status;
-        uint8_t time_remaining_10s;
-        uint8_t time_remaining_1min;
+        uint8_t time_remaining_10s;           /* 0xff if using 1min field */
+        uint8_t time_remaining_1min;          /* Remaining time in mins */
     } msgid_109;
 
     /* Chademo v2.0 only */
-    struct
+    struct __attribute__((packed))
     {
-        uint8_t pad[8];
+        uint8_t status;
+        uint8_t pad[7];
     } msgid_118;
 
-    struct
+    struct __attribute__((packed))
     {
-        uint8_t pad[8];
+        uint8_t discharge_current;          /* Battery current: 0xff - current (A x1) */
+        uint16_t min_voltage;               /* Minimum voltage for inverter (V x1?) */
+        uint8_t discharge_current_max;      /* Max current for protection (A x1) */
+        uint8_t reserved;
+        uint16_t low_threshold_voltage;     /* Inverter batt protection cutoff voltage (V x1?) */
+        uint8_t pad[1];
     } msgid_208;
 
-    struct
+    struct __attribute__((packed))
     {
-        uint8_t pad[8];
+        uint8_t v2x_sequence_num;           /* Always 0x02? */
+        uint16_t remaining_discharge_time;  /* Hours? */
+        uint8_t pad[5];
     } msgid_209;
   } charger;
 };
@@ -190,16 +202,21 @@ static bool chg_perm = false;               /* Vehicle Charge permission state *
 static bool k_perm = false;                 /* Vehicle Charge permission state (K line only) */
 
 static uint32_t state_time = 0;             /* Time that the last state transition happened */
-
-static bool contactor_closed = false;       /* Whether we have potentially live DC */
+static uint32_t error_time = 0;             /* Timer to flash LED on error */
 
 static bool errored = false;                /* If we hit any errors, prevent starting again */
 static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
 
-uint16_t max_evse_power = 0;                /* Maximum Power (W x1) from the EVSE */
-int32_t measured_voltage = 0;               /* Voltage (V x10) */
-int32_t measured_current = 0;               /* Current (A x10) */
+static uint16_t max_evse_power = 0;         /* Maximum Power (W x1) from the EVSE */
+static int32_t measured_voltage = 0;        /* Voltage (V x10) */
+static int32_t measured_current = 0;        /* Current (A x10) */
 static int32_t measured_power = 0;          /* Power (W x1) in (+'ve) or out (-'ve) of the battery */
+
+static uint8_t min_discharge_level = DEFAULT_MIN_SOC; /* Minimum SoC during discharge */
+static uint32_t available_energy = 0;       /* Available energy (0.1 kWh) */
+
+static bool start_pending = false;
+static bool stop_pending = false;
 
 /* For chademo v2.0 only */
 static uint8_t chademo_118[8] = {0x10, 0x64, 0x00, 0xB0, 0x00, 0x1E, 0x00, 0x8F};
@@ -238,22 +255,20 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
   /* Make sure we notify watchers ASAP */
   trigger_json_update();
 
+  printf("{\"new_state\":%d}\n", new_state);
+
   switch (new_state)
   {
     case CHADEMO_STATE_OFF:
-      /* This forcibly opens the contactors, so if current is not zero there is a welding risk. */
-      HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
-      contactor_closed = false;
-
       /* These should already be off, but can be used as an emergency stop */
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
 
       /* Unlock connector */
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIOE, CHADEMO_Pin, GPIO_PIN_SET);
 
       /* Let the vehicle know we're unlocked */
       can_data.charger.msgid_109.fault_status &= ~MSG109_CONN_LOCK;
@@ -270,33 +285,12 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       }
     break;
 
-    case CHADEMO_STATE_PARAM_CHK:
-    {
-      uint32_t max_current = 0;
-
-      /* These values are only allowed to change during Parameter checking */
-
-      /* Set the Threshold Voltage */
-      can_data.charger.msgid_108.threshold_voltage = 
-        MIN(SOLAX_MAXIMUM_SUPPORTED_VOLTAGE, can_data.vehicle.msgid_100.max_battery_voltage);
-
-      /*
-       * Use the max battery voltage reported by the vehicle and max power
-       * reported by the EVSE to calculate our maximum supported current.
-       */
-      if (can_data.vehicle.msgid_100.max_battery_voltage > 0)
-        max_current = max_evse_power / can_data.vehicle.msgid_100.max_battery_voltage;
-      can_data.charger.msgid_108.available_charger_current = max_current;
-
-      // ToDo: CAN CHG before Physical charge == fault
-      // ToDo: Physical Charge before sending first CAN data == fault
-    }
-    break;
-
     case CHADEMO_STATE_PERM_OK:
     {
       /* Lock the connector */
-      HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);      
+      HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(GPIOE, CHADEMO_Pin, GPIO_PIN_RESET);
+
       can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
 
       /*  Check for contact welding */
@@ -304,7 +298,8 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
           !(can_data.vehicle.msgid_102.status & (STATUS_CONTACTOR_OPEN)))
       {
         snprintf(last_error, ERROR_LEN,
-                 "Pre-contactor close battery check failed. More than 10V present.");
+                 "Pre-contactor close battery check failed. Voltage: %ldv, Status: 0x%02X.", 
+                 measured_voltage / 10, can_data.vehicle.msgid_102.status);
         new_state = CHADEMO_STATE_ERROR;
       }
       else
@@ -350,23 +345,20 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       if (ret != HAL_OK || leak_current > leak_base + LEAKAGE_CURRENT_MAX)
       {
         snprintf(last_error, ERROR_LEN,
-                 "Earth leakage test failed.");
+                 "Earth leakage test failed (%ld uA).", leak_current - leak_base);
         new_state = CHADEMO_STATE_ERROR;
       }
       else
       {
-        contactor_closed = true;
+        /* Enable the Battery Contactors to close */
         HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_SET);
-
         new_state = CHADEMO_STATE_BATT_CHECK;
       }
     }
     break;
 
-    case CHADEMO_STATE_BATT_CHECK:
-    break;
-
     case CHADEMO_STATE_ON:
+      // ToDo: Spec says this should only be set when charging (> 5A)
       can_data.charger.msgid_109.fault_status |= MSG109_CHARGE;
       can_data.charger.msgid_109.fault_status &= ~MSG109_CHG_STOPPED;
     break;
@@ -376,13 +368,15 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       solax_set_max_dc_chg_current(0);
       solax_set_max_dc_dis_current(0);
 
-      /* Let the vehicle know to stop charging (current ramp down) */
+      /* Let the vehicle know we're stopping (current ramp down) */
       can_data.charger.msgid_109.fault_status |= MSG109_CHG_STOPPED;
     break;
 
+    case CHADEMO_STATE_PARAM_CHK:
+    case CHADEMO_STATE_BATT_CHECK:
     case CHADEMO_STATE_WELD_CHECK:
-    case CHADEMO_STATE_WAIT_K:
-    case CHADEMO_STATE_WAIT_CONTACTOR:
+    case CHADEMO_STATE_WAIT_K_OFF:
+    case CHADEMO_STATE_WAIT_VEHICLE_OFF:
     case CHADEMO_STATE_ERROR:
       /* Nothing to do here, handled in chademo_process() */
     break;
@@ -413,8 +407,6 @@ static void chademo_check_vehicle_permission(void)
     can_ok = true;
   }
 
-  k_perm = phy_ok;
-
   /* Check for inconsistencies */
   if (chademo_state == CHADEMO_STATE_ON)
   {
@@ -433,14 +425,8 @@ static void chademo_check_vehicle_permission(void)
     }
   }
 
-  if (phy_ok && can_ok)
-  {
-    chg_perm = true;
-  }
-  else
-  {
-    chg_perm = false;
-  }
+  k_perm = phy_ok;
+  chg_perm = (phy_ok && can_ok);
 }
 
 /**
@@ -455,8 +441,9 @@ static void chademo_process_can(void)
 
   while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0)
   {
+#ifdef DEBUG_CAN
     int i;
-
+#endif
     /* Read the message */
     if (HAL_OK == HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, data))
     {
@@ -491,8 +478,8 @@ static void chademo_process_can(void)
           assert_param(sizeof(can_data.vehicle.msgid_102) >= RxHeader.DLC);
           memcpy(&can_data.vehicle.msgid_102, data, RxHeader.DLC);
 
-          /* Let logic know we've received our v1.0 data */
-          can_data.std_data = true;
+          /* Use this as our CAN active indicator */
+          last_update = HAL_GetTick();
           break;
 
         case 0x200:  /* For V2X */
@@ -503,9 +490,6 @@ static void chademo_process_can(void)
         case 0x201:  /* For V2X */
           assert_param(sizeof(can_data.vehicle.msgid_201) >= RxHeader.DLC);
           memcpy(&can_data.vehicle.msgid_201, data, RxHeader.DLC);
-
-          /* Let logic know we've received our v1.0.1+ data */
-          can_data.v2x_data = true;
           break;
 
         case 0x700:
@@ -531,19 +515,34 @@ static void chademo_process_can(void)
 }
 
 /**
-  * @brief  Send messages in response to ChaDeMo frames
+  * @brief  Send Charger messages
   * @retval None
   */
-HAL_StatusTypeDef chademo_send_responses(void)
+HAL_StatusTypeDef chademo_send_messages(void)
 {
+  static uint32_t last_send = 0;
   HAL_StatusTypeDef ret = HAL_OK;
 
-  /* If we received any valid messages */
-  if (can_data.std_data || can_data.v2x_data)
+  /* Send Charger messages every 100ms */
+  if (HAL_GetTick() < last_send + MESSAGE_INTERVAL)
+    return HAL_BUSY;
+
+  last_send = HAL_GetTick();
+
+  /* Update our Voltage, Current and Power measurements */
+  ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &measured_voltage);
+  if (ret != HAL_OK)
+    return ret;
+  ret = sensor_get_value(SENSOR_BATT_CURRENT, &measured_current);
+  if (ret != HAL_OK)
+    return ret;
+  measured_power = measured_voltage * measured_current / 100;
+
+  /* Check for Faults */
+  if (ret != HAL_OK || can_data.vehicle.msgid_102.faults || 
+      (can_data.vehicle.msgid_102.status & (STATUS_NOT_PARKED | STATUS_MALFUNCTION)) )
   {
-    /* Check for Faults */
-    if (ret != HAL_OK || can_data.vehicle.msgid_102.faults || 
-        (can_data.vehicle.msgid_102.status & (STATUS_NOT_PARKED | STATUS_MALFUNCTION)) )
+    if (chademo_state == CHADEMO_STATE_ON)
     {
       snprintf(last_error, ERROR_LEN,
             "Aborting Charge. Vehicle Faults: 0x%02X, Status: 0x%02X",
@@ -551,36 +550,26 @@ HAL_StatusTypeDef chademo_send_responses(void)
             can_data.vehicle.msgid_102.status);
 
       chademo_transition_state(CHADEMO_STATE_ERROR);
-      can_data.v2x_data = false;
     }
   }
 
-  /* Respond to standard messages */
-  if (ret == HAL_OK && can_data.std_data)
+  /* Send standard messages */
+  if (ret == HAL_OK)
   {
-    can_data.std_data = false;
-
-    last_update = HAL_GetTick();
-
-    HAL_GPIO_WritePin(GPIOE, CHADEMO_Pin, GPIO_PIN_RESET);
-
-    if (chademo_state == CHADEMO_STATE_ON)
+    can_data.charger.msgid_109.charger_voltage = measured_voltage / 10;
+    if (measured_current >= 0)
     {
-      /* Normal Operation */
-      can_data.charger.msgid_109.charger_voltage = measured_voltage / 10;
-      can_data.charger.msgid_109.charger_current = abs(measured_current / 10);
-
-      // ToDo: Consider decrementing the minute counter!
-      //can_data.charger.msgid_109.time_remaining_10s = 0xff;
-      //can_data.charger.msgid_109.time_remaining_1min = 0xff;
-
-      /* Update Solax Data (Standard) */
-      solax_set_battery_voltage_max(can_data.vehicle.msgid_100.max_battery_voltage * 10);
-      solax_set_battery_capacity_max(can_data.vehicle.msgid_101.rated_battery_capacity * 100);
-      solax_set_max_dc_chg_current(can_data.vehicle.msgid_102.charge_current_requested * 10);
-      solax_set_battery_soc(can_data.vehicle.msgid_102.charge_rate);
-      solax_set_battery_voltage_tgt(can_data.vehicle.msgid_102.target_battery_voltage * 10);
+      can_data.charger.msgid_109.charger_current = measured_current / 10;
+      can_data.charger.msgid_208.discharge_current = 255;
     }
+    else
+    {
+      can_data.charger.msgid_109.charger_current = 0;
+      can_data.charger.msgid_208.discharge_current = 255 - (measured_current / 10);
+    }
+
+    available_energy = 100 * can_data.vehicle.msgid_101.rated_battery_capacity /
+                             can_data.vehicle.msgid_102.charge_rate;
 
     ret = chademo_send_message(0x108, (uint8_t*)&can_data.charger.msgid_108);
     if (ret == HAL_OK)
@@ -591,30 +580,14 @@ HAL_StatusTypeDef chademo_send_responses(void)
       /* Only send the following on Chademo 2.0 vehicles? */
       ret = chademo_send_message(0x118, (uint8_t*)&can_data.charger.msgid_118);
     }
-
-    HAL_GPIO_WritePin(GPIOE, CHADEMO_Pin, GPIO_PIN_SET);
   }
 
-  /* Respond to V2X messages */
-  if (ret == HAL_OK && can_data.v2x_data)
+  /* Send V2X messages */
+  if (ret == HAL_OK)
   {
-    can_data.v2x_data = false;
-
-    HAL_GPIO_WritePin(GPIOE, CHADEMO_Pin, GPIO_PIN_RESET);
-
     ret = chademo_send_message(0x208, (uint8_t*)&can_data.charger.msgid_208);
     if (ret == HAL_OK)
       ret = chademo_send_message(0x209, (uint8_t*)&can_data.charger.msgid_209);
-
-    if (ret == HAL_OK && chademo_state == CHADEMO_STATE_ON)
-    {
-      /* Update Solax Data (V2X) */
-      solax_set_battery_voltage_min(can_data.vehicle.msgid_200.min_discharge_voltage * 10);
-      solax_set_max_dc_dis_current(can_data.vehicle.msgid_200.max_discharge_current);
-      solax_set_battery_capacity(can_data.vehicle.msgid_201.available_energy * 100);
-    }
-
-    HAL_GPIO_WritePin(GPIOE, CHADEMO_Pin, GPIO_PIN_SET);
   }
 
   return ret;
@@ -646,6 +619,11 @@ bool chademo_init(void)
   memcpy(&can_data.charger.msgid_208, chademo_208, 8);
   memcpy(&can_data.charger.msgid_209, chademo_209, 8);
 
+  can_data.charger.msgid_208.low_threshold_voltage = SOLAX_MINIMUM_SUPPORTED_VOLTAGE;
+  can_data.charger.msgid_208.discharge_current_max = 40;    // Our fuse is 40A
+
+  can_data.vehicle.msgid_102.status = STATUS_CONTACTOR_OPEN;
+
   return true;
 }
 
@@ -656,29 +634,14 @@ bool chademo_init(void)
   */
 void chademo_process(void)
 {
-  HAL_StatusTypeDef ret;
-  static uint32_t last_measurement = 0;
-
   /* Process any CAN messages */
   chademo_process_can();
-  
-  /* Update our Voltage, Current and Power measurements */
-  if (HAL_GetTick() > last_measurement + MEASUREMENT_INTERVAL)
-  {
-    ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &measured_voltage);
-    if (ret != HAL_OK)
-      return;
-    ret = sensor_get_value(SENSOR_BATT_CURRENT, &measured_current);
-    if (ret != HAL_OK)
-      return;
-    measured_power = measured_voltage * measured_current / 100;
-  }
-
-  /* Send any response messages (only if any received) */
-  chademo_send_responses();
 
   /* Check the Vehicle Permission GPIO */
   chademo_check_vehicle_permission();
+
+  /* Send Charger messages every 100ms */
+  chademo_send_messages();
 
   /* Time based state machine transitions */
   switch (chademo_state)
@@ -705,6 +668,83 @@ void chademo_process(void)
 
     /* Wait for vehicle to grant permission */
     case CHADEMO_STATE_PARAM_CHK:
+    {
+      uint32_t max_current = 0;
+
+      /* These values are only allowed to change during Parameter checking */
+
+      /* Set the Threshold Voltage */
+      can_data.charger.msgid_108.threshold_voltage = 
+        MIN(SOLAX_MAXIMUM_SUPPORTED_VOLTAGE, can_data.vehicle.msgid_100.max_battery_voltage);
+
+      /*
+       * Use the max battery voltage reported by the vehicle and max power
+       * reported by the EVSE to calculate our maximum supported current.
+       */
+      if (can_data.vehicle.msgid_100.max_battery_voltage > 0)
+      {
+        max_current = max_evse_power / can_data.vehicle.msgid_100.max_battery_voltage;
+      }
+      can_data.charger.msgid_108.available_charger_current = max_current;
+
+      /* Set the Charge time remaining */
+      can_data.charger.msgid_109.time_remaining_10s = can_data.vehicle.msgid_101.max_charging_time_10s;
+      can_data.charger.msgid_109.time_remaining_1min = can_data.vehicle.msgid_101.max_charging_time_1min;
+
+      /* Set up V2X Parameters */
+
+      can_data.charger.msgid_208.discharge_current_max = SOLAX_MAXIMUM_SUPPORTED_CURRENT;
+      if (can_data.vehicle.msgid_200.max_discharge_current != 0)
+      {
+        can_data.charger.msgid_208.discharge_current_max = 
+          MIN(can_data.vehicle.msgid_200.max_discharge_current, SOLAX_MAXIMUM_SUPPORTED_CURRENT);
+      }
+
+      can_data.charger.msgid_208.low_threshold_voltage = SOLAX_MINIMUM_SUPPORTED_VOLTAGE;
+      can_data.charger.msgid_208.min_voltage = SOLAX_MINIMUM_SUPPORTED_VOLTAGE;
+      if (can_data.vehicle.msgid_200.min_discharge_voltage != 0)
+      {
+        can_data.charger.msgid_208.low_threshold_voltage = 
+          MAX(SOLAX_MINIMUM_SUPPORTED_VOLTAGE, can_data.vehicle.msgid_200.min_discharge_voltage);
+      }
+
+      min_discharge_level = DEFAULT_MIN_SOC;
+      if (can_data.vehicle.msgid_200.min_discharge_level != 0)
+      {
+        min_discharge_level = can_data.vehicle.msgid_200.min_discharge_level;
+      }
+
+      /* Update Solax Data (Standard) */
+      solax_set_battery_voltage_max(can_data.vehicle.msgid_100.max_battery_voltage * 10);
+      solax_set_battery_capacity_max(can_data.vehicle.msgid_101.rated_battery_capacity * 100);
+      solax_set_max_dc_chg_current(can_data.vehicle.msgid_102.charge_current_requested * 10);
+      solax_set_battery_voltage_tgt(can_data.vehicle.msgid_102.target_battery_voltage * 10);
+
+      /* Update Solax Data (V2X) */
+      solax_set_battery_voltage_min(can_data.charger.msgid_208.low_threshold_voltage * 10);
+      solax_set_max_dc_dis_current(can_data.charger.msgid_208.discharge_current_max * 10);
+
+      // ToDo: CAN CHG before Physical charge == fault
+      // ToDo: Physical Charge before sending first CAN data == fault
+
+      if (chg_perm)
+      {
+        /* Check we're within limits */
+        if (can_data.vehicle.msgid_100.max_battery_voltage < SOLAX_MAXIMUM_SUPPORTED_VOLTAGE &&
+            can_data.vehicle.msgid_102.target_battery_voltage < SOLAX_MAXIMUM_SUPPORTED_VOLTAGE &&
+            (can_data.vehicle.msgid_102.status & STATUS_CHG_V2X_COMPAT) == STATUS_CHG_V2X_COMPAT)
+        {
+          chademo_transition_state(CHADEMO_STATE_PERM_OK);
+        }
+        else
+        {
+          snprintf(last_error, ERROR_LEN, "Battery / Vehicle incompatible (%d)", 
+                   can_data.vehicle.msgid_102.status);
+          can_data.charger.msgid_109.fault_status |= MSG109_BATT_INCOMPAT;
+          chademo_transition_state(CHADEMO_STATE_OFF);
+        }
+      }
+
       if (HAL_GetTick() > state_time + CHADEMO_CAN_TIMEOUT)
       {
         snprintf(last_error, ERROR_LEN,
@@ -712,33 +752,18 @@ void chademo_process(void)
         /* No need for full shut down sequence, no HV involved yet */
         chademo_transition_state(CHADEMO_STATE_OFF);
       }
-
-      if (chg_perm)
-      {
-        /* Check we're within limits */
-        if (can_data.vehicle.msgid_100.max_battery_voltage < SOLAX_MAXIMUM_SUPPORTED_VOLTAGE &&
-            can_data.vehicle.msgid_102.target_battery_voltage < SOLAX_MAXIMUM_SUPPORTED_VOLTAGE)
-        {
-          chademo_transition_state(CHADEMO_STATE_PERM_OK);
-        }
-        else
-        {
-          snprintf(last_error, ERROR_LEN, "Battery incompatible");
-          can_data.charger.msgid_109.fault_status |= MSG109_BATT_INCOMPAT;
-          chademo_transition_state(CHADEMO_STATE_OFF);
-        }
-      }
+    }
     break;
 
-    /* Vehicle Permission granted, HV turned on, waiting 1000ms to settle */
+    /* Vehicle Permission granted, HV turned on, waiting to settle */
     case CHADEMO_STATE_PERM_OK:
-      if (HAL_GetTick() > state_time + 1000)
+      if (HAL_GetTick() > state_time + LEAK_TEST_TIME)
         chademo_transition_state(CHADEMO_STATE_INS_TEST_BASE);
     break;
 
-    /* Leak Test Started waiting 1000ms for result */
+    /* Leak Test Started, waiting for result */
     case CHADEMO_STATE_INS_TEST_BASE:
-      if (HAL_GetTick() > state_time + 1000)
+      if (HAL_GetTick() > state_time + LEAK_TEST_TIME)
         chademo_transition_state(CHADEMO_STATE_INS_TEST);
     break;
 
@@ -746,7 +771,8 @@ void chademo_process(void)
     break;
 
     case CHADEMO_STATE_BATT_CHECK:
-      if (measured_voltage > CONTACTOR_CLOSED_V)
+      if ((measured_voltage > CONTACTOR_CLOSED_V) && 
+          (can_data.vehicle.msgid_102.status & (STATUS_CONTACTOR_OPEN)) != STATUS_CONTACTOR_OPEN)
       {
         chademo_transition_state(CHADEMO_STATE_ON);
       }
@@ -761,7 +787,8 @@ void chademo_process(void)
 
     case CHADEMO_STATE_ON:
     {
-      uint32_t voltage = measured_voltage / 10;
+      int32_t voltage = measured_voltage / 10;
+      int32_t current = measured_current / 10;
       uint16_t soc = can_data.vehicle.msgid_102.charge_rate;
 
       if (!chg_perm)
@@ -771,26 +798,51 @@ void chademo_process(void)
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
-      if (voltage > can_data.charger.msgid_108.threshold_voltage)
+      /* Charge Limits */
+      if (voltage >= can_data.charger.msgid_108.threshold_voltage)
       {
         snprintf(last_error, ERROR_LEN,
                  "Maximum Voltage (%ldV) Reached.", voltage);
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
-      if (voltage < can_data.vehicle.msgid_200.min_discharge_voltage)
+      /* V2X Limits */
+      if (voltage <= can_data.charger.msgid_208.low_threshold_voltage)
       {
         snprintf(last_error, ERROR_LEN,
                  "Minimum Voltage (%ldV) Reached.", voltage);
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
-      if (soc < can_data.vehicle.msgid_200.min_discharge_level)
+      if (current >= can_data.charger.msgid_208.discharge_current_max)
       {
         snprintf(last_error, ERROR_LEN,
-                 "Minimum SoC (%d%%) Reached.", soc);
+                 "Maximum Current %ldA) Reached.", current);
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
+
+      if (soc <= min_discharge_level)
+      {
+        snprintf(last_error, ERROR_LEN,
+                "Minimum SoC (%d%%) Reached.", soc);
+        chademo_transition_state(CHADEMO_STATE_STOP);
+      }
+
+      // ToDo: Consider decrementing the minute counter!
+      //can_data.charger.msgid_109.time_remaining_10s = 0xff;
+      //can_data.charger.msgid_109.time_remaining_1min = 0xff;
+      
+      if (can_data.charger.msgid_109.time_remaining_10s == 0 ||
+          can_data.charger.msgid_109.time_remaining_1min == 0)
+      {
+        snprintf(last_error, ERROR_LEN,
+                 "Max Charge Time Reached");
+        chademo_transition_state(CHADEMO_STATE_STOP);
+      }
+
+      /* Update Solax Data */
+      solax_set_battery_capacity(available_energy * 100);
+      solax_set_battery_soc(can_data.vehicle.msgid_102.charge_rate);
     }
     break;
 
@@ -806,40 +858,51 @@ void chademo_process(void)
         snprintf(last_error, ERROR_LEN,
                 "Timeout waiting for current to drop to < 5A.");
         can_data.charger.msgid_109.fault_status |= MSG109_CHG_MALFUNC | MSG109_FAULT;
-        chademo_transition_state(CHADEMO_STATE_ERROR);
+        chademo_transition_state(CHADEMO_STATE_WELD_CHECK);
       }
     break;
 
     /* Contactors Opened, waiting for voltage to drop below 10V */
     case CHADEMO_STATE_WELD_CHECK:
+      /* Let the vehicle know that we've stopped charging (< 5A) */
+      can_data.charger.msgid_109.fault_status &= ~MSG109_CHARGE;
+
+      /* Charge time remaining is now zero */
+      can_data.charger.msgid_109.time_remaining_10s = 0x00;
+      can_data.charger.msgid_109.time_remaining_1min = 0x00;
+
       /*  Check for contact welding */
       if ((measured_voltage <= CONTACTOR_OPEN_V) && 
           (can_data.vehicle.msgid_102.status & (STATUS_CONTACTOR_OPEN)))
       {
-        chademo_transition_state(CHADEMO_STATE_STOP);
+        chademo_transition_state(CHADEMO_STATE_WAIT_K_OFF);
       }
       else if (HAL_GetTick() > state_time + BATT_CHECK_TIMEOUT)
       {
         snprintf(last_error, ERROR_LEN,
                  "Welding Fault Detected, not Unlocking!");
         can_data.charger.msgid_109.fault_status |= MSG109_FAULT;
+
+        /* Try forcing it open */
+        HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
+
         chademo_transition_state(CHADEMO_STATE_ERROR);
       }
     break;
 
-    case CHADEMO_STATE_WAIT_K:
+    case CHADEMO_STATE_WAIT_K_OFF:
       if (!k_perm || (HAL_GetTick() > state_time + STOP_TIMEOUT))
       {
-        /* Let the vehicle know that we've stopped charging */
-        can_data.charger.msgid_109.fault_status &= ~MSG109_CHARGE;
-        chademo_transition_state(CHADEMO_STATE_WAIT_CONTACTOR);
+        chademo_transition_state(CHADEMO_STATE_WAIT_VEHICLE_OFF);
       }
     break;
 
-    case CHADEMO_STATE_WAIT_CONTACTOR:
+    case CHADEMO_STATE_WAIT_VEHICLE_OFF:
       if ((can_data.vehicle.msgid_102.status & STATUS_CONTACTOR_OPEN) == STATUS_CONTACTOR_OPEN)
       {
         /* Finally we can power off 12V! */
+        HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
+
         chademo_transition_state(CHADEMO_STATE_OFF);
       }
       if (HAL_GetTick() > state_time + STOP_TIMEOUT)
@@ -856,12 +919,49 @@ void chademo_process(void)
     break;
   }
 
+  /* Check for Start Request */
+  if (start_pending && !stop_pending)
+  {
+    start_pending = false;
+    if (!errored)
+    {
+      if (chademo_state == CHADEMO_STATE_OFF)
+      {
+        chademo_transition_state(CHADEMO_STATE_START);
+      }
+    }
+  }
+
+  /* Check for Stop Request */
+  if (stop_pending)
+  {
+    stop_pending = false;
+
+    if (!errored)
+    {
+      if (chademo_state >= CHADEMO_STATE_STOP)
+      {
+        /* Already stopping, ignore */
+      }
+      else if (chademo_state >= CHADEMO_STATE_PERM_OK)
+      {
+        /* Need to go through full stop sequence */
+        chademo_transition_state(CHADEMO_STATE_STOP);
+      }
+      else
+      {
+        chademo_transition_state(CHADEMO_STATE_OFF);
+      }
+    }
+  }
+
+
   /* We're errored. Flash the ChaDeMo LED */
   if (errored)
   {
-    if (HAL_GetTick() > state_time + 500)
+    if (HAL_GetTick() > error_time + 500)
     {
-      state_time = HAL_GetTick();
+      error_time = HAL_GetTick();
       HAL_GPIO_TogglePin(GPIOE, CHADEMO_Pin);
     }
   }
@@ -882,8 +982,7 @@ void chademo_process(void)
   */
 void chademo_start(void)
 {
-  if (chademo_state == CHADEMO_STATE_OFF)
-    chademo_transition_state(CHADEMO_STATE_START);
+  start_pending = true;
 }
 
 /**
@@ -892,10 +991,7 @@ void chademo_start(void)
   */
 void chademo_stop(void)
 {
-  if (chademo_state >= CHADEMO_STATE_PERM_OK)
-    chademo_transition_state(CHADEMO_STATE_STOP);
-  else
-    chademo_transition_state(CHADEMO_STATE_OFF);
+  stop_pending = true;
 }
 
 /**
@@ -913,7 +1009,7 @@ void chademo_set_max_power(uint32_t power)
   */
 bool chademo_is_contactor_closed(void)
 {
-  return contactor_closed;
+  return (chademo_state == CHADEMO_STATE_ON);
 }
 
 /**
@@ -931,37 +1027,43 @@ int32_t chademo_get_power(void)
   */
 void chademo_json_update(void)
 {
-  printf("\"chademo\":{\n    ");
-    printf("\"charger\":{\n      ");
-      printf("\"0x108\":{\"threshold_voltage\":%d, \"available_voltage\":%d, \"available_current\":%d},\n      ",
+  printf("\"chademo\":{");
+    printf("\"charger\":{");
+      printf("\"0x108\":{\"threshold_voltage\":%d, \"available_voltage\":%d, \"available_current\":%d},",
             can_data.charger.msgid_108.threshold_voltage,
             can_data.charger.msgid_108.available_charger_voltage,
             can_data.charger.msgid_108.available_charger_current);
-      printf("\"0x109\":{\"voltage\":%d, \"current\":%d, \"power\":%ld, \"fault_status\":%d}",
+      printf("\"0x109\":{\"voltage\":%d, \"current\":%d, \"power\":%ld, \"fault_status\":%d},",
             can_data.charger.msgid_109.charger_voltage,
             can_data.charger.msgid_109.charger_current,
             measured_power,
             can_data.charger.msgid_109.fault_status);
-    printf("},\n    ");
+      printf("\"0x208\":{\"discharge_current\":%d, \"min_voltage\":%d, \"discharge_current_max\":%d, \"low_threshold_voltage\":%d}",
+            0xff - can_data.charger.msgid_208.discharge_current,
+            can_data.charger.msgid_208.min_voltage,
+            can_data.charger.msgid_208.discharge_current_max,
+            can_data.charger.msgid_208.low_threshold_voltage);
+    printf("},");
 
-    printf("\"vehicle\":{\n      ");
-      printf("\"0x100\":{\"max_voltage\":%d},\n      ",
+    printf("\"vehicle\":{");
+      printf("\"0x100\":{\"max_voltage\":%d},",
             can_data.vehicle.msgid_100.max_battery_voltage);
-      printf("\"0x101\":{\"rated_capacity\":%d},\n      ",
+      printf("\"0x101\":{\"rated_capacity\":%d},",
             can_data.vehicle.msgid_101.rated_battery_capacity);
-      printf("\"0x102\":{\"target_voltage\":%d, \"charge_current\":%d, \"faults\":%d, \"status\":%d, \"soc\":%d},\n      ",
+      printf("\"0x102\":{\"target_voltage\":%d, \"charge_current\":%d, \"faults\":%d, \"status\":%d, \"soc\":%d},",
             can_data.vehicle.msgid_102.target_battery_voltage,
             can_data.vehicle.msgid_102.charge_current_requested,
             can_data.vehicle.msgid_102.faults,
             can_data.vehicle.msgid_102.status,
             can_data.vehicle.msgid_102.charge_rate);
-      printf("\"0x200\":{\"min_voltage\":%d, \"max_current\":%d, \"min_soc\":%d, \"capacity\":%d},\n      ",
+      printf("\"0x200\":{\"min_voltage\":%d, \"max_current\":%d, \"min_soc\":%d, \"capacity\":%d},",
             can_data.vehicle.msgid_200.min_discharge_voltage,
             can_data.vehicle.msgid_200.max_discharge_current,
             can_data.vehicle.msgid_200.min_discharge_level,
             can_data.vehicle.msgid_200.max_remaining_capacity);
-      printf("\"0x201\":{\"available_energy\":%d}},\n    ",
-            can_data.vehicle.msgid_201.available_energy);
+      printf("\"0x201\":{\"available_energy\":%ld}},",
+            available_energy);
+    printf("\"k_perm\":%d, ", k_perm);
     printf("\"state\":%d, \"last_error\":\"%s\"", chademo_state, last_error);
   printf("}");
 }

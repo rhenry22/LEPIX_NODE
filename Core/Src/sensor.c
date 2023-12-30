@@ -29,7 +29,7 @@
 #define INA219_HV_SHUNT         (0.1)  // 100mR Shunt resistor
 #define INA219_HV_CURRENT_LSB   (0.000050)  // 50uA per LSB
 
-static uint16_t midpoint = 2048;
+static uint16_t ibatt_zero = 2048;
 
 /**
   * @brief  Perform initialisation of all sensors
@@ -59,7 +59,7 @@ bool sensor_init(void)
     ret = false;
   }
 
-  if (HAL_OK != MX_ADC1_Get_Sample(ADC_BATT_CURR, &val))
+  if (HAL_OK != MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero) || ibatt_zero < 100)
   {
     printf("BATT CURR:  Init Failed\n");
     ret = false;
@@ -68,12 +68,6 @@ bool sensor_init(void)
   if (HAL_OK != MX_ADC1_Get_Sample(ADC_EVSE_PP, &val))
   {
     printf("EVSE PP:    Init Failed\n");
-    ret = false;
-  }
-
-  if (HAL_OK != MX_ADC1_Get_Sample(ADC_MIDPOINT, &midpoint))
-  {
-    printf("Midpoint:   Init Failed\n");
     ret = false;
   }
 
@@ -124,9 +118,9 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     case SENSOR_BATT_CURRENT: // A x10
     {
       uint16_t tmp;
-      ret = MX_ADC1_Get_Sample(ADC_BATT_CURR, &tmp);
+      ret = MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &tmp);
       if (ret == HAL_OK)
-        *val = ((int32_t)tmp * 3300) / 4096;
+        *val = ((int32_t)tmp - ibatt_zero) * 1000 / 2095;
     }
     break;
 
@@ -134,15 +128,6 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     {
       uint16_t tmp;
       ret = MX_ADC1_Get_Sample(ADC_EVSE_PP, &tmp);
-      if (ret == HAL_OK)
-        *val = ((int32_t)tmp * 3300) / 4096;
-    }
-    break;
-
-    case SENSOR_MIDPOINT: // mV
-    {
-      uint16_t tmp;
-      ret = MX_ADC1_Get_Sample(ADC_MIDPOINT, &tmp);
       if (ret == HAL_OK)
         *val = ((int32_t)tmp * 3300) / 4096;
     }

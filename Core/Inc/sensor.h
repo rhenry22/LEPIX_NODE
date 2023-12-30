@@ -20,11 +20,7 @@ typedef enum
   SENSOR_BATT_VOLTAGE,      // HV Battery Voltage (V x10)
   SENSOR_BATT_CURRENT,      // HV Battery Current (A x10)
 
-  SENSOR_EVSE_PP,           // EVSE PP Voltage (mV)
-
-  SENSOR_MIDPOINT,          // Midpoint for AC signals (mV)
-  SENSOR_IAC,               // AC Current probe (Not used)
-
+  SENSOR_EVSE_PP            // EVSE PP Voltage (mV)
 } SENSOR_SOURCE;
 
 bool sensor_init(void);

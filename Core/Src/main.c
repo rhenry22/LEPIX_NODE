@@ -58,7 +58,7 @@
 #define ENABLE_CHADEMO
 #define ENABLE_SOLAX
 
-#define JSON_UPDATE_TIME    (120000)
+#define JSON_UPDATE_TIME    (30000)
 
 #define MB_SLAVE_ADDRESS	  (1)
 
@@ -79,9 +79,9 @@ static uint32_t last_json_update = 0;  /* Last time we saw frame 0x03 */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len);
 
 /* USER CODE BEGIN PFP */
+void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len);
 
 /* USER CODE END PFP */
 
@@ -142,208 +142,48 @@ void trigger_json_update(void)
   last_json_update = 0;
 }
 
-/* USER CODE END 0 */
-
+#ifdef ENABLE_EVSE
 /**
-  * @brief  The application entry point.
-  * @retval int
+  * @brief  EVSE PP and Current callback.
+  * @param  pp Current connector state
+  * @param  current Maximum AC current (in / out)
+  * @retval None
   */
-int main(void)
+static void evse_changed_cb(EVSE_PP pp, uint8_t current)
 {
-  /* USER CODE BEGIN 1 */
-  EVSE_PP pp_prev = EVSE_PP_NONE;
-  uint8_t max_current = 0;
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
-  SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_CAN1_Init();
-  MX_CAN2_Init();
-  MX_USART1_UART_Init();
-  MX_ADC1_Init();
-  MX_I2C1_Init();
-  MX_SPI1_Init();
-  MX_USART2_UART_Init();
-  MX_USB_DEVICE_Init();
-  MX_TIM2_Init();
-  MX_IWDG_Init();
-  /* USER CODE BEGIN 2 */
-
-  MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0);
-  MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1);
-
-  /* Power Up ESP8266 */
-  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
-  HAL_Delay(2000);
-
-  if (!sensor_init())
+  switch (pp)
   {
-    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise sensors.\"}]\n");
-    error = true;
+    case EVSE_PP_INSERTED:
+      /* Enable the CP Line */
+      /* This tells the EVSE to start charging (supply power) */
+      HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
+    break;
+
+    default:
+
+    case EVSE_PP_NONE:
+      /* Disable the CP line */
+      HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
+    /* break; */  /* Deliberate fall through */
+
+    case EVSE_PP_PRESSED:
+      /* Update the inverter max */
+      current = 0;
+      chademo_stop();
+    break;
   }
-
-#ifdef ENABLE_EVSE
-  if (!evse_init())
-  {
-    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise EVSE interface.\"}]\n");
-    error = true;
-  }
-#endif
-
-#ifdef ENABLE_CHADEMO
-  if (!chademo_init())
-  {
-    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise ChaDeMo interface.\"}]\n");
-    error = true;
-  }
-#endif
-
-  if (!modbus_init(MB_SLAVE_ADDRESS, &mb_read_cb))
-  {
-    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Modbus interface.\"}]\n");
-    error = true;
-  }
-
-  if (!error)
-    printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    EVSE_PP pp;
-
-    /* Catch any errors and EStop */
-    if (error)
-    {
-      emergency_stop();
-    }
-
-#ifdef ENABLE_CHADEMO
-    /* Process any ChaDeMo work */
-    chademo_process();
-#endif
 
 #ifdef ENABLE_SOLAX
-    /* Process any Inverter work */
-    solax_process();
-#endif
-
-#ifdef ENABLE_EVSE
-    /* Check the EVSE PP Line Status */
-    pp = evse_get_pp();
-    if (pp != pp_prev)
-    {
-      pp_prev = pp;
-
-      switch (pp)
-      {
-        case EVSE_PP_INSERTED:
-          /* Enable the CP Line */
-          /* This tells the EVSE to start charging (supply power) */
-          HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
-        break;
-
-        default:
-
-        case EVSE_PP_NONE:
-          /* Disable the CP line */
-          HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
-        /* break; */  /* Deliberate fall through */
-
-        case EVSE_PP_PRESSED:
-          /* Update the inverter max */
-          max_current = 0;
-          solax_set_max_ac_current(0);
-          chademo_stop();
-        break;
-      }
-    }
-
-    if (pp == EVSE_PP_INSERTED)
-    {
-      uint8_t current;
-
-      /* Check the EVSE CP Status */
-      evse_get_max_current(&current);
-
-      if (current != max_current)
-      {
-        max_current = current;
-
-#ifdef ENABLE_SOLAX
-        /* Update the inverter max. */
-        solax_set_max_ac_current(max_current);
+    /* Update the inverter max. */
+    solax_set_max_ac_current(current);
 #endif
 
 #ifdef ENABLE_CHADEMO
-        /* Update ChaDeMo max */
-        chademo_set_max_power(240 * max_current);
+    /* Update ChaDeMo max */
+    //chademo_set_max_power(240 * current);
 #endif
-      }
-    }
-#endif // ENABLE_EVSE
-
-    /* Process Serial Data */
-    HAL_UART_Process();
-
-    /* Send regular JSON messages */
-    if ((last_json_update == 0) || 
-        (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME))
-    {
-      int32_t acc_current;
-
-      sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
-
-      printf("{\"controller\":{\n  ");
-      evse_json_update();
-      printf(",\n  ");
-      solax_json_update();
-      printf(",\n  ");
-      chademo_json_update();
-      printf(",\n  \"timestamp\":%ld,\"status\":0,\"acc_current\":%d\n}}\n", 
-              HAL_GetTick(), acc_current / 1000);
-
-      last_json_update = HAL_GetTick();
-    }
-
-    HAL_IWDG_Refresh(&hiwdg);
-
-    /* Re-purpose the EVSE LED to show when we're busy */
-    HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
-    __WFI();
-    HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
-
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  }
-
-  /* Something went wrong */
-  NVIC_SystemReset();
-  
-  /* USER CODE END 3 */
 }
+#endif
 
 /**
   * @brief Modbus Read Callback
@@ -389,6 +229,159 @@ void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len)
 	}
 
 	modbus_resp_end();
+}
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_CAN1_Init();
+  MX_CAN2_Init();
+  MX_USART1_UART_Init();
+  MX_ADC1_Init();
+  MX_I2C1_Init();
+  MX_SPI1_Init();
+  MX_USART2_UART_Init();
+  MX_USB_DEVICE_Init();
+  MX_TIM2_Init();
+  /* USER CODE BEGIN 2 */
+
+  MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0);
+  MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1);
+
+  /* Power Up ESP8266 */
+  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+  HAL_Delay(2000);
+
+  MX_USART1_UART_Init();
+
+  if (!sensor_init())
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise sensors.\"}]\n");
+    error = true;
+  }
+
+#ifdef ENABLE_EVSE
+  if (!evse_init(&evse_changed_cb))
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise EVSE interface.\"}]\n");
+    error = true;
+  }
+#endif
+
+#ifdef ENABLE_CHADEMO
+  if (!chademo_init())
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise ChaDeMo interface.\"}]\n");
+    error = true;
+  }
+#endif
+
+  if (!modbus_init(MB_SLAVE_ADDRESS, &mb_read_cb))
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Modbus interface.\"}]\n");
+    error = true;
+  }
+
+  if (!error)
+    printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
+
+  chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
+
+  /* USER CODE END 2 */
+
+  MX_IWDG_Init();
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    /* Catch any errors and EStop */
+    if (error)
+    {
+      emergency_stop();
+    }
+
+#ifdef ENABLE_EVSE
+    evse_process();
+#endif
+
+#ifdef ENABLE_CHADEMO
+    /* Process any ChaDeMo work */
+    chademo_process();
+#endif
+
+#ifdef ENABLE_SOLAX
+    /* Process any Inverter work */
+    solax_process();
+#endif
+
+    /* Process Serial Data */
+    HAL_UART_Process();
+
+    /* Send regular JSON messages */
+    if ((last_json_update == 0) || 
+        (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME))
+    {
+      int32_t acc_current;
+
+      sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
+
+      printf("{\"controller\":{");
+      evse_json_update();
+      printf(",");
+      solax_json_update();
+      printf(",");
+      chademo_json_update();
+      printf(",\"timestamp\":%ld,\"status\":0,\"acc_current\":%ld}}\n", 
+              HAL_GetTick(), acc_current / 1000);
+
+      last_json_update = HAL_GetTick();
+    }
+
+    HAL_IWDG_Refresh(&hiwdg);
+
+    /* Re-purpose the EVSE LED to show when we're busy */
+    HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
+    __WFI();
+    HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
+
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+
+  /* Something went wrong */
+  NVIC_SystemReset();
+  
+  /* USER CODE END 3 */
 }
 
 /**
@@ -448,24 +441,16 @@ void SystemClock_Config(void)
   */
 int _write(int file, char *ptr, int len)
 {
-    static uint8_t rc = USBD_OK;
-
     /* If USB is connected, send to USB */
     if (CDC_Is_Connected())
     {
-      /* Send the data, retrying if busy */
-      do {
-          rc = CDC_Transmit_FS((uint8_t*)ptr, len);
-      } while (USBD_BUSY == rc);
+      /* Send the data */
+      CDC_Transmit_FS((uint8_t*)ptr, len, 10);
     }
-    else
+    //else
     {
       /* Send Data to Serial */
-      HAL_StatusTypeDef rc;
-      do {
-        /* Send the data, retrying if busy */
-        rc = HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
-      } while (rc == HAL_BUSY);
+      HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
     }
 
     return len;

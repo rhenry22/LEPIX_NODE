@@ -17,10 +17,13 @@
   ******************************************************************************
   */
 #include "usbd_cdc_if.h"
+#include <string.h>
+
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "usart.h"
 #include "modbus.h"
+#include "chademo.h"
 
 /* USER CODE BEGIN 0 */
 
@@ -57,11 +60,15 @@ void MX_USART1_UART_Init(void)
   huart1.Init.Mode = UART_MODE_TX_RX;
   huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+
+  HAL_UART_DeInit(&huart1);
   if (HAL_UART_Init(&huart1) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN USART1_Init 2 */
+
+  HAL_UART_Setup_UART1();
 
   /* USER CODE END USART1_Init 2 */
 
@@ -86,11 +93,15 @@ void MX_USART2_UART_Init(void)
   huart2.Init.Mode = UART_MODE_TX_RX;
   huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+
+  HAL_UART_DeInit(&huart2);
   if (HAL_UART_Init(&huart2) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
+
+  HAL_UART_Setup_UART2();
 
   /* USER CODE END USART2_Init 2 */
 
@@ -290,11 +301,18 @@ void HAL_UART_Process(void)
   {
     if (CDC_Is_Connected())
     {
-      while (CDC_Transmit_FS(&uart1_rxbuf[0], uart1_rx_bytes) == USBD_BUSY)
-      {
-        if (HAL_GetTick() > timeout)
-          break;
-      }
+      CDC_Transmit_FS(&uart1_rxbuf[0], uart1_rx_bytes, timeout);
+    }
+    //else
+    {
+      if (uart1_rx_bytes == strlen("RESET") && strcmp((char*)uart1_rxbuf, "RESET") == 0)
+        NVIC_SystemReset();
+
+      if (uart1_rx_bytes == strlen("START") && strcmp((char*)uart1_rxbuf, "START") == 0)
+        chademo_start();
+
+      if (uart1_rx_bytes == strlen("STOP") && strcmp((char*)uart1_rxbuf, "STOP") == 0)
+        chademo_stop();
     }
     uart1_rx_bytes = 0;
     HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_TX_DATA_SIZE);

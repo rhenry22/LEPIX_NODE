@@ -64,10 +64,6 @@ void trigger_json_update(void);
 #define EVSE_PP_GPIO_Port GPIOA
 #define EVSE_CP_Pin GPIO_PIN_1
 #define EVSE_CP_GPIO_Port GPIOA
-#define ADC1_IAC1_Pin GPIO_PIN_2
-#define ADC1_IAC1_GPIO_Port GPIOA
-#define ADC1_MIDPOINT_Pin GPIO_PIN_3
-#define ADC1_MIDPOINT_GPIO_Port GPIOA
 #define ADC1_VAC_Pin GPIO_PIN_4
 #define ADC1_VAC_GPIO_Port GPIOA
 #define SPI1_BATT_CS__Pin GPIO_PIN_4
@@ -106,9 +102,9 @@ void trigger_json_update(void);
 #define INVERTER_Pin LED3_Pin
 
 #define ADC_EVSE_PP     (0)
-#define ADC_IAC         (1)
-#define ADC_MIDPOINT    (2)
-#define ADC_BATT_CURR   (3)
+#define ADC_BATT_CURR   (1)
+
+#define ERROR_LEN       (128)
 
 /* USER CODE END Private defines */
 

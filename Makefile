@@ -217,6 +217,9 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 $(BUILD_DIR):
 	mkdir $@		
 
+run:
+	dfu-util -a0 -s 0x8000000:leave
+
 flash:
 	dfu-util -a0 -D $(BUILD_DIR)/$(TARGET).bin -s 0x8000000:leave
 #######################################
