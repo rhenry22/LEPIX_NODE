@@ -39,6 +39,7 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USART1 init function */
 
@@ -196,6 +197,24 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
     __HAL_LINKDMA(uartHandle,hdmarx,hdma_usart2_rx);
 
+    /* USART2_TX Init */
+    hdma_usart2_tx.Instance = DMA1_Stream6;
+    hdma_usart2_tx.Init.Channel = DMA_CHANNEL_4;
+    hdma_usart2_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_usart2_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart2_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart2_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart2_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart2_tx.Init.Mode = DMA_NORMAL;
+    hdma_usart2_tx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart2_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart2_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmatx,hdma_usart2_tx);
+
     /* USART2 interrupt Init */
     HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(USART2_IRQn);
@@ -247,6 +266,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
     /* USART2 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
+    HAL_DMA_DeInit(uartHandle->hdmatx);
 
     /* USART2 interrupt Deinit */
     HAL_NVIC_DisableIRQ(USART2_IRQn);
@@ -286,6 +306,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   else
   {
     uart2_rx_bytes = Size;
+    HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_RESET);
   }
 }
 
@@ -320,8 +341,22 @@ void HAL_UART_Process(void)
 
   if (uart2_rx_bytes > 0)
   {
+    /* Put Transceiver into TX mode */
+    HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
+    modbus_process(&uart2_rxbuf[0], uart2_rx_bytes);
+    
     uart2_rx_bytes = 0;
     HAL_UARTEx_ReceiveToIdle_DMA(&huart2, &uart2_rxbuf[0], APP_TX_DATA_SIZE);
+  }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart == &huart2)
+  {
+    /* Put Transceiver back into RX mode */
+    HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
   }
 }
 

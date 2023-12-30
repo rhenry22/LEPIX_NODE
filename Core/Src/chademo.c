@@ -268,7 +268,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
       /* Unlock connector */
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(GPIOE, CHADEMO_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(LED_GPIO_Port, CHADEMO_Pin, GPIO_PIN_SET);
 
       /* Let the vehicle know we're unlocked */
       can_data.charger.msgid_109.fault_status &= ~MSG109_CONN_LOCK;
@@ -289,7 +289,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     {
       /* Lock the connector */
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(GPIOE, CHADEMO_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(LED_GPIO_Port, CHADEMO_Pin, GPIO_PIN_RESET);
 
       can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
 
@@ -962,7 +962,7 @@ void chademo_process(void)
     if (HAL_GetTick() > error_time + 500)
     {
       error_time = HAL_GetTick();
-      HAL_GPIO_TogglePin(GPIOE, CHADEMO_Pin);
+      HAL_GPIO_TogglePin(LED_GPIO_Port, CHADEMO_Pin);
     }
   }
 

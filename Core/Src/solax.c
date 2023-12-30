@@ -476,7 +476,7 @@ void solax_process(void)
 
   while (HAL_CAN_GetRxFifoFillLevel(&hcan2, CAN_RX_FIFO1) > 0)
   {
-    HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_RESET);
+    //HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_RESET);
 
     /* Read the message */
     if (HAL_OK == HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &RxHeader, data))
@@ -527,7 +527,7 @@ void solax_process(void)
     state = SOLAX_BATTERY_ANNOUNCE;
   }
 
-  HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_SET);
+  //HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
 }
 
 /**

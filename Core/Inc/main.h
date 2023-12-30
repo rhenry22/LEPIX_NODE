@@ -31,7 +31,6 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -56,6 +55,7 @@ void Error_Handler(void);
 
 void emergency_stop(void);
 void trigger_json_update(void);
+void dump_packet(uint8_t *data, uint8_t len);
 
 /* USER CODE END EFP */
 
@@ -100,6 +100,7 @@ void trigger_json_update(void);
 #define EVSE_Pin     LED1_Pin
 #define CHADEMO_Pin  LED2_Pin
 #define INVERTER_Pin LED3_Pin
+#define LED_GPIO_Port GPIOE
 
 #define ADC_EVSE_PP     (0)
 #define ADC_BATT_CURR   (1)

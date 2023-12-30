@@ -335,8 +335,6 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   int8_t ret = USBD_OK;
 
   /* USER CODE BEGIN 6 */
-  HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_RESET);
-
   if (*Len == 1)
   {
     switch (Buf[0])
@@ -367,8 +365,6 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
     USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
     USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   }
-
-  HAL_GPIO_WritePin(GPIOE, INVERTER_Pin, GPIO_PIN_SET);
 
   return ret;
   /* USER CODE END 6 */

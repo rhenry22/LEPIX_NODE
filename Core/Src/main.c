@@ -74,12 +74,12 @@
 /* USER CODE BEGIN PV */
 static bool error = false;
 static uint32_t last_json_update = 0;  /* Last time we saw frame 0x03 */
+static float power_offset = 0;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-
 /* USER CODE BEGIN PFP */
 void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len);
 
@@ -177,11 +177,6 @@ static void evse_changed_cb(EVSE_PP pp, uint8_t current)
     /* Update the inverter max. */
     solax_set_max_ac_current(current);
 #endif
-
-#ifdef ENABLE_CHADEMO
-    /* Update ChaDeMo max */
-    //chademo_set_max_power(240 * current);
-#endif
 }
 #endif
 
@@ -194,41 +189,47 @@ static void evse_changed_cb(EVSE_PP pp, uint8_t current)
   */
 void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len)
 {
-  
+  //HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_RESET);
 	switch (type)
 	{
 		case MB_READ_HOLDING:
+    case MB_READ_INPUT:
 			switch (reg)
 			{
 				case 12:	// Current Power (W)
-					modbus_resp_begin(MB_READ_HOLDING, sizeof(int32_t));
-					modbus_resp_float((float)chademo_get_power());
+					modbus_resp_begin(type, sizeof(int32_t));
+					modbus_resp_float((float)chademo_get_power() + power_offset);
+        	modbus_resp_end();
 				break;
 
 
 				case 0x2004:	// Current Power (KW)
-					modbus_resp_begin(MB_READ_HOLDING, sizeof(int32_t));
-					modbus_resp_float((float)chademo_get_power() / 1000.0f);
+					modbus_resp_begin(type, sizeof(int32_t));
+					modbus_resp_float(((float)chademo_get_power() + power_offset) / 1000.0f);
+        	modbus_resp_end();
 				break;
 
 				case 70: 	// Frequency (Hz)
 				case 0x200E: 	// Frequency (Hz)
-					modbus_resp_begin(MB_READ_HOLDING, sizeof(int32_t));
+					modbus_resp_begin(type, sizeof(int32_t));
 					modbus_resp_float(50.0f);
+        	modbus_resp_end();
 				break;
 
 				default:
 					modbus_resp_begin(0x80 | type, MB_ERR_ILLEGAL_ADDRESS);
+        	modbus_resp_end();
 				break;
 			}
 		break;
 
 		default:
 			modbus_resp_begin(0x80 | type, MB_ERR_ILLEGAL_FUNCTION);
+      modbus_resp_end();
 		break;
 	}
 
-	modbus_resp_end();
+  //HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
 }
 
 /* USER CODE END 0 */
@@ -273,14 +274,12 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-  MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0);
-  MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1);
-
   /* Power Up ESP8266 */
   HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
   HAL_Delay(2000);
 
   MX_USART1_UART_Init();
+  MX_USART2_UART_Init();
 
   if (!sensor_init())
   {
@@ -297,11 +296,16 @@ int main(void)
 #endif
 
 #ifdef ENABLE_CHADEMO
+  MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0);
   if (!chademo_init())
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise ChaDeMo interface.\"}]\n");
     error = true;
   }
+#endif
+
+#ifdef ENABLE_SOLAX
+  MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1);
 #endif
 
   if (!modbus_init(MB_SLAVE_ADDRESS, &mb_read_cb))
@@ -314,6 +318,10 @@ int main(void)
     printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
 
   chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
+
+#ifndef ENABLE_EVSE
+  HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
+#endif
 
   /* USER CODE END 2 */
 
@@ -431,6 +439,14 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void dump_packet(uint8_t *data, uint8_t len)
+{
+  int i;
+  for (i=0; i<len; ++i)
+    printf("0x%02X, ", data[i]);
+  printf("\n");
+}
 
 /**
   * @brief Override for printf output

@@ -10,10 +10,11 @@
  *  @author Richard Taylor <richard@artaylor.co.uk>
  */
 #include <string.h>
+#include <stdio.h>
 #include "usart.h"
 #include "modbus.h"
 
-#define BUFFER_LEN  (64)
+#define BUFFER_LEN  (16)
 
 static uint8_t tx_index = 0;
 static uint8_t tx_buffer[BUFFER_LEN];
@@ -68,17 +69,18 @@ static void modbus_tx_add_byte(uint8_t data)
 
 /**
   * @brief  Adds the byte to the tx buffer ready for CRC calculation
-  * @param  data Byte of data to append.
-  * @retval None
+  * @param  data Buffer containing data
+  * @param  len Length of data in bytes
+  * @retval uint8_t resulting CRC
   */
 static uint16_t modbus_calculate_crc(uint8_t *data, uint16_t len)
 {
-  uint16_t byte;
+  uint8_t byte;
   uint16_t crc = 0xFFFF;
 
   while (len--)
   {
-    byte = *data++ ^ crc;
+    byte = (*data++) ^ crc;
     crc >>= 8;
     crc ^= modbus_crc_table[byte];
   }
@@ -99,7 +101,7 @@ bool modbus_init(uint8_t addr, modbus_read_fn read_fn)
   tx_index = 0;
   memset(tx_buffer, 0, BUFFER_LEN);
 
-  // ToDo: Set up DMA read with MB_RX_TIMEOUT_MS
+  HAL_UART_Setup_UART2();
 
   return true;
 }
@@ -127,6 +129,9 @@ void modbus_process(uint8_t *data, uint16_t len)
 
 void modbus_resp_begin(uint8_t func, uint8_t len)
 {
+  tx_index = 0;
+  memset(tx_buffer, 0, BUFFER_LEN);
+
   // Send our device address, function and data length
   modbus_tx_add_byte(mb_addr);
   modbus_tx_add_byte(func);
@@ -152,11 +157,8 @@ void modbus_resp_end(void)
 {
   uint16_t crc = modbus_calculate_crc(&tx_buffer[0], tx_index);
 
-  modbus_tx_add_byte((crc >> 8) & 0xff);
   modbus_tx_add_byte(crc & 0xff);
+  modbus_tx_add_byte((crc >> 8) & 0xff);
 
-  HAL_UART_Transmit(&huart2, &tx_buffer[0], tx_index, 100);
-
-  tx_index = 0;
-  memset(tx_buffer, 0, BUFFER_LEN);
+  HAL_UART_Transmit_DMA(&huart2, &tx_buffer[0], tx_index);
 }
