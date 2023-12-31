@@ -2,11 +2,13 @@
  *  @brief Functions to interact with ChaDeMo connection
  *
  *  This contains logic and CAN bus message data to communicate with a 
- *  Chademo 1.0 Vehicle.
+ *  Chademo 1.0.1 V2X enabled vehicle (Tested on a 2015 Nissan Leaf).
  *  It also includes a state machine to control the Analog and Digital handshake.
  * 
- *  Inspired by the description of Type 2 connectors here:
- *  https://www.elso.sk/en/blog/technologies/evse-charging-of-electric-vehicles
+ *  Inspired by:
+ *    https://github.com/dalathegreat/BYD-Battery-Emulator-For-Gen24
+ *    https://github.com/jsphuebner/stm32-car
+ *    https://openinverter.org/wiki/Tesla_Model_S/X_GEN2_Charger#Functionality_of_external_CAN_bus
  * 
  *  ToDo: 
  *  Requires a user interface to show charging status and start / stop charging
@@ -18,7 +20,7 @@
  *  (i.e. separate from CPU)
  *  
  *  Check and Calibrate Earth Leakage threshold value (lower than 100 Ω/V)
- *  Monitor lock soleniod current and set CONN Lock flag to zero if it fails.
+ *  Monitor lock solenoid current and set CONN Lock flag to zero if it fails.
  *  
  *  Copyright (c) 2023 ARTaylor.co.uk.
  *  All rights reserved.
@@ -126,7 +128,7 @@ struct can_data
         uint8_t max_discharge_current;    /* Max Discharge (A x1) */
         uint16_t min_discharge_voltage;   /* Min Voltage (V x1?) 0: unused */
         uint8_t min_discharge_level;      /* Min SoC or kWh (% x1) 0: unused */
-        uint8_t max_remaining_capacity;   /* Max Available capacity with which the vehicle permits (dis?)charging */
+        uint8_t max_remaining_capacity;   /* Max Available capacity with which the vehicle permits (dis?)charging (0.1%?)*/
         uint8_t pad[3];                   /* Data here, need more info (0x00, 0x45, 0xb9) */
     } msgid_200;
 
@@ -213,6 +215,7 @@ static int32_t measured_current = 0;        /* Current (A x10) */
 static int32_t measured_power = 0;          /* Power (W x1) in (+'ve) or out (-'ve) of the battery */
 
 static uint8_t min_discharge_level = DEFAULT_MIN_SOC; /* Minimum SoC during discharge */
+static uint32_t rated_capacity = 180000;     /* Rated capacity (0.1 kWh) */
 static uint32_t available_energy = 0;       /* Available energy (0.1 kWh) */
 
 static bool start_pending = false;
@@ -255,8 +258,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
   /* Make sure we notify watchers ASAP */
   trigger_json_update();
 
-  printf("{\"new_state\":%d}\n", new_state);
-
   switch (new_state)
   {
     case CHADEMO_STATE_OFF:
@@ -274,14 +275,21 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       can_data.charger.msgid_109.fault_status &= ~MSG109_CONN_LOCK;
     break;
 
-    case CHADEMO_STATE_START:
-      if (!errored)
+    case CHADEMO_STATE_PARAM_CHK:
+      if (k_perm)
       {
-        if (chademo_state == CHADEMO_STATE_OFF)
-        {
-          /* Signal to the vehicle that we're ready to start */
-          HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_SET);
-        }
+        /* Vehicle permission line stuck */
+        snprintf(last_error, ERROR_LEN,
+                 "Vehicle permission (k) line state invalid.");
+        new_state = CHADEMO_STATE_ERROR;
+      }
+
+      if ((can_data.vehicle.msgid_102.status & STATUS_CHARGE) == STATUS_CHARGE)
+      {
+        /* Vehicle permission message invalid */
+        snprintf(last_error, ERROR_LEN,
+                 "Vehicle permission CHARGE bit state invalid.");
+        new_state = CHADEMO_STATE_ERROR;
       }
     break;
 
@@ -372,7 +380,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       can_data.charger.msgid_109.fault_status |= MSG109_CHG_STOPPED;
     break;
 
-    case CHADEMO_STATE_PARAM_CHK:
+    case CHADEMO_STATE_START:
     case CHADEMO_STATE_BATT_CHECK:
     case CHADEMO_STATE_WELD_CHECK:
     case CHADEMO_STATE_WAIT_K_OFF:
@@ -568,9 +576,6 @@ HAL_StatusTypeDef chademo_send_messages(void)
       can_data.charger.msgid_208.discharge_current = 255 - (measured_current / 10);
     }
 
-    available_energy = 100 * can_data.vehicle.msgid_101.rated_battery_capacity /
-                             can_data.vehicle.msgid_102.charge_rate;
-
     ret = chademo_send_message(0x108, (uint8_t*)&can_data.charger.msgid_108);
     if (ret == HAL_OK)
       ret = chademo_send_message(0x109, (uint8_t*)&can_data.charger.msgid_109);
@@ -620,7 +625,7 @@ bool chademo_init(void)
   memcpy(&can_data.charger.msgid_209, chademo_209, 8);
 
   can_data.charger.msgid_208.low_threshold_voltage = SOLAX_MINIMUM_SUPPORTED_VOLTAGE;
-  can_data.charger.msgid_208.discharge_current_max = 40;    // Our fuse is 40A
+  can_data.charger.msgid_208.discharge_current_max = SOLAX_MAXIMUM_SUPPORTED_CURRENT;
 
   can_data.vehicle.msgid_102.status = STATUS_CONTACTOR_OPEN;
 
@@ -651,16 +656,22 @@ void chademo_process(void)
     break;
 
     case CHADEMO_STATE_START:
+      if (!errored && solax_contactor_enabled())
+      {
+        /* Signal to the vehicle that we're ready to start */
+        HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_SET);
+      }
+
       if (HAL_GetTick() > state_time + CHADEMO_CAN_TIMEOUT)
       {
         snprintf(last_error, ERROR_LEN,
-                 "Timed out waiting for CAN messages from Vehicle");
+                 "Timed out waiting for CAN messages from Vehicle and Inverter");
         /* No need for full shut down sequence, no HV involved yet */
         chademo_transition_state(CHADEMO_STATE_OFF);
       }
 
-      /* Check that we're receiving CAN messages and update our limits */
-      if (last_update > 0)
+      /* Check that we're allowed to enable and are receiving CAN messages */
+      if (solax_contactor_enabled() && last_update > 0)
       {
         chademo_transition_state(CHADEMO_STATE_PARAM_CHK);
       }
@@ -669,30 +680,28 @@ void chademo_process(void)
     /* Wait for vehicle to grant permission */
     case CHADEMO_STATE_PARAM_CHK:
     {
-      uint32_t max_current = 0;
-
       /* These values are only allowed to change during Parameter checking */
 
       /* Set the Threshold Voltage */
       can_data.charger.msgid_108.threshold_voltage = 
         MIN(SOLAX_MAXIMUM_SUPPORTED_VOLTAGE, can_data.vehicle.msgid_100.max_battery_voltage);
 
-      /*
-       * Use the max battery voltage reported by the vehicle and max power
-       * reported by the EVSE to calculate our maximum supported current.
-       */
-      if (can_data.vehicle.msgid_100.max_battery_voltage > 0)
-      {
-        max_current = max_evse_power / can_data.vehicle.msgid_100.max_battery_voltage;
-      }
-      can_data.charger.msgid_108.available_charger_current = max_current;
+      /* Set Maximum possible current (will be limited by EVSE and Inverter setting)*/
+      can_data.charger.msgid_108.available_charger_current = SOLAX_MAXIMUM_SUPPORTED_CURRENT;
 
       /* Set the Charge time remaining */
       can_data.charger.msgid_109.time_remaining_10s = can_data.vehicle.msgid_101.max_charging_time_10s;
       can_data.charger.msgid_109.time_remaining_1min = can_data.vehicle.msgid_101.max_charging_time_1min;
 
+      /* Set rated capacity if available otherwise use default */
+      if (can_data.vehicle.msgid_101.rated_battery_capacity > 0)
+      {
+        rated_capacity = can_data.vehicle.msgid_101.rated_battery_capacity;
+      }
+
       /* Set up V2X Parameters */
 
+      /* Set maximum discharge current based on vehicle and inverter */
       can_data.charger.msgid_208.discharge_current_max = SOLAX_MAXIMUM_SUPPORTED_CURRENT;
       if (can_data.vehicle.msgid_200.max_discharge_current != 0)
       {
@@ -700,6 +709,7 @@ void chademo_process(void)
           MIN(can_data.vehicle.msgid_200.max_discharge_current, SOLAX_MAXIMUM_SUPPORTED_CURRENT);
       }
 
+      /* Set minimum and threshold voltage based on vehicle and inverter */
       can_data.charger.msgid_208.low_threshold_voltage = SOLAX_MINIMUM_SUPPORTED_VOLTAGE;
       can_data.charger.msgid_208.min_voltage = SOLAX_MINIMUM_SUPPORTED_VOLTAGE;
       if (can_data.vehicle.msgid_200.min_discharge_voltage != 0)
@@ -708,6 +718,7 @@ void chademo_process(void)
           MAX(SOLAX_MINIMUM_SUPPORTED_VOLTAGE, can_data.vehicle.msgid_200.min_discharge_voltage);
       }
 
+      /* Set the minimum SoC */
       min_discharge_level = DEFAULT_MIN_SOC;
       if (can_data.vehicle.msgid_200.min_discharge_level != 0)
       {
@@ -716,16 +727,13 @@ void chademo_process(void)
 
       /* Update Solax Data (Standard) */
       solax_set_battery_voltage_max(can_data.vehicle.msgid_100.max_battery_voltage * 10);
-      solax_set_battery_capacity_max(can_data.vehicle.msgid_101.rated_battery_capacity * 100);
+      solax_set_battery_capacity_max(rated_capacity * 100);
       solax_set_max_dc_chg_current(can_data.vehicle.msgid_102.charge_current_requested * 10);
       solax_set_battery_voltage_tgt(can_data.vehicle.msgid_102.target_battery_voltage * 10);
 
       /* Update Solax Data (V2X) */
       solax_set_battery_voltage_min(can_data.charger.msgid_208.low_threshold_voltage * 10);
       solax_set_max_dc_dis_current(can_data.charger.msgid_208.discharge_current_max * 10);
-
-      // ToDo: CAN CHG before Physical charge == fault
-      // ToDo: Physical Charge before sending first CAN data == fault
 
       if (chg_perm)
       {
@@ -791,10 +799,19 @@ void chademo_process(void)
       int32_t current = measured_current / 10;
       uint16_t soc = can_data.vehicle.msgid_102.charge_rate;
 
+      available_energy = soc * rated_capacity / 100;
+
       if (!chg_perm)
       {
         snprintf(last_error, ERROR_LEN,
                  "Charge Permission Revoked");
+        chademo_transition_state(CHADEMO_STATE_STOP);
+      }
+
+      if (!solax_contactor_enabled())
+      {
+        snprintf(last_error, ERROR_LEN,
+                 "Inverter Permission Revoked");
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
@@ -1046,10 +1063,14 @@ void chademo_json_update(void)
     printf("},");
 
     printf("\"vehicle\":{");
-      printf("\"0x100\":{\"max_voltage\":%d},",
-            can_data.vehicle.msgid_100.max_battery_voltage);
-      printf("\"0x101\":{\"rated_capacity\":%d},",
-            can_data.vehicle.msgid_101.rated_battery_capacity);
+      printf("\"0x100\":{\"max_voltage\":%d, \"min_voltage\":%d},",
+            can_data.vehicle.msgid_100.max_battery_voltage,
+            can_data.vehicle.msgid_100.min_battery_voltage);
+      printf("\"0x101\":{\"rated_capacity\":%d, \"max_charge_time\":%d},",
+            can_data.vehicle.msgid_101.rated_battery_capacity,
+            (can_data.vehicle.msgid_101.max_charging_time_10s == 0xff)?
+            can_data.vehicle.msgid_101.max_charging_time_1min * 60:
+            can_data.vehicle.msgid_101.max_charging_time_10s);
       printf("\"0x102\":{\"target_voltage\":%d, \"charge_current\":%d, \"faults\":%d, \"status\":%d, \"soc\":%d},",
             can_data.vehicle.msgid_102.target_battery_voltage,
             can_data.vehicle.msgid_102.charge_current_requested,
@@ -1061,9 +1082,11 @@ void chademo_json_update(void)
             can_data.vehicle.msgid_200.max_discharge_current,
             can_data.vehicle.msgid_200.min_discharge_level,
             can_data.vehicle.msgid_200.max_remaining_capacity);
-      printf("\"0x201\":{\"available_energy\":%ld}},",
-            available_energy);
+      printf("\"0x201\":{\"available_energy\":%d}},",
+            can_data.vehicle.msgid_201.available_energy);
     printf("\"k_perm\":%d, ", k_perm);
+    printf("\"rated_capacity\":%ld, ", rated_capacity);
+    printf("\"available_energy\":%ld, ", available_energy);
     printf("\"state\":%d, \"last_error\":\"%s\"", chademo_state, last_error);
   printf("}");
 }

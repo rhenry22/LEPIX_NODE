@@ -58,9 +58,11 @@
 #define ENABLE_CHADEMO
 #define ENABLE_SOLAX
 
-#define JSON_UPDATE_TIME    (30000)
+#define JSON_UPDATE_TIME    (10000)
 
 #define MB_SLAVE_ADDRESS	  (1)
+
+#define STDIO_TX_TIMEOUT    (5)
 
 /* USER CODE END PD */
 
@@ -76,6 +78,8 @@ static bool error = false;
 static uint32_t last_json_update = 0;  /* Last time we saw frame 0x03 */
 static float power_offset = 0;
 
+static uint32_t loop_time_max = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,15 +91,6 @@ void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-#if 0
-static void jump_to_dfu(void)
-{
-  /* Drop us into DFU mode */
-  __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
-  NVIC_SystemReset();
-}
-#endif
 
 /**
   * @brief  Forcibly shut everything down
@@ -168,7 +163,6 @@ static void evse_changed_cb(EVSE_PP pp, uint8_t current)
 
     case EVSE_PP_PRESSED:
       /* Update the inverter max */
-      current = 0;
       chademo_stop();
     break;
   }
@@ -199,33 +193,33 @@ void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len)
 				case 12:	// Current Power (W)
 					modbus_resp_begin(type, sizeof(int32_t));
 					modbus_resp_float((float)chademo_get_power() + power_offset);
-        	modbus_resp_end();
+                    modbus_resp_end();
 				break;
 
 
 				case 0x2004:	// Current Power (KW)
 					modbus_resp_begin(type, sizeof(int32_t));
 					modbus_resp_float(((float)chademo_get_power() + power_offset) / 1000.0f);
-        	modbus_resp_end();
+                    modbus_resp_end();
 				break;
 
 				case 70: 	// Frequency (Hz)
 				case 0x200E: 	// Frequency (Hz)
 					modbus_resp_begin(type, sizeof(int32_t));
 					modbus_resp_float(50.0f);
-        	modbus_resp_end();
+                    modbus_resp_end();
 				break;
 
 				default:
 					modbus_resp_begin(0x80 | type, MB_ERR_ILLEGAL_ADDRESS);
-        	modbus_resp_end();
+                    modbus_resp_end();
 				break;
 			}
 		break;
 
 		default:
 			modbus_resp_begin(0x80 | type, MB_ERR_ILLEGAL_FUNCTION);
-      modbus_resp_end();
+            modbus_resp_end();
 		break;
 	}
 
@@ -317,7 +311,11 @@ int main(void)
   if (!error)
     printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
 
+  /* Set Maximum DC power. Import / Export will be controlled separately. */
   chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
+  
+  // ToDo: Drive this from the ESP8266
+  chademo_start();
 
 #ifndef ENABLE_EVSE
   HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
@@ -331,6 +329,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    uint32_t loop_time = HAL_GetTick();
+    
     /* Catch any errors and EStop */
     if (error)
     {
@@ -368,13 +368,18 @@ int main(void)
       solax_json_update();
       printf(",");
       chademo_json_update();
+      printf(",\"loop_time_max\":%ld", loop_time_max);
       printf(",\"timestamp\":%ld,\"status\":0,\"acc_current\":%ld}}\n", 
               HAL_GetTick(), acc_current / 1000);
 
       last_json_update = HAL_GetTick();
     }
 
+    /* Kick the Watchdog */
     HAL_IWDG_Refresh(&hiwdg);
+
+    loop_time = HAL_GetTick() - loop_time;
+    if (loop_time > loop_time_max) loop_time_max = loop_time;
 
     /* Re-purpose the EVSE LED to show when we're busy */
     HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
@@ -440,6 +445,12 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+/**
+  * @brief Print the contents of a packet in HEX
+  * @param  data: pointer to data
+  * @param  len: length of data
+  * @retval None
+  */
 void dump_packet(uint8_t *data, uint8_t len)
 {
   int i;
@@ -457,19 +468,19 @@ void dump_packet(uint8_t *data, uint8_t len)
   */
 int _write(int file, char *ptr, int len)
 {
-    /* If USB is connected, send to USB */
-    if (CDC_Is_Connected())
-    {
-      /* Send the data */
-      CDC_Transmit_FS((uint8_t*)ptr, len, 10);
-    }
-    //else
-    {
-      /* Send Data to Serial */
-      HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, 100);
-    }
+  /* If USB is connected, send to USB */
+  if (CDC_Is_Connected())
+  {
+    /* Send the data */
+    CDC_Transmit_FS((uint8_t*)ptr, len, 10);
+  }
+  //else
+  {
+    /* Send Data to Serial */
+    HAL_UART_Write_UART1((uint8_t *)ptr, len, 100);
+  }
 
-    return len;
+  return len;
 }
 
 /* USER CODE END 4 */

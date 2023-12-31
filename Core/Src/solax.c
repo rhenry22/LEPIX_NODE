@@ -232,6 +232,7 @@ static uint32_t t_zero_set = 0;                     /* Time at which current req
 static uint32_t last_update = 0;                    /* Last time we saw a CAN message */
 static uint16_t max_charge_current = 0;             /* Max DC charge current (A x10) */
 static uint16_t max_discharge_current = 0;          /* Max DC discharge current (A x10) */
+static bool contactor_close = false;                /* Has the inverter requested contactor close? */
 
 static char last_error[ERROR_LEN+1] = {0};          /* Last error string */
 
@@ -275,8 +276,8 @@ static HAL_StatusTypeDef solax_send_standard_response(void)
 
 static void solax_update_values(void)
 {
-  int32_t voltage;
-  int32_t current;
+  int32_t voltage; /* V x10 */
+  int32_t current; /* A x10 */
 
   /* Update Measured Values */
   sensor_get_value(SENSOR_BATT_VOLTAGE, &voltage);
@@ -290,7 +291,7 @@ static void solax_update_values(void)
   solax_data.bms.msg_1876.cell_mv_max = (voltage / NUM_CELLS) + 40;
   solax_data.bms.msg_1876.cell_mv_min = (voltage / NUM_CELLS) - 40;
   
-  // ToDo: Add some form of temperature monitoring / reporting
+  // ToDo: Add temperature monitoring
 #if 0
   //BMS_Status
   SOLAX_1875.data.u8[0] = (uint8_t)temperature_average;
@@ -301,8 +302,8 @@ static void solax_update_values(void)
 
   if (voltage > 0)
   {
-    uint32_t req_current;
-    uint32_t req_power;
+    uint32_t req_current; /* A x10 */
+    uint32_t req_power;   /* W x1 */
 
     /* Voltage and Curent are both x10 */
     /* AC power is in W x1 */
@@ -330,10 +331,10 @@ static void solax_update_values(void)
   }
 
   /* Check SoC and adjust charge rate if needed */
-  if (solax_data.bms.msg_1873.soc >= 95)
+  if (solax_data.bms.msg_1873.soc >= SOLAX_MAXIMUM_SOC)
     solax_data.bms.msg_1872.charge_max = 0;
 
-  if (solax_data.bms.msg_1873.soc <= 20)
+  if (solax_data.bms.msg_1873.soc <= SOLAX_MINIMUM_SOC)
     solax_data.bms.msg_1872.discharge_max = 0;
 }
 
@@ -354,7 +355,7 @@ static HAL_StatusTypeDef solax_update_state(void)
     snprintf(last_error, ERROR_LEN,
              "Unhandled Inverter Status: %d",
              solax_data.inverter.msg_1871.data[MSG_1871_STATUS]);
-    chademo_stop();
+    contactor_close = false;
     ret = HAL_ERROR;
   }
 
@@ -379,8 +380,12 @@ static HAL_StatusTypeDef solax_update_state(void)
         if (solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR] == 0x0001)
         {
           /* Message from the inverter to proceed to contactor closing */
-          chademo_start();
+          contactor_close = true;
           state = SOLAX_REQUEST_CONTACTOR_CLOSE;
+        }
+        else
+        {
+          contactor_close = false;
         }
       break;
 
@@ -406,14 +411,14 @@ static HAL_StatusTypeDef solax_update_state(void)
         {
           /* Message from the inverter to open contactor */
           snprintf(last_error, ERROR_LEN,
-                  "Battery State: Inverter Requests Open Contactor");
+                  "Inverter Requests Open Contactor");
           state = SOLAX_BATTERY_ANNOUNCE;
-          chademo_stop();
         }
       break;
 
       case SOLAX_FAULT:
       case SOLAX_UPDATING_FW:
+        contactor_close = false;
       break;
     }
   }
@@ -457,7 +462,7 @@ static void solax_process_frame(void)
 
     default:
       snprintf(last_error, ERROR_LEN,
-                "Solax: 1871 frame 0x%02X received from inverter.",
+                "1871 frame 0x%02X received from inverter.",
                 solax_data.inverter.msg_1871.frame_id);
     break;
   }
@@ -523,7 +528,6 @@ void solax_process(void)
   /* Shut down if we timeout receiving messages */
   if (HAL_GetTick() > last_update + SOLAX_TIMEOUT && (state > SOLAX_BATTERY_ANNOUNCE))
   {
-    chademo_stop();
     state = SOLAX_BATTERY_ANNOUNCE;
   }
 
@@ -661,4 +665,13 @@ void solax_json_update(void)
     solax_data.inverter.msg_1871_3.data[5],
     solax_data.inverter.msg_1871_3.data[6]);
   printf("}");
+}
+
+/**
+  * @brief  Does the inverter allow us to close the concactor?
+  * @retval bool true: Yes, false: No
+  */
+bool solax_contactor_enabled(void)
+{
+  return contactor_close;
 }

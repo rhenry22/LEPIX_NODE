@@ -28,16 +28,18 @@
 /* USER CODE BEGIN 0 */
 
 static uint16_t uart1_rx_bytes = 0;
-static uint8_t uart1_rxbuf[APP_TX_DATA_SIZE];
+static uint8_t uart1_rxbuf[APP_RX_DATA_SIZE];
+static bool uart1_busy = false;
 
 static uint16_t uart2_rx_bytes = 0;
-static uint8_t uart2_rxbuf[APP_TX_DATA_SIZE];
+static uint8_t uart2_rxbuf[APP_RX_DATA_SIZE];
 
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart1_rx;
+DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 
@@ -151,6 +153,24 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
     __HAL_LINKDMA(uartHandle,hdmarx,hdma_usart1_rx);
 
+    /* USART1_TX Init */
+    hdma_usart1_tx.Instance = DMA2_Stream7;
+    hdma_usart1_tx.Init.Channel = DMA_CHANNEL_4;
+    hdma_usart1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_usart1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart1_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart1_tx.Init.Mode = DMA_NORMAL;
+    hdma_usart1_tx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart1_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart1_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmatx,hdma_usart1_tx);
+
     /* USART1 interrupt Init */
     HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(USART1_IRQn);
@@ -243,6 +263,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
     /* USART1 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
+    HAL_DMA_DeInit(uartHandle->hdmatx);
 
     /* USART1 interrupt Deinit */
     HAL_NVIC_DisableIRQ(USART1_IRQn);
@@ -278,16 +299,24 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
 /* USER CODE BEGIN 1 */
 
+/**
+  * @brief Set up UART1 for DMA reads
+  * @retval None
+  */
 void HAL_UART_Setup_UART1(void)
 {
   HAL_UART_DMAStop(&huart1);
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_TX_DATA_SIZE);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_RX_DATA_SIZE);
 }
 
+/**
+  * @brief Set up UART2 for DMA reads
+  * @retval None
+  */
 void HAL_UART_Setup_UART2(void)
 {
   HAL_UART_DMAStop(&huart2);
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, &uart2_rxbuf[0], APP_TX_DATA_SIZE);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, &uart2_rxbuf[0], APP_RX_DATA_SIZE);
 }
 
 /**
@@ -307,6 +336,25 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   {
     uart2_rx_bytes = Size;
     HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_RESET);
+  }
+}
+
+/**
+  * @brief UART Tx Complete callback (for IT / DMA sends)
+  * @param  huart: UART handle
+  * @retval None
+  */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart == &huart1)
+  {
+    uart1_busy = false;
+  }
+  else
+  {
+    /* Put Transceiver back into RX mode */
+    HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
   }
 }
 
@@ -336,28 +384,40 @@ void HAL_UART_Process(void)
         chademo_stop();
     }
     uart1_rx_bytes = 0;
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_TX_DATA_SIZE);
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_RX_DATA_SIZE);
   }
 
   if (uart2_rx_bytes > 0)
   {
     /* Put Transceiver into TX mode */
-    HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_SET);
     modbus_process(&uart2_rxbuf[0], uart2_rx_bytes);
     
     uart2_rx_bytes = 0;
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart2, &uart2_rxbuf[0], APP_TX_DATA_SIZE);
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart2, &uart2_rxbuf[0], APP_RX_DATA_SIZE);
   }
 }
 
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+/**
+  * @brief Write data to UART1 via DMA if possible
+  * @param  ptr: pointer to data
+  * @param  len: length of data
+  * @param  timeout: Number of ms to wait for port to be free
+  * @retval HAL_StatusTypeDef: HAL_OK on success 
+  */
+HAL_StatusTypeDef HAL_UART_Write_UART1(uint8_t *ptr, uint16_t len, uint32_t timeout)
 {
-  if (huart == &huart2)
-  {
-    /* Put Transceiver back into RX mode */
-    HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
-  }
+  HAL_StatusTypeDef ret;
+  uint32_t t = HAL_GetTick() + timeout;
+
+  while (uart1_busy && HAL_GetTick() < t);
+  if (HAL_GetTick() >= t)
+    return HAL_TIMEOUT;
+
+  ret = HAL_UART_Transmit_DMA(&huart1, ptr, len);
+  uart1_busy = true;
+
+  return ret;
 }
 
 /* USER CODE END 1 */
