@@ -8,6 +8,7 @@
 #define SOLAX_MAXIMUM_SOC               (90)
 #define SOLAX_MINIMUM_SOC               (20)
 
+HAL_StatusTypeDef solax_init(void);
 void solax_process(void);
 
 void solax_set_max_ac_current(uint8_t current);

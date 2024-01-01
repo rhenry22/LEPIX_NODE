@@ -62,8 +62,6 @@
 
 #define MB_SLAVE_ADDRESS	  (1)
 
-#define STDIO_TX_TIMEOUT    (5)
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -76,7 +74,7 @@
 /* USER CODE BEGIN PV */
 static bool error = false;
 static uint32_t last_json_update = 0;  /* Last time we saw frame 0x03 */
-static float power_offset = 0;
+static float power_offset = -1000;
 
 static uint32_t loop_time_max = 0;
 
@@ -252,6 +250,9 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
+  HAL_CAN_DeInit(&hcan1);
+  HAL_CAN_DeInit(&hcan2);
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -270,10 +271,11 @@ int main(void)
 
   /* Power Up ESP8266 */
   HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+  
+  /* Turn on the EVSE */
+  HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
+  
   HAL_Delay(2000);
-
-  MX_USART1_UART_Init();
-  MX_USART2_UART_Init();
 
   if (!sensor_init())
   {
@@ -300,6 +302,7 @@ int main(void)
 
 #ifdef ENABLE_SOLAX
   MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1);
+  solax_init();
 #endif
 
   if (!modbus_init(MB_SLAVE_ADDRESS, &mb_read_cb))
@@ -315,11 +318,7 @@ int main(void)
   chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
   
   // ToDo: Drive this from the ESP8266
-  chademo_start();
-
-#ifndef ENABLE_EVSE
-  HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
-#endif
+  //chademo_start();
 
   /* USER CODE END 2 */
 
@@ -363,14 +362,16 @@ int main(void)
       sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
 
       printf("{\"controller\":{");
+      printf("\"timestamp\":%ld", HAL_GetTick());
+      printf(",\"loop_time_max\":%ld", loop_time_max);
+      printf(",\"acc_current\":%ld", acc_current / 1000);
+      printf(",");
       evse_json_update();
       printf(",");
       solax_json_update();
       printf(",");
       chademo_json_update();
-      printf(",\"loop_time_max\":%ld", loop_time_max);
-      printf(",\"timestamp\":%ld,\"status\":0,\"acc_current\":%ld}}\n", 
-              HAL_GetTick(), acc_current / 1000);
+      printf("}}\n");
 
       last_json_update = HAL_GetTick();
     }

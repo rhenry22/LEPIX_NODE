@@ -199,12 +199,14 @@ void evse_process(void)
   */
 void evse_json_update(void)
 {
-  printf("\"evse\":{");
+  printf("\"evse\":{\"max_current\":%ld", max_current);
 
-  printf("\"pp\":%d, \"max_current\":%ld, \"last_error\":\"%s\"",
-         pp,
-         max_current,
-         last_error);
+  if (strnlen(last_error, ERROR_LEN))
+  {
+    printf(",\"pp\":%d, \"last_error\":\"%s\"",
+          pp,
+          last_error);
+  }
 
   printf("}");
-  }
+}

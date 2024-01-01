@@ -23,7 +23,7 @@
 #include "chademo.h"
 #include "solax.h"
 
-//#define DEBUG_SOLAX
+#define DEBUG_SOLAX
 
 /* Battery size in Wh (Maximum value for most inverters is 60000 [60kWh], 
  * you can use larger batteries but do not set value over 60000! 
@@ -177,7 +177,7 @@ struct _solax_data solax_data = {
     /* BMS_Status */
     .msg_1875 = {
       .pack_temp = 180,
-      .num_batts = 7, // 0?
+      .num_batts = 0, // 7 or 0?
       .contactor = 0
     },
 
@@ -407,6 +407,15 @@ static HAL_StatusTypeDef solax_update_state(void)
       break;
 
       case SOLAX_CONTACTOR_CLOSED:
+        if (!chademo_is_contactor_closed())
+        {
+        {
+          /* Message from the inverter to open contactor */
+          snprintf(last_error, ERROR_LEN,
+                  "Vehicle stopping");
+          state = SOLAX_BATTERY_ANNOUNCE;
+        }
+                }
         if (solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR] == 0)
         {
           /* Message from the inverter to open contactor */
@@ -494,18 +503,6 @@ void solax_process(void)
         continue;
       }
 
-#ifdef DEBUG_SOLAX
-      {
-        int i;
-        printf("Solax Packet: ID: 0x%02lX\nData: ", RxHeader.ExtId);
-        for (i=0; i<RxHeader.DLC; ++i)
-        {
-          printf("0x%02X ", data[i]);
-        }
-        printf("\n");
-      }
-#endif
-
       switch (RxHeader.ExtId)
       {
         case 0x1871:
@@ -528,10 +525,17 @@ void solax_process(void)
   /* Shut down if we timeout receiving messages */
   if (HAL_GetTick() > last_update + SOLAX_TIMEOUT && (state > SOLAX_BATTERY_ANNOUNCE))
   {
+    snprintf(last_error, ERROR_LEN,
+              "No CAN messages received in %lds", (HAL_GetTick() - last_update) / 1000);
     state = SOLAX_BATTERY_ANNOUNCE;
   }
 
   //HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
+}
+
+HAL_StatusTypeDef solax_init(void)
+{
+  return solax_send_message(0x100A001, (uint8_t*)&solax_data.bms.msg_100A001, 0);
 }
 
 /**
@@ -642,19 +646,24 @@ void solax_json_update(void)
 {
   printf("\"solax\":{");
 
-  printf("\"state\":%d, \"max_chg_current\":%d.%d, \"max_dis_current\":%d.%d",
-         state,
-         solax_data.bms.msg_1872.charge_max/10,
-         solax_data.bms.msg_1872.charge_max%10,
-         solax_data.bms.msg_1872.discharge_max/10,
-         solax_data.bms.msg_1872.discharge_max%10);
+  printf("\"state\":%d", state);
 
-  printf(", \"voltage\":%d.%d, \"current\":%d.%d, \"last_error\":\"%s\"", 
-          solax_data.bms.msg_1873.voltage / 10,
-          solax_data.bms.msg_1873.voltage % 10,
-          solax_data.bms.msg_1873.current / 10,
-          solax_data.bms.msg_1873.current % 10,
-          last_error);
+  if (strnlen(last_error, ERROR_LEN))
+  {
+    printf(",\"last_error\":\"%s\"", last_error);
+  }
+
+#ifdef DEBUG_SOLAX
+  printf(",\"last_update\":%ld", HAL_GetTick() - last_update);
+  printf(",\"contactor_req\":%d", solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR]);
+  printf(", \"max_chg_current\":%d, \"max_dis_current\":%d",
+         solax_data.bms.msg_1872.charge_max,
+         solax_data.bms.msg_1872.discharge_max);
+
+  printf(", \"voltage\":%d, \"current\":%d", 
+          solax_data.bms.msg_1873.voltage,
+          solax_data.bms.msg_1873.current);
+
 
   /* Time information from Inverter */
   printf(", \"date\":\"%04d/%02d/%02d\", \"time\":\"%02d:%02d:%02d\"",
@@ -664,6 +673,7 @@ void solax_json_update(void)
     solax_data.inverter.msg_1871_3.data[4],
     solax_data.inverter.msg_1871_3.data[5],
     solax_data.inverter.msg_1871_3.data[6]);
+#endif
   printf("}");
 }
 

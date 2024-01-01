@@ -38,17 +38,18 @@
 #include "solax.h"
 #include "sensor.h"
 
-//#define DEBUG_CAN
+#define DEBUG_CHADEMO
 
 #define MESSAGE_INTERVAL      (100)
 
 #define DEBOUNCE_TIME         (50)
 #define CHADEMO_CAN_TIMEOUT   (10000)
+#define BATT_CHECK_TIMEOUT    (5000 * 2)
+#define STOP_TIMEOUT          (10000) /* How long to wait for current to drop */
+
+#define STOP_CURRENT          (5)    /* Spec is 5A, but using 0.5A (x10) */
 #define LEAKAGE_CURRENT_MAX   (250 * 500 / 5)  /* 100Ohm/V == 500kOhm == 250uA (@ 500V)*/
 #define LEAK_TEST_TIME        (1000)  /* Between 200ms and 1000ms */
-#define STOP_CURRENT          (50)    /* 5A (x10) */
-#define BATT_CHECK_TIMEOUT    (5000)
-#define STOP_TIMEOUT          (10000) /* How long to wait for current to drop */
 #define DEFAULT_MIN_SOC       (25)
 
 #define CONTACTOR_CLOSED_V    (500)
@@ -449,9 +450,6 @@ static void chademo_process_can(void)
 
   while (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0)
   {
-#ifdef DEBUG_CAN
-    int i;
-#endif
     /* Read the message */
     if (HAL_OK == HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, data))
     {
@@ -460,15 +458,6 @@ static void chademo_process_can(void)
         snprintf(last_error, ERROR_LEN, "Unexpected Ext CAN message");
         continue;
       }
-
-#ifdef DEBUG_CAN
-      printf("ChaDeMo: ChaDeMo Packet: ID: 0x%02lX\nData: ", RxHeader.StdId);
-      for (i=0; i<RxHeader.DLC; ++i)
-      {
-        printf("0x%02X ", data[i]);
-      }
-      printf("\n");
-#endif
 
       switch (RxHeader.StdId) 
       {
@@ -573,7 +562,7 @@ HAL_StatusTypeDef chademo_send_messages(void)
     else
     {
       can_data.charger.msgid_109.charger_current = 0;
-      can_data.charger.msgid_208.discharge_current = 255 - (measured_current / 10);
+      can_data.charger.msgid_208.discharge_current = 255 + (measured_current / 10);
     }
 
     ret = chademo_send_message(0x108, (uint8_t*)&can_data.charger.msgid_108);
@@ -664,8 +653,18 @@ void chademo_process(void)
 
       if (HAL_GetTick() > state_time + CHADEMO_CAN_TIMEOUT)
       {
-        snprintf(last_error, ERROR_LEN,
-                 "Timed out waiting for CAN messages from Vehicle and Inverter");
+        if (!solax_contactor_enabled())
+        {
+          snprintf(last_error, ERROR_LEN,
+                  "Timed out waiting for request from Inverter");
+        }
+
+        if (last_update == 0)
+        {
+          snprintf(last_error, ERROR_LEN,
+                  "Timed out waiting for CAN messages from Vehicle");
+        }
+
         /* No need for full shut down sequence, no HV involved yet */
         chademo_transition_state(CHADEMO_STATE_OFF);
       }
@@ -801,6 +800,10 @@ void chademo_process(void)
 
       available_energy = soc * rated_capacity / 100;
 
+      /* Update allowed currents */
+      solax_set_max_dc_chg_current(can_data.vehicle.msgid_102.charge_current_requested * 10);
+      solax_set_max_dc_dis_current(can_data.charger.msgid_208.discharge_current_max * 10);
+
       if (!chg_perm)
       {
         snprintf(last_error, ERROR_LEN,
@@ -873,7 +876,7 @@ void chademo_process(void)
       else if (HAL_GetTick() > state_time + STOP_TIMEOUT)
       {
         snprintf(last_error, ERROR_LEN,
-                "Timeout waiting for current to drop to < 5A.");
+                "Timeout waiting for current to drop below threshold.");
         can_data.charger.msgid_109.fault_status |= MSG109_CHG_MALFUNC | MSG109_FAULT;
         chademo_transition_state(CHADEMO_STATE_WELD_CHECK);
       }
@@ -1045,7 +1048,17 @@ int32_t chademo_get_power(void)
 void chademo_json_update(void)
 {
   printf("\"chademo\":{");
-    printf("\"charger\":{");
+    printf("\"state\":%d", chademo_state);
+    printf(",\"voltage\":%ld,\"current\":%ld,\"power\":%ld",
+          measured_voltage/10,
+          measured_current/10,
+          measured_power);
+    if (strnlen(last_error, ERROR_LEN))
+      printf(",\"last_error\":\"%s\"", last_error);
+#ifdef DEBUG_CHADEMO
+    printf(",\"last_update\":%ld", HAL_GetTick() - last_update);
+    printf(",\"k_perm\":%d", k_perm);
+    printf(",\"charger\":{");
       printf("\"0x108\":{\"threshold_voltage\":%d, \"available_voltage\":%d, \"available_current\":%d},",
             can_data.charger.msgid_108.threshold_voltage,
             can_data.charger.msgid_108.available_charger_voltage,
@@ -1056,13 +1069,13 @@ void chademo_json_update(void)
             measured_power,
             can_data.charger.msgid_109.fault_status);
       printf("\"0x208\":{\"discharge_current\":%d, \"min_voltage\":%d, \"discharge_current_max\":%d, \"low_threshold_voltage\":%d}",
-            0xff - can_data.charger.msgid_208.discharge_current,
+            can_data.charger.msgid_208.discharge_current,
             can_data.charger.msgid_208.min_voltage,
             can_data.charger.msgid_208.discharge_current_max,
             can_data.charger.msgid_208.low_threshold_voltage);
-    printf("},");
+    printf("}");
 
-    printf("\"vehicle\":{");
+    printf(",\"vehicle\":{");
       printf("\"0x100\":{\"max_voltage\":%d, \"min_voltage\":%d},",
             can_data.vehicle.msgid_100.max_battery_voltage,
             can_data.vehicle.msgid_100.min_battery_voltage);
@@ -1082,11 +1095,9 @@ void chademo_json_update(void)
             can_data.vehicle.msgid_200.max_discharge_current,
             can_data.vehicle.msgid_200.min_discharge_level,
             can_data.vehicle.msgid_200.max_remaining_capacity);
-      printf("\"0x201\":{\"available_energy\":%d}},",
+      printf("\"0x201\":{\"available_energy\":%d}",
             can_data.vehicle.msgid_201.available_energy);
-    printf("\"k_perm\":%d, ", k_perm);
-    printf("\"rated_capacity\":%ld, ", rated_capacity);
-    printf("\"available_energy\":%ld, ", available_energy);
-    printf("\"state\":%d, \"last_error\":\"%s\"", chademo_state, last_error);
+    printf("}");
+#endif
   printf("}");
 }
