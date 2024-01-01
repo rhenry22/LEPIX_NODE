@@ -295,10 +295,10 @@ int main(void)
 
   /* Power Up ESP8266 */
   HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
-  
+
   /* Turn on the EVSE */
   HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
-  
+
   HAL_Delay(2000);
 
   if (!sensor_init())
@@ -340,7 +340,7 @@ int main(void)
 
   /* Set Maximum DC power. Import / Export will be controlled separately. */
   chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
-  
+
   // ToDo: Drive this from the ESP8266
   //chademo_start();
 
@@ -353,7 +353,7 @@ int main(void)
   while (1)
   {
     uint32_t loop_time = HAL_GetTick();
-    
+
     /* Catch any errors and EStop */
     if (error)
     {
@@ -378,7 +378,7 @@ int main(void)
     HAL_UART_Process();
 
     /* Send regular JSON messages */
-    if ((last_json_update == 0) || 
+    if ((last_json_update == 0) ||
         (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME))
     {
       int32_t acc_current;
@@ -418,7 +418,7 @@ int main(void)
 
   /* Something went wrong */
   NVIC_SystemReset();
-  
+
   /* USER CODE END 3 */
 }
 

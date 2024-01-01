@@ -3,10 +3,10 @@
  *
  *  This is the minimum needed to emulate one of the two
  *  Power meters supported by FoxESS inverters.
- *  
+ *
  *  Copyright (c) 2023 ARTaylor.co.uk.
  *  All rights reserved.
- * 
+ *
  *  @author Richard Taylor <richard@artaylor.co.uk>
  */
 #include <string.h>

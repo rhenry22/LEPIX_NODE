@@ -2,9 +2,9 @@
  *  @brief Functions to interact with EVSE
  *
  *  This contains functions and logic to determine
- *  the state of an EVSE interface, request it to 
+ *  the state of an EVSE interface, request it to
  *  turn on, and report the maximum current capability.
- * 
+ *
  *  Inspired by the description of Type 2 connectors here:
  *  https://www.elso.sk/en/blog/technologies/evse-charging-of-electric-vehicles
  *
@@ -75,7 +75,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
         cp_pwm = 100 * (cp_active - cp_first_rise) / (time - cp_first_rise);
         cp_active = 0;
         cp_first_rise = 0;
-        
+
         // Only apply if we have a valid length PWM cycle (1kHz)
         if (time > 900 && time < 1100)
         {
@@ -84,7 +84,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
             /*
             * 6A = 10%
             * 48A = 80%
-            * 
+            *
             */
             if (cp_pwm <= 80)
               max_current = 6 + (48 - 6) * (cp_pwm - 9) / (80 - 10);
@@ -135,7 +135,7 @@ EVSE_PP evse_get_pp(void)
 {
   int32_t val;
   HAL_StatusTypeDef ret;
-  
+
   if (last_pp_check + PP_CHECK_INTERVAL < HAL_GetTick())
   {
     last_pp_check = HAL_GetTick();

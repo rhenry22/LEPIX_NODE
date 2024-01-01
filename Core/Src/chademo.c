@@ -1,30 +1,30 @@
 /** @file chademo.c
  *  @brief Functions to interact with ChaDeMo connection
  *
- *  This contains logic and CAN bus message data to communicate with a 
+ *  This contains logic and CAN bus message data to communicate with a
  *  Chademo 1.0.1 V2X enabled vehicle (Tested on a 2015 Nissan Leaf).
  *  It also includes a state machine to control the Analog and Digital handshake.
- * 
+ *
  *  Inspired by:
  *    https://github.com/dalathegreat/BYD-Battery-Emulator-For-Gen24
  *    https://github.com/jsphuebner/stm32-car
  *    https://openinverter.org/wiki/Tesla_Model_S/X_GEN2_Charger#Functionality_of_external_CAN_bus
- * 
- *  ToDo: 
+ *
+ *  ToDo:
  *  Requires a user interface to show charging status and start / stop charging
  *  Requires Short Circuit and Isolation detection (100KOhm min) not just earth leakage
  *  Emergency Stop button (Red, latching)
  *  Start / Stop buttons (Blue, Green, illuminated)
  *  Separate CPU for Inverter Control and Interface (technically OK?)
- *  Analog handshake should go via connector lock detection and inverter shutoff in HW 
+ *  Analog handshake should go via connector lock detection and inverter shutoff in HW
  *  (i.e. separate from CPU)
- *  
+ *
  *  Check and Calibrate Earth Leakage threshold value (lower than 100 Ω/V)
  *  Monitor lock solenoid current and set CONN Lock flag to zero if it fails.
- *  
+ *
  *  Copyright (c) 2023 ARTaylor.co.uk.
  *  All rights reserved.
- * 
+ *
  *  @author Richard Taylor <richard@artaylor.co.uk>
  */
 
@@ -81,7 +81,7 @@
 #define MSG109_CHG_MALFUNC    (1 << 4)
 #define MSG109_CHG_STOPPED    (1 << 5)
 
-struct can_data 
+struct can_data
 {
   struct _vehicle
   {
@@ -307,7 +307,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
           !(can_data.vehicle.msgid_102.status & (STATUS_CONTACTOR_OPEN)))
       {
         snprintf(last_error, ERROR_LEN,
-                 "Pre-contactor close battery check failed. Voltage: %ldv, Status: 0x%02X.", 
+                 "Pre-contactor close battery check failed. Voltage: %ldv, Status: 0x%02X.",
                  measured_voltage / 10, can_data.vehicle.msgid_102.status);
         new_state = CHADEMO_STATE_ERROR;
       }
@@ -343,7 +343,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     case CHADEMO_STATE_INS_TEST:
     {
       int32_t leak_current;
-      
+
       ret = sensor_get_value(SENSOR_HV_TEST_CURRENT, &leak_current);
 
       /* Disable HV Test */
@@ -403,9 +403,9 @@ static void chademo_check_vehicle_permission(void)
 {
   bool phy_ok = false;
   bool can_ok = false;
-  
+
   /* Check physical Vehicle Charge Permission */
-  if (GPIO_PIN_RESET == HAL_GPIO_ReadPin(CHADEMO_CHARGE_ALLOWED__GPIO_Port, 
+  if (GPIO_PIN_RESET == HAL_GPIO_ReadPin(CHADEMO_CHARGE_ALLOWED__GPIO_Port,
                                          CHADEMO_CHARGE_ALLOWED__Pin))
   {
     phy_ok = true;
@@ -459,7 +459,7 @@ static void chademo_process_can(void)
         continue;
       }
 
-      switch (RxHeader.StdId) 
+      switch (RxHeader.StdId)
       {
         case 0x100:
           assert_param(sizeof(can_data.vehicle.msgid_100) >= RxHeader.DLC);
@@ -536,7 +536,7 @@ HAL_StatusTypeDef chademo_send_messages(void)
   measured_power = measured_voltage * measured_current / 100;
 
   /* Check for Faults */
-  if (ret != HAL_OK || can_data.vehicle.msgid_102.faults || 
+  if (ret != HAL_OK || can_data.vehicle.msgid_102.faults ||
       (can_data.vehicle.msgid_102.status & (STATUS_NOT_PARKED | STATUS_MALFUNCTION)) )
   {
     if (chademo_state == CHADEMO_STATE_ON)
@@ -569,7 +569,7 @@ HAL_StatusTypeDef chademo_send_messages(void)
     if (ret == HAL_OK)
       ret = chademo_send_message(0x109, (uint8_t*)&can_data.charger.msgid_109);
 
-    if (ret == HAL_OK && can_data.vehicle.msgid_102.chademo_version >= 0x03) 
+    if (ret == HAL_OK && can_data.vehicle.msgid_102.chademo_version >= 0x03)
     {
       /* Only send the following on Chademo 2.0 vehicles? */
       ret = chademo_send_message(0x118, (uint8_t*)&can_data.charger.msgid_118);
@@ -682,7 +682,7 @@ void chademo_process(void)
       /* These values are only allowed to change during Parameter checking */
 
       /* Set the Threshold Voltage */
-      can_data.charger.msgid_108.threshold_voltage = 
+      can_data.charger.msgid_108.threshold_voltage =
         MIN(SOLAX_MAXIMUM_SUPPORTED_VOLTAGE, can_data.vehicle.msgid_100.max_battery_voltage);
 
       /* Set Maximum possible current (will be limited by EVSE and Inverter setting)*/
@@ -704,7 +704,7 @@ void chademo_process(void)
       can_data.charger.msgid_208.discharge_current_max = SOLAX_MAXIMUM_SUPPORTED_CURRENT;
       if (can_data.vehicle.msgid_200.max_discharge_current != 0)
       {
-        can_data.charger.msgid_208.discharge_current_max = 
+        can_data.charger.msgid_208.discharge_current_max =
           MIN(can_data.vehicle.msgid_200.max_discharge_current, SOLAX_MAXIMUM_SUPPORTED_CURRENT);
       }
 
@@ -713,7 +713,7 @@ void chademo_process(void)
       can_data.charger.msgid_208.min_voltage = SOLAX_MINIMUM_SUPPORTED_VOLTAGE;
       if (can_data.vehicle.msgid_200.min_discharge_voltage != 0)
       {
-        can_data.charger.msgid_208.low_threshold_voltage = 
+        can_data.charger.msgid_208.low_threshold_voltage =
           MAX(SOLAX_MINIMUM_SUPPORTED_VOLTAGE, can_data.vehicle.msgid_200.min_discharge_voltage);
       }
 
@@ -745,7 +745,7 @@ void chademo_process(void)
         }
         else
         {
-          snprintf(last_error, ERROR_LEN, "Battery / Vehicle incompatible (%d)", 
+          snprintf(last_error, ERROR_LEN, "Battery / Vehicle incompatible (%d)",
                    can_data.vehicle.msgid_102.status);
           can_data.charger.msgid_109.fault_status |= MSG109_BATT_INCOMPAT;
           chademo_transition_state(CHADEMO_STATE_OFF);
@@ -778,7 +778,7 @@ void chademo_process(void)
     break;
 
     case CHADEMO_STATE_BATT_CHECK:
-      if ((measured_voltage > CONTACTOR_CLOSED_V) && 
+      if ((measured_voltage > CONTACTOR_CLOSED_V) &&
           (can_data.vehicle.msgid_102.status & (STATUS_CONTACTOR_OPEN)) != STATUS_CONTACTOR_OPEN)
       {
         chademo_transition_state(CHADEMO_STATE_ON);
@@ -851,7 +851,7 @@ void chademo_process(void)
       // ToDo: Consider decrementing the minute counter!
       //can_data.charger.msgid_109.time_remaining_10s = 0xff;
       //can_data.charger.msgid_109.time_remaining_1min = 0xff;
-      
+
       if (can_data.charger.msgid_109.time_remaining_10s == 0 ||
           can_data.charger.msgid_109.time_remaining_1min == 0)
       {
@@ -892,7 +892,7 @@ void chademo_process(void)
       can_data.charger.msgid_109.time_remaining_1min = 0x00;
 
       /*  Check for contact welding */
-      if ((measured_voltage <= CONTACTOR_OPEN_V) && 
+      if ((measured_voltage <= CONTACTOR_OPEN_V) &&
           (can_data.vehicle.msgid_102.status & (STATUS_CONTACTOR_OPEN)))
       {
         chademo_transition_state(CHADEMO_STATE_WAIT_K_OFF);
@@ -987,7 +987,7 @@ void chademo_process(void)
   }
 
   /* Check that we are receiving regular CAN messages from ChaDeMo */
-  if (chademo_state == CHADEMO_STATE_ON && 
+  if (chademo_state == CHADEMO_STATE_ON &&
       HAL_GetTick() > (last_update + CHADEMO_CAN_TIMEOUT))
   {
       snprintf(last_error, ERROR_LEN,
@@ -1038,7 +1038,7 @@ bool chademo_is_contactor_closed(void)
   */
 int32_t chademo_get_power(void)
 {
-  return measured_power;  
+  return measured_power;
 }
 
 /**

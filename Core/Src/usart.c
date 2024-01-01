@@ -385,7 +385,7 @@ void HAL_UART_Process(void)
     /* Put Transceiver into TX mode */
     HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_SET);
     modbus_process(&uart2_rxbuf[0], uart2_rx_bytes);
-    
+
     uart2_rx_bytes = 0;
     HAL_UARTEx_ReceiveToIdle_DMA(&huart2, &uart2_rxbuf[0], APP_RX_DATA_SIZE);
   }
@@ -396,7 +396,7 @@ void HAL_UART_Process(void)
   * @param  ptr: pointer to data
   * @param  len: length of data
   * @param  timeout: Number of ms to wait for port to be free
-  * @retval HAL_StatusTypeDef: HAL_OK on success 
+  * @retval HAL_StatusTypeDef: HAL_OK on success
   */
 HAL_StatusTypeDef HAL_UART_Write_UART1(uint8_t *ptr, uint16_t len, uint32_t timeout)
 {

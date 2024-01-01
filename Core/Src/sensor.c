@@ -7,7 +7,7 @@
  *
  *  Copyright (c) 2023 ARTaylor.co.uk.
  *  All rights reserved.
- * 
+ *
  *  @author Richard Taylor <richard@artaylor.co.uk>
  *  @bug No known bugs.
  */
@@ -99,7 +99,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
 
     case SENSOR_ACC_CURRENT: // uA
     {
-      int16_t reg;      
+      int16_t reg;
       ret = ina219_read_reg(INA219_ACC_ADDR, 0x04, &reg);
       if (ret == HAL_OK)
         *val = (int32_t)reg * (1000000 * INA219_ACC_CURRENT_LSB);
@@ -108,7 +108,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
 
     case SENSOR_HV_TEST_CURRENT: // uA
     {
-      int16_t reg;      
+      int16_t reg;
       ret = ina219_read_reg(INA219_HV_ADDR, 0x04, &reg);
       if (ret == HAL_OK)
         *val = (int32_t)reg * (1000000 * INA219_HV_CURRENT_LSB);

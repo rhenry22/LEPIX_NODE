@@ -24,7 +24,7 @@ HAL_StatusTypeDef MAX22530_read_register(uint8_t reg, uint16_t *data)
   uint8_t buf[2];
 
   HAL_GPIO_WritePin(SPI1_BATT_CS__GPIO_Port, SPI1_BATT_CS__Pin, GPIO_PIN_RESET);
-  
+
   buf[0] = header;
   ret = HAL_SPI_TransmitReceive(&hspi1, buf, buf, 1, 100);
   if (ret == HAL_OK)
@@ -62,7 +62,7 @@ HAL_StatusTypeDef MAX22530_write_register(uint8_t reg, uint16_t data)
     ret = HAL_SPI_TransmitReceive(&hspi1, buf, buf, 2, 100);
   }
   HAL_GPIO_WritePin(SPI1_BATT_CS__GPIO_Port, SPI1_BATT_CS__Pin, GPIO_PIN_SET);
-  
+
   if (ret != HAL_OK)
   {
     printf("%s: Error (%d)\n", __func__, ret);

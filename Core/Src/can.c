@@ -245,7 +245,7 @@ HAL_StatusTypeDef MX_CAN_Setup_Receive(CAN_HandleTypeDef *hcan, uint32_t fifo)
 
   CAN_FilterTypeDef  sFilterConfig;
 
-  /* Setup the CAN filter (and assign RX FIFO) */  
+  /* Setup the CAN filter (and assign RX FIFO) */
   if (hcan == &hcan1)
     sFilterConfig.FilterBank = 0;
   else
@@ -259,7 +259,7 @@ HAL_StatusTypeDef MX_CAN_Setup_Receive(CAN_HandleTypeDef *hcan, uint32_t fifo)
   sFilterConfig.FilterMaskIdLow = 0x0000;
   sFilterConfig.FilterActivation = ENABLE;
   sFilterConfig.SlaveStartFilterBank = 14;
-  
+
   sFilterConfig.FilterFIFOAssignment = fifo;
 
   ret = HAL_CAN_ConfigFilter(hcan, &sFilterConfig);

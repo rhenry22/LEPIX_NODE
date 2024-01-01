@@ -3,12 +3,12 @@
  *
  *  This module provides a layer to run a statemachine emulating a BMS to use
  *  with the Solax / FoxESS inverters.
- * 
- *  Inspired by: 
+ *
+ *  Inspired by:
  *    https://github.com/rand12345/solax_can_bus
  *  and
  *    https://github.com/dalathegreat/BYD-Battery-Emulator-For-Gen24
- * 
+ *
  *  @author Richard Taylor <richard@artaylor.co.uk>
  *  @bug No known bugs.
  */
@@ -25,8 +25,8 @@
 
 #define DEBUG_SOLAX
 
-/* Battery size in Wh (Maximum value for most inverters is 60000 [60kWh], 
- * you can use larger batteries but do not set value over 60000! 
+/* Battery size in Wh (Maximum value for most inverters is 60000 [60kWh],
+ * you can use larger batteries but do not set value over 60000!
  */
 #define BATTERY_WH_MAX    (24000)
 #define CELL_MAX_VOLTAGE  (4135)
@@ -56,7 +56,7 @@ struct _solax_data
 {
   struct
   {
-    struct 
+    struct
     {
       uint8_t frame_id;
       uint8_t data[7];
@@ -136,7 +136,7 @@ struct _solax_data
       char serial[8];
     } msg_1881;
 
-    struct 
+    struct
     {
       char serial[8];
     } msg_1882;
@@ -153,13 +153,13 @@ struct _solax_data solax_data = {
   .bms = {
 
     /* BMS_Answer
-     * Unknown contents. 
+     * Unknown contents.
      * Response announcing that battery will be connected.
      */
     .msg_1801 = {
       .data = {0x0002, 0x0001, 0x0001, 0x0000}
     },
-  
+
     /* BMS_Limits */
     .msg_1872 = {
       .slave_voltage_max = ABSOLUTE_MAX_VOLTAGE / 100,
@@ -210,7 +210,7 @@ struct _solax_data solax_data = {
       .discharge_max = 0
     },
 
-    /* BMS_PackData */ 
+    /* BMS_PackData */
     .msg_1873 = {
       .voltage = 3800,
       .current = 0,
@@ -290,7 +290,7 @@ static void solax_update_values(void)
   /* BMS_PackTemps (Cell voltages) */
   solax_data.bms.msg_1876.cell_mv_max = (voltage / NUM_CELLS) + 40;
   solax_data.bms.msg_1876.cell_mv_min = (voltage / NUM_CELLS) - 40;
-  
+
   // ToDo: Add temperature monitoring
 #if 0
   //BMS_Status
@@ -321,7 +321,7 @@ static void solax_update_values(void)
     req_power = voltage * req_current / 100;
     if (req_power > max_ac_power)
       req_current = (100 * max_ac_power) / voltage;
-    
+
     solax_data.bms.msg_1872.discharge_max = req_current;
   }
   else
@@ -670,7 +670,7 @@ void solax_json_update(void)
          solax_data.bms.msg_1872.charge_max,
          solax_data.bms.msg_1872.discharge_max);
 
-  printf(", \"voltage\":%d, \"current\":%d", 
+  printf(", \"voltage\":%d, \"current\":%d",
           solax_data.bms.msg_1873.voltage,
           solax_data.bms.msg_1873.current);
 

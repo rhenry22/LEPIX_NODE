@@ -178,10 +178,10 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
 /* USER CODE BEGIN 1 */
 
 /**
-  * @brief  Conversion complete callback in non blocking mode 
+  * @brief  Conversion complete callback in non blocking mode
   * @param  adcHandle : ADC handle
-  * @note   This example shows a simple way to report end of conversion, and 
-  *         you can add your own implementation.    
+  * @note   This example shows a simple way to report end of conversion, and
+  *         you can add your own implementation.
   * @retval None
   */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
