@@ -75,7 +75,7 @@ struct _solax_data
     {
       uint16_t data[4];
     } msg_1801;
- 
+
     struct _bms_limits
     {
       uint16_t slave_voltage_max; /* Voltage x10 V */
@@ -103,8 +103,8 @@ struct _solax_data
     struct _bms_status
     {
       uint16_t pack_temp; /* Temp x10 C */
-      uint16_t num_batts; /* Number of batteries (7) */
-      uint16_t contactor; /* Contactor on / off (0x1 / 0x0) */
+      uint16_t num_batts; /* Number of batteries */
+      uint16_t contactor; /* Contactor on / off (0x4 / 0x1 / 0x0) */
       uint16_t reserved;
     } msg_1875;
 
@@ -157,7 +157,7 @@ struct _solax_data solax_data = {
      * Response announcing that battery will be connected.
      */
     .msg_1801 = {
-      .data = {0x0002, 0x0001, 0x0001}
+      .data = {0x0002, 0x0001, 0x0001, 0x0000}
     },
   
     /* BMS_Limits */
@@ -377,7 +377,8 @@ static HAL_StatusTypeDef solax_update_state(void)
         if (ret != HAL_OK)
           break;
 
-        if (solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR] == 0x0001)
+        if (solax_data.inverter.msg_1871.frame_id == 0x02 &&
+            solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR] == 0x0001)
         {
           /* Message from the inverter to proceed to contactor closing */
           contactor_close = true;
@@ -391,6 +392,9 @@ static HAL_StatusTypeDef solax_update_state(void)
 
       case SOLAX_REQUEST_CONTACTOR_CLOSE:
         /* Announce that the battery will be connected */
+        solax_data.bms.msg_1801.data[0] = 2;
+        solax_data.bms.msg_1801.data[1] = 1;
+        solax_data.bms.msg_1801.data[2] = 1;
         ret = solax_send_message(0x1801, (uint8_t*)&solax_data.bms.msg_1801, 8);
         if (ret != HAL_OK)
           break;
@@ -409,14 +413,22 @@ static HAL_StatusTypeDef solax_update_state(void)
       case SOLAX_CONTACTOR_CLOSED:
         if (!chademo_is_contactor_closed())
         {
-        {
           /* Message from the inverter to open contactor */
           snprintf(last_error, ERROR_LEN,
                   "Vehicle stopping");
           state = SOLAX_BATTERY_ANNOUNCE;
+
+          /* Announce that the battery will be disconnected */
+          solax_data.bms.msg_1801.data[0] = 0;
+          solax_data.bms.msg_1801.data[1] = 0;
+          solax_data.bms.msg_1801.data[2] = 0;
+          ret = solax_send_message(0x1801, (uint8_t*)&solax_data.bms.msg_1801, 8);
+          if (ret != HAL_OK)
+            break;
         }
-                }
-        if (solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR] == 0)
+
+        if (solax_data.inverter.msg_1871.frame_id == 0x02 &&
+            solax_data.inverter.msg_1871.data[MSG_1871_CONTACTOR] == 0)
         {
           /* Message from the inverter to open contactor */
           snprintf(last_error, ERROR_LEN,
@@ -443,8 +455,8 @@ static void solax_process_frame(void)
   /* Process the frame */
   switch (solax_data.inverter.msg_1871.frame_id)
   {
-    case 0x01:
-    case 0x02:
+    case 0x01: /* Status update */
+    case 0x02: /* Command */
       /* Make sure our response messages are up to date. */
       if (HAL_GetTick() > last_update + SOLAX_UPDATE_RATE)
         solax_update_values();
@@ -456,15 +468,13 @@ static void solax_process_frame(void)
       last_update = HAL_GetTick();
     break;
 
-    case 0x03:
-      /* Time Update (heartbeat) */
+    case 0x03: /* Time Update (heartbeat) */
       memcpy(&solax_data.inverter.msg_1871_3,
              &solax_data.inverter.msg_1871,
              sizeof(solax_data.inverter.msg_1871_3));
     break;
 
-    case 0x05:
-      /* Send BMS IDs */
+    case 0x05: /* Send BMS IDs */
       solax_send_message(0x1881, (uint8_t*)&solax_data.bms.msg_1881, 8);
       solax_send_message(0x1882, (uint8_t*)&solax_data.bms.msg_1882, 8);
     break;
