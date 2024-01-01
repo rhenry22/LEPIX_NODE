@@ -334,28 +334,10 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   int8_t ret = USBD_OK;
 
+#ifndef ESP_FLASH_MODE
   /* USER CODE BEGIN 6 */
-  if (*Len == 1)
-  {
-    switch (Buf[0])
-    {
-      case '1':
-        chademo_start();
-      break;
-      
-      case '2':
-        chademo_stop();
-      break;
-      
-      case '3':
-        HAL_NVIC_SystemReset();
-      break;
-
-      default:
-      break;
-    }
-  }
-
+  stdio_parser(Buf, *Len);
+#else
   if (HAL_UART_Transmit(&huart1, Buf, *Len, 250) != HAL_OK)
   {
     ret = USBD_BUSY;
@@ -365,6 +347,7 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
     USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
     USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   }
+#endif
 
   return ret;
   /* USER CODE END 6 */

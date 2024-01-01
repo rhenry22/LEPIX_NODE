@@ -46,6 +46,8 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
+//#define ESP_FLASH_MODE
+
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
@@ -53,6 +55,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
+void stdio_parser(uint8_t *ptr, uint32_t len);
 void emergency_stop(void);
 void trigger_json_update(void);
 void dump_packet(uint8_t *data, uint8_t len);

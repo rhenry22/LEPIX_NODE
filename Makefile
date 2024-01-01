@@ -25,6 +25,7 @@ DEBUG = 1
 OPT = -Og
 
 
+
 #######################################
 # paths
 #######################################
@@ -140,7 +141,6 @@ AS_DEFS =
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
 -DSTM32F407xx
-
 
 # AS includes
 AS_INCLUDES = 

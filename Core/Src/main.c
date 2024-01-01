@@ -224,6 +224,30 @@ void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len)
   //HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
 }
 
+void stdio_parser(uint8_t *ptr, uint32_t len)
+{
+ if (len == 1)
+  {
+    switch (ptr[0])
+    {
+      case '1':
+        chademo_start();
+      break;
+
+      case '2':
+        chademo_stop();
+      break;
+
+      case '3':
+        HAL_NVIC_SystemReset();
+      break;
+
+      default:
+      break;
+    }
+  }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -469,17 +493,17 @@ void dump_packet(uint8_t *data, uint8_t len)
   */
 int _write(int file, char *ptr, int len)
 {
+#ifndef ESP_FLASH_MODE
   /* If USB is connected, send to USB */
   if (CDC_Is_Connected())
   {
     /* Send the data */
     CDC_Transmit_FS((uint8_t*)ptr, len, 10);
   }
-  //else
-  {
-    /* Send Data to Serial */
-    HAL_UART_Write_UART1((uint8_t *)ptr, len, 100);
-  }
+
+  /* Send Data to Serial */
+  HAL_UART_Write_UART1((uint8_t *)ptr, len, 100);
+#endif
 
   return len;
 }

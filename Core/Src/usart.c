@@ -23,7 +23,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "usart.h"
 #include "modbus.h"
-#include "chademo.h"
 
 /* USER CODE BEGIN 0 */
 
@@ -364,25 +363,19 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   */
 void HAL_UART_Process(void)
 {
-  uint32_t timeout = HAL_GetTick() + 10;
-
   if (uart1_rx_bytes > 0)
   {
+#ifdef ESP_FLASH_MODE
+    /* Echo serial to USB (for ESP8266 flashing) */
     if (CDC_Is_Connected())
     {
-      CDC_Transmit_FS(&uart1_rxbuf[0], uart1_rx_bytes, timeout);
+      CDC_Transmit_FS(&uart1_rxbuf[0], uart1_rx_bytes, 10);
     }
-    //else
-    {
-      if (uart1_rx_bytes == strlen("RESET") && strcmp((char*)uart1_rxbuf, "RESET") == 0)
-        NVIC_SystemReset();
+#endif
 
-      if (uart1_rx_bytes == strlen("START") && strcmp((char*)uart1_rxbuf, "START") == 0)
-        chademo_start();
+    /* Call stdio parser */
+    stdio_parser(&uart1_rxbuf[0], uart1_rx_bytes);
 
-      if (uart1_rx_bytes == strlen("STOP") && strcmp((char*)uart1_rxbuf, "STOP") == 0)
-        chademo_stop();
-    }
     uart1_rx_bytes = 0;
     HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_RX_DATA_SIZE);
   }
