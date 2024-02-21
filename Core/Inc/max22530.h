@@ -6,7 +6,7 @@
 #include "main.h"
 
 /*MAX22530 Registers*/
-#define MAX22530_PROD_ID           0x00 
+#define MAX22530_PROD_ID           0x00
 #define MAX22530_ADC1              0x01
 #define MAX22530_ADC2              0x02
 #define MAX22530_ADC3              0x03

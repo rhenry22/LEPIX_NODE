@@ -342,12 +342,10 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   {
     ret = USBD_BUSY;
   }
-  else
-  {
-    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
-    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-  }
 #endif
+
+  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
+  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
 
   return ret;
   /* USER CODE END 6 */

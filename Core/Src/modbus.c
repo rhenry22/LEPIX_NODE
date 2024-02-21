@@ -19,8 +19,13 @@
 static uint8_t tx_index = 0;
 static uint8_t tx_buffer[BUFFER_LEN];
 
-static modbus_read_fn read_cb = NULL;
-static uint8_t mb_addr = 0;
+static modbus_m_rx_cb mb_m_rx_cb = NULL;
+static modbus_s_rx_cb mb_s_rx_cb = NULL;
+static modbus_tx_cb mb_tx_cb = NULL;
+
+static bool read_pending = false;
+static uint16_t read_reg = 0;
+static uint8_t read_addr = 0;
 
 static const uint16_t modbus_crc_table[] = {
 0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
@@ -89,14 +94,15 @@ static uint16_t modbus_calculate_crc(uint8_t *data, uint16_t len)
 
 /**
   * @brief  Initialise Modbus module
-  * @param  addr Modbus address to respond to
-  * @param  read_fn Function callback to get reg data
+  * @param  rx_cb Read Process Callback
+  * @param  tx_cb Write complete callback
   * @retval bool true: Success, false: Failure
   */
-bool modbus_init(uint8_t addr, modbus_read_fn read_fn)
+bool modbus_init(modbus_m_rx_cb m_rx_cb, modbus_s_rx_cb s_rx_cb, modbus_tx_cb tx_cb)
 {
-  read_cb = read_fn;
-  mb_addr = addr;
+  mb_m_rx_cb = m_rx_cb;
+  mb_s_rx_cb = s_rx_cb;
+  mb_tx_cb = tx_cb;
 
   tx_index = 0;
   memset(tx_buffer, 0, BUFFER_LEN);
@@ -113,52 +119,103 @@ bool modbus_init(uint8_t addr, modbus_read_fn read_fn)
 void modbus_process(uint8_t *data, uint16_t len)
 {
   // Rely on the timeout to signal the packet end
-  if (data[0] == mb_addr)
-  {
-    // Check the CRC
-    uint16_t crc = modbus_calculate_crc(&data[0], len);
+  // Check the CRC
+  uint16_t crc = modbus_calculate_crc(&data[0], len);
+  uint8_t addr = data[0];
 
-    if (crc == 0)
+  // Remove CRC from len
+  len -= 2;
+
+  if (crc == 0 && len >= 3)
+  {
+    // Good CRC, let our app know
+    if (read_pending && addr == read_addr)
     {
-      // Good CRC, let our app know
-      if (read_cb)
-        read_cb(data[1], data[2] << 8 | data[3], data[4] << 8 | data[5]);
+      read_pending = false;
+      if (mb_m_rx_cb)
+        mb_m_rx_cb(addr, data[1], read_reg, &data[2], len - 2);
+    }
+    else
+    {
+      if (mb_s_rx_cb)
+        mb_s_rx_cb(addr, data[1], &data[2], len - 2);
     }
   }
 }
 
-void modbus_resp_begin(uint8_t func, uint8_t len)
+void modbus_tx_complete(void)
+{
+  /* Put Transceiver back into RX mode */
+  HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
+
+  if (mb_tx_cb)
+    mb_tx_cb();
+}
+
+void modbus_tx_begin(uint8_t addr, uint8_t func, uint8_t len)
 {
   tx_index = 0;
   memset(tx_buffer, 0, BUFFER_LEN);
 
   // Send our device address, function and data length
-  modbus_tx_add_byte(mb_addr);
+  modbus_tx_add_byte(addr);
   modbus_tx_add_byte(func);
   modbus_tx_add_byte(len);
 }
 
-void modbus_resp_byte(uint8_t data)
+void modbus_tx_uint8(uint8_t data)
 {
   modbus_tx_add_byte(data);
 }
 
-void modbus_resp_float(float data)
+void modbus_tx_uint16(uint16_t data)
 {
   uint8_t *ptr = (uint8_t*)&data;
+  modbus_tx_add_byte(ptr[1]);
+  modbus_tx_add_byte(ptr[0]);
+}
 
+void modbus_tx_float(float data)
+{
+  uint8_t *ptr = (uint8_t*)&data;
   modbus_tx_add_byte(ptr[3]);
   modbus_tx_add_byte(ptr[2]);
   modbus_tx_add_byte(ptr[1]);
   modbus_tx_add_byte(ptr[0]);
 }
 
-void modbus_resp_end(void)
+void modbus_tx_end(void)
 {
   uint16_t crc = modbus_calculate_crc(&tx_buffer[0], tx_index);
 
   modbus_tx_add_byte(crc & 0xff);
   modbus_tx_add_byte((crc >> 8) & 0xff);
 
+  HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_RESET);
   HAL_UART_Transmit_DMA(&huart2, &tx_buffer[0], tx_index);
+}
+
+
+HAL_StatusTypeDef modbus_read(uint8_t addr, uint8_t fn, uint16_t reg)
+{
+  if (read_pending)
+    return HAL_BUSY;
+
+  tx_index = 0;
+  memset(tx_buffer, 0, BUFFER_LEN);
+
+  read_reg = reg;
+  read_addr = addr;
+  read_pending = true;
+
+  // Send our device address, function and data length
+  modbus_tx_add_byte(addr);
+  modbus_tx_add_byte(fn);
+  modbus_tx_uint16(reg);
+  modbus_tx_uint16(1);
+  modbus_tx_end();
+
+  return HAL_OK;
 }

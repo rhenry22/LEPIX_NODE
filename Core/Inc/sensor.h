@@ -24,6 +24,7 @@ typedef enum
 } SENSOR_SOURCE;
 
 bool sensor_init(void);
+HAL_StatusTypeDef sensor_zero_ibatt(void);
 HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val);
 
 #endif /* __SENSOR_H__ */

@@ -43,35 +43,39 @@ bool sensor_init(void)
 
   if (!MAX22530_Init())
   {
-    printf("MAX22530:   Init Failed\n");
     ret = false;
   }
 
   if (!ina219_init(INA219_ACC_ADDR, 0.04096 / (INA219_ACC_CURRENT_LSB * INA219_ACC_SHUNT)))
   {
-    printf("INA219 ACC: Init Failed\n");
     ret = false;
   }
 
   if (!ina219_init(INA219_HV_ADDR, 0.04096 / (INA219_HV_CURRENT_LSB * INA219_HV_SHUNT)))
   {
-    printf("INA219 HV:  Init Failed\n");
     ret = false;
   }
 
   if (HAL_OK != MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero) || ibatt_zero < 100)
   {
-    printf("BATT CURR:  Init Failed\n");
     ret = false;
   }
 
   if (HAL_OK != MX_ADC1_Get_Sample(ADC_EVSE_PP, &val))
   {
-    printf("EVSE PP:    Init Failed\n");
     ret = false;
   }
 
   return ret;
+}
+
+/**
+  * @brief  Zero the battery current sensor
+  * @retval HAL_StatusTypeDef HAL_OK on success
+  */
+HAL_StatusTypeDef sensor_zero_ibatt(void)
+{
+  return MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero);
 }
 
 /**
@@ -134,7 +138,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     break;
 
     default:
-      printf("Sensor %d not implemnented yet\n", src);
+      assert_failed((uint8_t*)__FILE__, __LINE__);
     break;
   }
 

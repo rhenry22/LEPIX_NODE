@@ -58,9 +58,41 @@
 #define ENABLE_CHADEMO
 #define ENABLE_SOLAX
 
-#define JSON_UPDATE_TIME    (10000)
+#define DEBUG_CONTROLLER
 
-#define MB_SLAVE_ADDRESS	  (1)
+#define JSON_UPDATE_TIME    (1000)
+#define MB_SLAVE_METER      (1)
+
+#define MB_SLAVE_INVERTER   (247)
+
+enum
+{
+  FOX_BATT_V = 11006,     // (V x10)
+  FOX_BATT_I = 11007,     // (A x10)
+  FOX_BATT_P = 11008,     // (W)
+
+  FOX_GRID_V = 11009,     // Grid Voltage (V x10)
+  FOX_GRID_I = 11010,     // Grid Current (A x10)
+  FOX_GRID_P1 = 11011,    // Grid Phase R Power (W)
+  FOX_GRID_P2 = 11012,    // Grid Phase Q Power (W)
+  FOX_GRID_P3 = 11013,    // Grid Phase S Power (W)
+
+  FOX_INV_STATE = 11056,  // Inverter Status
+  FOX_BATT_STATE = 11057, // Battery Status
+
+  FOX_FAULT_1 = 11061,
+  FOX_FAULT_2 = 11062,
+  FOX_FAULT_3 = 11063,
+  FOX_FAULT_4 = 11064,
+  FOX_FAULT_5 = 11065,
+  FOX_FAULT_6 = 11066,
+  FOX_FAULT_7 = 11067,
+  FOX_FAULT_8 = 11068,
+  
+  FOX_REM_EN = 44000,
+  FOX_REM_TIMER = 44001,
+  FOX_REM_POWER = 44002
+};
 
 /* USER CODE END PD */
 
@@ -72,18 +104,19 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-static bool error = false;
-static uint32_t last_json_update = 0;  /* Last time we saw frame 0x03 */
-static float power_offset = -1000;
-
-static uint32_t loop_time_max = 0;
-
+static bool error = false;            /* Whether we are in the error state */
+static uint32_t last_json_update = 0; /* Last time we saw frame 0x03 */
+static uint32_t req_inv_power = 0;    /* Time read inverter power requested */
+static int32_t power_offset = 0;      /* Offset from actual power (i.e. charge / discharge) */
+static int32_t inv_power = 0;         /* Power reported by inverter */
+static uint32_t loop_time_max = 0;    /* Maximum loop time observed */
+static uint8_t cmd_buf[APP_RX_DATA_SIZE];  /* Buffer for stdin commands */
+static uint16_t cmd_buf_len = 0;      /* Length of stdin buffer */
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len);
 
 /* USER CODE END PFP */
 
@@ -99,7 +132,7 @@ void emergency_stop(void)
   volatile uint32_t i;
 
   /* Stop Everything in the system */
-  __disable_irq();
+  //__disable_irq();
 
   /* Turn Off EVSE */
   HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
@@ -161,72 +194,205 @@ static void evse_changed_cb(EVSE_PP pp, uint8_t current)
 
     case EVSE_PP_PRESSED:
       /* Update the inverter max */
+      power_offset = 0;
       chademo_stop();
     break;
   }
 
 #ifdef ENABLE_SOLAX
-    /* Update the inverter max. */
-    solax_set_max_ac_current(current);
+  /* Update the inverter max (BMS / DC handled by ChaDeMo). */
+  solax_set_max_ac_current(current);
 #endif
 }
 #endif
 
 /**
-  * @brief Modbus Read Callback
+  * @brief Modbus Slave Read Callback
+  * @param addr Modbus slave address
   * @param type Modbus function type
   * @param reg Register to read
   * @param len Number of registers to read
   * @retval None
   */
-void mb_read_cb(MB_FUNC type, uint16_t reg, uint16_t len)
+void mb_slave_read_cb(uint8_t addr, MB_FUNC type, uint8_t *data, uint16_t len)
 {
-  //HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_RESET);
-	switch (type)
-	{
-		case MB_READ_HOLDING:
-    case MB_READ_INPUT:
-			switch (reg)
-			{
-				case 12:	// Current Power (W)
-					modbus_resp_begin(type, sizeof(int32_t));
-					modbus_resp_float((float)chademo_get_power() + power_offset);
-                    modbus_resp_end();
-				break;
+  if (addr == MB_SLAVE_METER && len == 4)
+  {
+    uint16_t reg = data[0] << 8 | data[1];
 
+    switch (type)
+    {
+      case MB_READ_HOLDING:
+      case MB_READ_INPUT:
+        switch (reg)
+        {
+          case 12:  // Current Power (W)
+            modbus_tx_begin(MB_SLAVE_METER, type, sizeof(int32_t));
+            modbus_tx_float((float)chademo_get_power() + power_offset);
+            modbus_tx_end();
+          break;
 
-				case 0x2004:	// Current Power (KW)
-					modbus_resp_begin(type, sizeof(int32_t));
-					modbus_resp_float(((float)chademo_get_power() + power_offset) / 1000.0f);
-                    modbus_resp_end();
-				break;
+          case 0x2004:  // Current Power (KW)
+            modbus_tx_begin(MB_SLAVE_METER, type, sizeof(int32_t));
+            modbus_tx_float(((float)chademo_get_power() + power_offset) / 1000.0f);
+            modbus_tx_end();
+          break;
 
-				case 70: 	// Frequency (Hz)
-				case 0x200E: 	// Frequency (Hz)
-					modbus_resp_begin(type, sizeof(int32_t));
-					modbus_resp_float(50.0f);
-                    modbus_resp_end();
-				break;
+          case 70:   // Frequency (Hz)
+          case 0x200E:   // Frequency (Hz)
+            modbus_tx_begin(MB_SLAVE_METER, type, sizeof(int32_t));
+            modbus_tx_float(50.0f);
+            modbus_tx_end();
+          break;
 
-				default:
-					modbus_resp_begin(0x80 | type, MB_ERR_ILLEGAL_ADDRESS);
-                    modbus_resp_end();
-				break;
-			}
-		break;
+          default:
+            modbus_tx_begin(MB_SLAVE_METER, 0x80 | type, MB_ERR_ILLEGAL_ADDRESS);
+            modbus_tx_end();
+          break;
+        }
+      break;
 
-		default:
-			modbus_resp_begin(0x80 | type, MB_ERR_ILLEGAL_FUNCTION);
-            modbus_resp_end();
-		break;
-	}
-
-  //HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
+      default:
+        modbus_tx_begin(MB_SLAVE_METER, 0x80 | type, MB_ERR_ILLEGAL_FUNCTION);
+        modbus_tx_end();
+      break;
+    }
+  }
 }
 
-void stdio_parser(uint8_t *ptr, uint32_t len)
+/**
+  * @brief Modbus Master Read Callback (Data back from Slave)
+  * @param addr Modbus slave address
+  * @param type Modbus function type
+  * @param reg Register that was resuested
+  * @param data Pointer to raw data
+  * @param len Length (in bytes) of raw data
+  * @retval None
+  */
+void mb_master_read_cb(uint8_t addr, MB_FUNC type, uint16_t reg, uint8_t *data, uint16_t len)
 {
- if (len == 1)
+  if (addr == MB_SLAVE_INVERTER)
+  {
+    /* Process Inverter's response to our request */
+    switch (reg)
+    {
+      case FOX_GRID_P1:
+        if (data[0] == 2)
+        {
+          inv_power = data[1] << 8 | data[2];
+        }
+      break;
+    }
+  }
+}
+
+/**
+  * @brief Modbus Write Complete Callback
+  * @retval None
+  */
+void mb_write_cb(void)
+{
+}
+
+/**
+  * @brief  Process a line of stdin data
+  * @param  ptr Pointer to received data
+  * @param  len length of data
+  * @retval None
+  */
+static void process_stdin_line(uint8_t *ptr, uint16_t len)
+{
+  char *tok;
+
+  tok = strtok((char*)ptr, " \r\n");
+  if (tok)
+  {
+    if (0 == strcmp(tok, "chademo"))
+    {
+      tok = strtok(NULL, " ");
+      if (tok)
+      {
+        if (0 == strcmp(tok, "start"))
+        {
+          chademo_start();
+        }
+        else if (0 == strcmp(tok, "stop"))
+        {
+          power_offset = 0;
+          chademo_stop();
+        }
+      }
+    }
+    else if (0 == strcmp(tok, "power"))
+    {
+      tok = strtok(NULL, " ");
+      if (tok)
+      {
+        power_offset = strtol(tok, NULL, 10);
+      }
+    }
+    else if (0 == strcmp(tok, "reset"))
+    {
+      HAL_NVIC_SystemReset();
+    }
+    else if (0 == strcmp(tok, "modbus"))
+    {
+      tok = strtok(NULL, " ");
+      if (tok)
+      {
+        if (0 == strcmp(tok, "read"))
+        {
+          tok = strtok(NULL, " ");
+          if (tok)
+          {
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+  * @brief  Process data received on stdin
+  * @param  ptr Pointer to received data
+  * @param  len length of data
+  * @retval None
+  */
+void stdio_parser(uint8_t *ptr, uint16_t len)
+{
+  uint32_t i;
+
+  if (len < (APP_RX_DATA_SIZE - cmd_buf_len))
+  {
+    uint8_t *c = &cmd_buf[cmd_buf_len];
+
+    memcpy(&cmd_buf[cmd_buf_len], ptr, len);
+    cmd_buf_len += len;
+
+    for (i=0; i<len; ++i, ++c)
+    {
+      if (*c == '\n' || *c == '\r')
+      {
+        uint32_t offset = cmd_buf_len - len + i;
+
+        /* Ensure we're null terminated */
+        cmd_buf[offset] = 0;
+
+        /* Process this line */
+        process_stdin_line(&cmd_buf[0], offset);
+        cmd_buf_len = 0;
+        memset(cmd_buf, 0, APP_RX_DATA_SIZE);
+      }
+    }
+  }
+  else
+  {
+    /* Buffer overflow */
+    cmd_buf_len = 0;
+  }
+
+  /* Fast response for when hacking around */
+  if (len == 1)
   {
     switch (ptr[0])
     {
@@ -235,11 +401,20 @@ void stdio_parser(uint8_t *ptr, uint32_t len)
       break;
 
       case '2':
+        power_offset = 0;
         chademo_stop();
       break;
 
       case '3':
         HAL_NVIC_SystemReset();
+      break;
+
+      case '+':
+        power_offset += 100;
+      break;
+
+      case '-':
+        power_offset -= 100;
       break;
 
       default:
@@ -274,32 +449,28 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
-  HAL_CAN_DeInit(&hcan1);
-  HAL_CAN_DeInit(&hcan2);
-
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
+  MX_USART1_UART_Init();
+  MX_USART2_UART_Init();
+  MX_USB_DEVICE_Init();
   MX_CAN1_Init();
   MX_CAN2_Init();
-  MX_USART1_UART_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
-  MX_USART2_UART_Init();
-  MX_USB_DEVICE_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-
-  /* Power Up ESP8266 */
-  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
 
   /* Turn on the EVSE */
   HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
 
-  HAL_Delay(2000);
+  /* Power Up ESP8266 */
+  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+  HAL_Delay(3000);
 
   if (!sensor_init())
   {
@@ -316,7 +487,6 @@ int main(void)
 #endif
 
 #ifdef ENABLE_CHADEMO
-  MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0);
   if (!chademo_init())
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise ChaDeMo interface.\"}]\n");
@@ -325,11 +495,14 @@ int main(void)
 #endif
 
 #ifdef ENABLE_SOLAX
-  MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1);
-  solax_init();
+  if (!solax_init())
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Solax interface.\"}]\n");
+    error = true;
+  }
 #endif
 
-  if (!modbus_init(MB_SLAVE_ADDRESS, &mb_read_cb))
+  if (!modbus_init(&mb_master_read_cb, &mb_slave_read_cb, &mb_write_cb))
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Modbus interface.\"}]\n");
     error = true;
@@ -340,9 +513,6 @@ int main(void)
 
   /* Set Maximum DC power. Import / Export will be controlled separately. */
   chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
-
-  // ToDo: Drive this from the ESP8266
-  //chademo_start();
 
   /* USER CODE END 2 */
 
@@ -377,6 +547,12 @@ int main(void)
     /* Process Serial Data */
     HAL_UART_Process();
 
+    if (HAL_GetTick() > req_inv_power + 100)
+    {
+      req_inv_power = HAL_GetTick();
+      modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_GRID_P1);
+    }
+
     /* Send regular JSON messages */
     if ((last_json_update == 0) ||
         (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME))
@@ -386,9 +562,13 @@ int main(void)
       sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
 
       printf("{\"controller\":{");
-      printf("\"timestamp\":%ld", HAL_GetTick());
+      printf("\"power_offset\":%ld", power_offset);
+      printf("\"inverter_power\":%ld", inv_power);
+      printf(",\"timestamp\":%ld", HAL_GetTick());
+#ifdef DEBUG_CONTROLLER
       printf(",\"loop_time_max\":%ld", loop_time_max);
       printf(",\"acc_current\":%ld", acc_current / 1000);
+#endif
       printf(",");
       evse_json_update();
       printf(",");
@@ -400,6 +580,27 @@ int main(void)
       last_json_update = HAL_GetTick();
     }
 
+    /* Check shutdown */
+    if (power_offset == 0 &&
+        chademo_get_state() == CHADEMO_STATE_ON)
+    {
+      chademo_stop();
+    }
+
+    /* Check startup */
+    if (power_offset != 0 &&
+        chademo_get_state() == CHADEMO_STATE_OFF)
+    {
+      chademo_start();
+    }
+
+    /* Prevent continuous loop if we shut down */
+    // ToDo: CAN timeout case?
+    if (chademo_get_state() >= CHADEMO_STATE_STOP)
+    {
+      power_offset = 0;
+    }
+
     /* Kick the Watchdog */
     HAL_IWDG_Refresh(&hiwdg);
 
@@ -407,9 +608,9 @@ int main(void)
     if (loop_time > loop_time_max) loop_time_max = loop_time;
 
     /* Re-purpose the EVSE LED to show when we're busy */
-    HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
     __WFI();
-    HAL_GPIO_WritePin(LED3_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
 
     /* USER CODE END WHILE */
 

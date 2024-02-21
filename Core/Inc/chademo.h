@@ -28,7 +28,7 @@ void chademo_stop(void);
 void chademo_start(void);
 
 void chademo_set_max_power(uint32_t power);
-bool chademo_is_contactor_closed(void);
+CHADEMO_STATE chademo_get_state(void);
 int32_t chademo_get_power(void);
 
 void chademo_json_update(void);

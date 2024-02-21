@@ -334,7 +334,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   else
   {
     uart2_rx_bytes = Size;
-    HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_RESET);
   }
 }
 
@@ -351,9 +350,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
   }
   else
   {
-    /* Put Transceiver back into RX mode */
-    HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LED_GPIO_Port, INVERTER_Pin, GPIO_PIN_SET);
+    modbus_tx_complete();
   }
 }
 
@@ -382,8 +379,6 @@ void HAL_UART_Process(void)
 
   if (uart2_rx_bytes > 0)
   {
-    /* Put Transceiver into TX mode */
-    HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_SET);
     modbus_process(&uart2_rxbuf[0], uart2_rx_bytes);
 
     uart2_rx_bytes = 0;

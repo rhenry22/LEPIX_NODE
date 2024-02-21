@@ -38,7 +38,7 @@
 #include "solax.h"
 #include "sensor.h"
 
-#define DEBUG_CHADEMO
+//#define DEBUG_CHADEMO
 
 #define MESSAGE_INTERVAL      (100)
 
@@ -219,8 +219,8 @@ static uint8_t min_discharge_level = DEFAULT_MIN_SOC; /* Minimum SoC during disc
 static uint32_t rated_capacity = 180000;     /* Rated capacity (0.1 kWh) */
 static uint32_t available_energy = 0;       /* Available energy (0.1 kWh) */
 
-static bool start_pending = false;
-static bool stop_pending = false;
+static bool start_pending = false;          /* A start request is pending */
+static bool stop_pending = false;           /* A stop request is pending */
 
 /* For chademo v2.0 only */
 static uint8_t chademo_118[8] = {0x10, 0x64, 0x00, 0xB0, 0x00, 0x1E, 0x00, 0x8F};
@@ -274,6 +274,22 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
       /* Let the vehicle know we're unlocked */
       can_data.charger.msgid_109.fault_status &= ~MSG109_CONN_LOCK;
+    break;
+
+    case CHADEMO_STATE_START:
+      /* Ensure that our current measurement is zeroed */
+      ret = sensor_zero_ibatt();
+      if (ret != HAL_OK)
+      {
+        snprintf(last_error, ERROR_LEN, "Failed to zero battery current.");
+        new_state = CHADEMO_STATE_ERROR;
+      }
+
+      // ToDo: HACK!!
+      //HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
+      //HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
+      //solax_set_max_dc_chg_current(10);
+      //solax_set_max_dc_dis_current(10);
     break;
 
     case CHADEMO_STATE_PARAM_CHK:
@@ -367,7 +383,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     break;
 
     case CHADEMO_STATE_ON:
-      // ToDo: Spec says this should only be set when charging (> 5A)
+      // ToDo: Spec says this should be set when charging (> 5A)
       can_data.charger.msgid_109.fault_status |= MSG109_CHARGE;
       can_data.charger.msgid_109.fault_status &= ~MSG109_CHG_STOPPED;
     break;
@@ -381,7 +397,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       can_data.charger.msgid_109.fault_status |= MSG109_CHG_STOPPED;
     break;
 
-    case CHADEMO_STATE_START:
     case CHADEMO_STATE_BATT_CHECK:
     case CHADEMO_STATE_WELD_CHECK:
     case CHADEMO_STATE_WAIT_K_OFF:
@@ -804,17 +819,17 @@ void chademo_process(void)
       solax_set_max_dc_chg_current(can_data.vehicle.msgid_102.charge_current_requested * 10);
       solax_set_max_dc_dis_current(can_data.charger.msgid_208.discharge_current_max * 10);
 
-      if (!chg_perm)
-      {
-        snprintf(last_error, ERROR_LEN,
-                 "Charge Permission Revoked");
-        chademo_transition_state(CHADEMO_STATE_STOP);
-      }
-
       if (!solax_contactor_enabled())
       {
         snprintf(last_error, ERROR_LEN,
                  "Inverter Permission Revoked");
+        chademo_transition_state(CHADEMO_STATE_STOP);
+      }
+
+      if (!chg_perm)
+      {
+        snprintf(last_error, ERROR_LEN,
+                 "Charge Permission Revoked");
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
@@ -975,7 +990,6 @@ void chademo_process(void)
     }
   }
 
-
   /* We're errored. Flash the ChaDeMo LED */
   if (errored)
   {
@@ -1024,12 +1038,12 @@ void chademo_set_max_power(uint32_t power)
 }
 
 /**
-  * @brief  Returns whether the DC is potentially live (contactor closed)
-  * @retval bool true: Live, false: Not Live
+  * @brief  Returns the current state
+  * @retval CHADEMO_STATE
   */
-bool chademo_is_contactor_closed(void)
+CHADEMO_STATE chademo_get_state(void)
 {
-  return (chademo_state == CHADEMO_STATE_ON);
+  return chademo_state;
 }
 
 /**

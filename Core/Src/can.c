@@ -58,6 +58,11 @@ void MX_CAN1_Init(void)
   }
   /* USER CODE BEGIN CAN1_Init 2 */
 
+  if (HAL_OK != MX_CAN_Setup_Receive(&hcan1, CAN_FILTER_FIFO0))
+  {
+    Error_Handler();
+  }
+
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -89,6 +94,11 @@ void MX_CAN2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN2_Init 2 */
+
+  if (HAL_OK != MX_CAN_Setup_Receive(&hcan2, CAN_FILTER_FIFO1))
+  {
+    Error_Handler();
+  }
 
   /* USER CODE END CAN2_Init 2 */
 
@@ -273,7 +283,7 @@ HAL_StatusTypeDef MX_CAN_Setup_Receive(CAN_HandleTypeDef *hcan, uint32_t fifo)
   ret = HAL_CAN_Start(hcan);
   if (ret != HAL_OK)
   {
-    printf("CAN Start failed (%d)\r\n", ret);
+    printf("CAN Start failed (%d:%ld)\r\n", ret, hcan->ErrorCode);
     return ret;
   }
 

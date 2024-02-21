@@ -85,11 +85,13 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
             * 6A = 10%
             * 48A = 80%
             *
+            * (x + denom / 2) for integer rounding
+            *
             */
             if (cp_pwm <= 80)
-              max_current = 6 + (48 - 6) * (cp_pwm - 9) / (80 - 10);
+              max_current = 6 + ((48 - 6) * (cp_pwm - 10) + (80 - 10) / 2) / (80 - 10);
             else
-              max_current = 48 + (80 - 48) * (cp_pwm - 9) / (96 - 80);
+              max_current = 48 + ((80 - 48) * (cp_pwm - 10) + (96 - 80) / 2) / (96 - 80);
           }
           else
           {
