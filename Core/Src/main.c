@@ -33,6 +33,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "usbd_cdc_if.h"
+#include "ioexp.h"
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -112,12 +113,13 @@ static int32_t inv_power = 0;         /* Power reported by inverter */
 static uint32_t loop_time_max = 0;    /* Maximum loop time observed */
 static uint8_t cmd_buf[APP_RX_DATA_SIZE];  /* Buffer for stdin commands */
 static uint16_t cmd_buf_len = 0;      /* Length of stdin buffer */
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+void JumpToBootloader(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -143,7 +145,9 @@ void emergency_stop(void)
 
   /* Force Leak Test Off */
   HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
 
   while(1)
   {
@@ -409,6 +413,10 @@ void stdio_parser(uint8_t *ptr, uint16_t len)
         HAL_NVIC_SystemReset();
       break;
 
+      case '4':
+        JumpToBootloader();
+      break;
+
       case '+':
         power_offset += 100;
       break;
@@ -470,7 +478,25 @@ int main(void)
 
   /* Power Up ESP8266 */
   HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+
+  /* Initialise Red/Green IO expander and clear LEDs */
+  if (ioexp_init(IOEXP_RG_LED))
+  {
+    ioexp_set_output(IOEXP_RG_LED, 0x0000);
+    ioexp_set_direction(IOEXP_RG_LED, 0xffff);
+  }
+
+  /* Initialise Blue/Yellow IO expander and clear LEDs */
+  if (ioexp_init(IOEXP_BY_LED))
+  {
+    ioexp_set_output(IOEXP_BY_LED, 0x0000);
+    ioexp_set_direction(IOEXP_BY_LED, 0xffff);
+  }
+
+  /* Give USB and ESP a chance to start up */
   HAL_Delay(3000);
+
+  /* Initialise Sensors and Peripherals */
 
   if (!sensor_init())
   {
@@ -514,9 +540,9 @@ int main(void)
   /* Set Maximum DC power. Import / Export will be controlled separately. */
   chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
 
-  /* USER CODE END 2 */
-
   MX_IWDG_Init();
+
+  /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -547,6 +573,7 @@ int main(void)
     /* Process Serial Data */
     HAL_UART_Process();
 
+    /* Poll Inverter Power */
     if (HAL_GetTick() > req_inv_power + 100)
     {
       req_inv_power = HAL_GetTick();
@@ -557,17 +584,22 @@ int main(void)
     if ((last_json_update == 0) ||
         (HAL_GetTick() > last_json_update + JSON_UPDATE_TIME))
     {
+#ifdef DEBUG_CONTROLLER
       int32_t acc_current;
+      int32_t hv_current;
 
       sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
+      sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
+#endif
 
       printf("{\"controller\":{");
       printf("\"power_offset\":%ld", power_offset);
-      printf("\"inverter_power\":%ld", inv_power);
+      printf(",\"inverter_power\":%ld", inv_power);
       printf(",\"timestamp\":%ld", HAL_GetTick());
 #ifdef DEBUG_CONTROLLER
       printf(",\"loop_time_max\":%ld", loop_time_max);
       printf(",\"acc_current\":%ld", acc_current / 1000);
+      printf(",\"hv_current\":%ld", hv_current);
 #endif
       printf(",");
       evse_json_update();
@@ -578,6 +610,24 @@ int main(void)
       printf("}}\n");
 
       last_json_update = HAL_GetTick();
+    }
+
+    /* Debug LEDs */
+    {
+      static uint16_t old_leds = 0;
+      uint16_t leds = 0;
+
+      if (GPIO_PIN_SET == HAL_GPIO_ReadPin(CHADEMO_CP_GPIO_Port, CHADEMO_CP_Pin))
+        leds |= 1 << 8;
+
+      if (GPIO_PIN_RESET == HAL_GPIO_ReadPin(CHADEMO_CHARGE_ALLOWED__GPIO_Port, CHADEMO_CHARGE_ALLOWED__Pin))
+        leds |= 1 << 9;
+
+      if (leds != old_leds)
+      {
+        old_leds = leds;
+        ioexp_set_direction(IOEXP_RG_LED, ~leds);
+      }
     }
 
     /* Check shutdown */
@@ -608,9 +658,9 @@ int main(void)
     if (loop_time > loop_time_max) loop_time_max = loop_time;
 
     /* Re-purpose the EVSE LED to show when we're busy */
-    HAL_GPIO_WritePin(LED_GPIO_Port, EVSE_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
     __WFI();
-    HAL_GPIO_WritePin(LED_GPIO_Port, EVSE_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
     /* USER CODE END WHILE */
 
@@ -707,6 +757,17 @@ int _write(int file, char *ptr, int len)
 #endif
 
   return len;
+}
+
+/**
+  * @brief  Reset and boot into DFU
+  * @retval Does not return
+  */
+void JumpToBootloader(void) {
+  volatile uint32_t *magic = (volatile uint32_t *)0x20000000;
+  *magic = 0xB007DF00;
+
+  NVIC_SystemReset();
 }
 
 /* USER CODE END 4 */

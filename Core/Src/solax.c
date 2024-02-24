@@ -47,7 +47,7 @@ typedef enum _solax_state
 {
   SOLAX_BATTERY_ANNOUNCE,
   SOLAX_REQUEST_CONTACTOR_CLOSE,
-  SOLAX_CONTACTOR_CLOSING,
+  SOLAX_CONTACTOR_PRECHARGE,
   SOLAX_CONTACTOR_CLOSED,
   SOLAX_FAULT,
   SOLAX_UPDATING_FW
@@ -335,7 +335,7 @@ static void solax_update_values(void)
   int32_t current; /* A x10 */
 
   /* Update Measured Values */
-  sensor_get_value(SENSOR_BATT_VOLTAGE, &voltage);
+  sensor_get_value(SENSOR_INV_VOLTAGE, &voltage);
   sensor_get_value(SENSOR_BATT_CURRENT, &current);
 
   /* BMS_PackData */
@@ -398,12 +398,7 @@ static HAL_StatusTypeDef solax_update_state(void)
   HAL_StatusTypeDef ret = HAL_OK;
   SOLAX_STATE s = state;
 
-  /* Update the contactor state */
-  if (chademo_get_state() == CHADEMO_STATE_ON)
-    solax_data.bms.msg_1875.contactor = 2;
-  else
-    solax_data.bms.msg_1875.contactor = 0;
-
+  /* Possible error bit */
   if (solax_data.inverter.msg_1871.data[MSG_1871_STATUS] != 0x0001)
   {
     state = SOLAX_FAULT;
@@ -414,12 +409,27 @@ static HAL_StatusTypeDef solax_update_state(void)
     ret = HAL_ERROR;
   }
 
+  /* Make sure we open the contactors if requested / errored */
+  if (!contactor_close)
+  {
+    HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);
+    solax_data.bms.msg_1875.contactor = 0;
+
+    if (state < SOLAX_FAULT)
+      state = SOLAX_BATTERY_ANNOUNCE;
+  }
+
   if (ret == HAL_OK)
   {
     switch (state) {
       case SOLAX_BATTERY_ANNOUNCE:
         /* BMS Announce */
         solax_send_message(0x100A001, (uint8_t*)&solax_data.bms.msg_100A001, 0);
+
+        HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);
+        solax_data.bms.msg_1875.contactor = 0;
 
         if (contactor_close)
         {
@@ -430,27 +440,51 @@ static HAL_StatusTypeDef solax_update_state(void)
 
       case SOLAX_REQUEST_CONTACTOR_CLOSE:
         /* Stay in this state until ChaDeMo starts up */
-        if (chademo_get_state() >= CHADEMO_STATE_START &&
-            chademo_get_state() <= CHADEMO_STATE_ON)
+        if (chademo_get_state() == CHADEMO_STATE_ON)
         {
-          
-        }
+          if (contactor_close)
+          {
+            /* Respond that battery is connecting */
+            solax_send_message(0x1801, (uint8_t*)&solax_data.bms.msg_1801, 8);
 
-        if (contactor_close)
-        {
-          /* Respond that battery is connecting */
-          solax_send_message(0x1801, (uint8_t*)&solax_data.bms.msg_1801, 8);
+            /* Enable Precharge contactor */
+            HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_SET);
 
-          state = SOLAX_CONTACTOR_CLOSING;
+            state = SOLAX_CONTACTOR_PRECHARGE;
+          }
         }
       break;
 
-      case SOLAX_CONTACTOR_CLOSING:
-        /* Stay in this state until ChaDeMo completes connection */
-        if (solax_data.bms.msg_1875.contactor != 0)
+      case SOLAX_CONTACTOR_PRECHARGE:
+      {
+        int32_t batt_voltage;
+        int32_t inv_voltage;
+
+        sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
+        sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
+
+        /* Check that we're outputting a sensible voltage */
+
+        if (batt_voltage == inv_voltage)
         {
-          state = SOLAX_CONTACTOR_CLOSED;
+          solax_data.bms.msg_1875.contactor = 2;
+
+          /* Enable Main contactor */
+          HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_SET);
+
+          /* The contactors cause our current measurement to offset. */
+          ret = sensor_zero_ibatt();
+          if (ret != HAL_OK)
+          {
+            snprintf(last_error, ERROR_LEN, "Failed to zero HV current.");
+            state = SOLAX_FAULT;
+          }
+          else
+          {
+            state = SOLAX_CONTACTOR_CLOSED;
+          }
         }
+      }
       break;
 
       case SOLAX_CONTACTOR_CLOSED:
@@ -578,14 +612,14 @@ void solax_process(void)
       break;
   }
 
+  /* Update voltage / current values */
+  solax_update_values();
+
   /* Update our data and send BMS messages. */
-  if (HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE && 
+  if (HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE &&
       HAL_GetTick() < last_update + SOLAX_UPDATE_RATE) 
   {
     bms_update = HAL_GetTick();
-
-    /* Update voltage / current values */
-    solax_update_values();
 
     /* Update the state machine */
     solax_update_state();
@@ -745,13 +779,4 @@ void solax_json_update(void)
     solax_data.inverter.msg_1871_3.data[6]);
 #endif
   printf("}");
-}
-
-/**
-  * @brief  Does the inverter allow us to close the concactor?
-  * @retval bool true: Yes, false: No
-  */
-bool solax_contactor_enabled(void)
-{
-  return contactor_close;
 }

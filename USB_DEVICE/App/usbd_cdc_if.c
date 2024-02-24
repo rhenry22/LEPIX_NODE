@@ -104,6 +104,9 @@ USBD_CDC_LineCodingTypeDef linecoding =
   0x08    /* nb. of bits 8*/
 };
 
+
+static volatile bool is_connected = false;
+
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -137,7 +140,6 @@ static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
 static int8_t CDC_TransmitCplt_FS(uint8_t *pbuf, uint32_t *Len, uint8_t epnum);
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
-
 /* USER CODE END PRIVATE_FUNCTIONS_DECLARATION */
 
 /**
@@ -154,9 +156,6 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 };
 
 /* Private functions ---------------------------------------------------------*/
-
-static volatile bool is_connected = false;
-
 /**
   * @brief  Initializes the CDC media low layer over the FS USB IP
   * @retval USBD_OK if all operations are OK else USBD_FAIL
@@ -191,9 +190,9 @@ static int8_t CDC_DeInit_FS(void)
   */
 static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 {
+  /* USER CODE BEGIN 5 */
   int8_t ret = USBD_OK;
 
-  /* USER CODE BEGIN 5 */
   switch(cmd)
   {
     case CDC_SEND_ENCAPSULATED_COMMAND:
@@ -332,10 +331,10 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   */
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
+  /* USER CODE BEGIN 6 */
   int8_t ret = USBD_OK;
 
 #ifndef ESP_FLASH_MODE
-  /* USER CODE BEGIN 6 */
   stdio_parser(Buf, *Len);
 #else
   if (HAL_UART_Transmit(&huart1, Buf, *Len, 250) != HAL_OK)
@@ -365,13 +364,13 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len, uint32_t timeout)
 {
   uint8_t result = USBD_OK;
+  /* USER CODE BEGIN 7 */
   uint32_t t = HAL_GetTick() + timeout;
 
   if (is_connected)
   {
     USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
 
-    /* USER CODE BEGIN 7 */
     while (hcdc->TxState != 0 && HAL_GetTick() < t);
 
     if (hcdc->TxState != 0){

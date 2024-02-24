@@ -63,6 +63,8 @@ void dump_packet(uint8_t *data, uint8_t len);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define CHADEMO_CP_Pin GPIO_PIN_6
+#define CHADEMO_CP_GPIO_Port GPIOE
 #define EVSE_PP_Pin GPIO_PIN_0
 #define EVSE_PP_GPIO_Port GPIOA
 #define EVSE_CP_Pin GPIO_PIN_1
@@ -93,16 +95,31 @@ void dump_packet(uint8_t *data, uint8_t len);
 #define LED2_GPIO_Port GPIOE
 #define LED3_Pin GPIO_PIN_13
 #define LED3_GPIO_Port GPIOE
+#define GPIO_INT__Pin GPIO_PIN_14
+#define GPIO_INT__GPIO_Port GPIOE
+#define OD1_EN_Pin GPIO_PIN_10
+#define OD1_EN_GPIO_Port GPIOB
+#define OD2_EN_Pin GPIO_PIN_11
+#define OD2_EN_GPIO_Port GPIOB
+#define OD3_EN_Pin GPIO_PIN_12
+#define OD3_EN_GPIO_Port GPIOB
+#define GPIO1_Pin GPIO_PIN_13
+#define GPIO1_GPIO_Port GPIOB
+#define GPIO2_Pin GPIO_PIN_14
+#define GPIO2_GPIO_Port GPIOB
+#define GPIO3_Pin GPIO_PIN_15
+#define GPIO3_GPIO_Port GPIOB
+#define ISO_TEST_EN_Pin GPIO_PIN_6
+#define ISO_TEST_EN_GPIO_Port GPIOC
 #define TEST_HV_EN_Pin GPIO_PIN_13
 #define TEST_HV_EN_GPIO_Port GPIOA
+#define HV_EN_Pin GPIO_PIN_14
+#define HV_EN_GPIO_Port GPIOA
 #define RS485_TX_RX__Pin GPIO_PIN_7
 #define RS485_TX_RX__GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
 
-#define EVSE_Pin     LED1_Pin
-#define CHADEMO_Pin  LED2_Pin
-#define INVERTER_Pin LED3_Pin
 #define LED_GPIO_Port GPIOE
 
 #define ADC_EVSE_PP     (0)

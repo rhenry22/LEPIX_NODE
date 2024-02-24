@@ -11,15 +11,8 @@
  *    https://openinverter.org/wiki/Tesla_Model_S/X_GEN2_Charger#Functionality_of_external_CAN_bus
  *
  *  ToDo:
- *  Requires a user interface to show charging status and start / stop charging
- *  Requires Short Circuit and Isolation detection (100KOhm min) not just earth leakage
- *  Emergency Stop button (Red, latching)
- *  Start / Stop buttons (Blue, Green, illuminated)
- *  Separate CPU for Inverter Control and Interface (technically OK?)
  *  Analog handshake should go via connector lock detection and inverter shutoff in HW
  *  (i.e. separate from CPU)
- *
- *  Check and Calibrate Earth Leakage threshold value (lower than 100 Ω/V)
  *  Monitor lock solenoid current and set CONN Lock flag to zero if it fails.
  *
  *  Copyright (c) 2023 ARTaylor.co.uk.
@@ -34,11 +27,18 @@
 
 #include "usbd_cdc_if.h"  /* for MIN */
 #include "can.h"
+#include "ioexp.h"
 #include "chademo.h"
 #include "solax.h"
 #include "sensor.h"
 
 //#define DEBUG_CHADEMO
+
+/* 
+ * Leakage is monitored by the Inverter and we will cause problems if done in
+ * multiple places 
+ */
+//#define LEAK_TEST
 
 #define MESSAGE_INTERVAL      (100)
 
@@ -50,6 +50,7 @@
 #define STOP_CURRENT          (5)    /* Spec is 5A, but using 0.5A (x10) */
 #define LEAKAGE_CURRENT_MAX   (250 * 500 / 5)  /* 100Ohm/V == 500kOhm == 250uA (@ 500V)*/
 #define LEAK_TEST_TIME        (1000)  /* Between 200ms and 1000ms */
+#define ISOLATION_MIN_VOLTAGE (3500)
 #define DEFAULT_MIN_SOC       (25)
 
 #define CONTACTOR_CLOSED_V    (500)
@@ -203,9 +204,12 @@ static struct can_data can_data;            /* Structure holding all CAN message
 
 static bool chg_perm = false;               /* Vehicle Charge permission state */
 static bool k_perm = false;                 /* Vehicle Charge permission state (K line only) */
+static bool cp_ready = false;               /* Is the car plugged in? */
 
 static uint32_t state_time = 0;             /* Time that the last state transition happened */
 static uint32_t error_time = 0;             /* Timer to flash LED on error */
+static uint32_t button_time = 0;            /* Timer for button LED(s) */
+static uint32_t button2_time = 0;           /* Timer for button Press / Hold */
 
 static bool errored = false;                /* If we hit any errors, prevent starting again */
 static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
@@ -264,13 +268,15 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     case CHADEMO_STATE_OFF:
       /* These should already be off, but can be used as an emergency stop */
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
 
       /* Unlock connector */
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(LED_GPIO_Port, CHADEMO_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(LED_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
 
       /* Let the vehicle know we're unlocked */
       can_data.charger.msgid_109.fault_status &= ~MSG109_CONN_LOCK;
@@ -284,12 +290,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         snprintf(last_error, ERROR_LEN, "Failed to zero battery current.");
         new_state = CHADEMO_STATE_ERROR;
       }
-
-      // ToDo: HACK!!
-      //HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
-      //HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
-      //solax_set_max_dc_chg_current(10);
-      //solax_set_max_dc_dis_current(10);
     break;
 
     case CHADEMO_STATE_PARAM_CHK:
@@ -314,7 +314,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     {
       /* Lock the connector */
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(LED_GPIO_Port, CHADEMO_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(LED_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
 
       can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
 
@@ -329,8 +329,9 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       }
       else
       {
-        /* Enable HV DCDC Test source */
+        /* Enable HV DCDC Test source(s) */
         HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
       }
     }
     break;
@@ -344,13 +345,18 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         {
           leak_base = val;
 
-          /* Start Test */
+#ifdef LEAK_TEST
+          /* Start Earth Leakage Test */
           HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
+#else
+          /* Start Isolation / Short Circuit Test */
+        HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
+#endif
         }
         else
         {
           snprintf(last_error, ERROR_LEN,
-                  "Failed to get baseline leakage current.");
+                  "Failed to get baseline HV current.");
           new_state = CHADEMO_STATE_ERROR;
         }
     }
@@ -358,19 +364,26 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
     case CHADEMO_STATE_INS_TEST:
     {
-      int32_t leak_current;
+      int32_t hv_current;
 
-      ret = sensor_get_value(SENSOR_HV_TEST_CURRENT, &leak_current);
-
-      /* Disable HV Test */
-      HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-
+      ret = sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
       /* Check that HV Test current is below threshold */
-      if (ret != HAL_OK || leak_current > leak_base + LEAKAGE_CURRENT_MAX)
+      if (ret != HAL_OK || hv_current > leak_base + LEAKAGE_CURRENT_MAX)
+      {
+#ifdef LEAK_TEST
+        snprintf(last_error, ERROR_LEN,
+                 "Earth leakage test failed (%ld uA).", hv_current - leak_base);
+#else
+        snprintf(last_error, ERROR_LEN,
+                 "Short Circuit test failed (%ld uA).", hv_current - leak_base);
+#endif
+        new_state = CHADEMO_STATE_ERROR;
+      }
+      /* Check that we are able to bring up the HV Test current is below threshold */
+      else if (measured_voltage < ISOLATION_MIN_VOLTAGE)
       {
         snprintf(last_error, ERROR_LEN,
-                 "Earth leakage test failed (%ld uA).", leak_current - leak_base);
+                 "Isolation test failed (%ld V).", measured_voltage / 10);
         new_state = CHADEMO_STATE_ERROR;
       }
       else
@@ -379,6 +392,12 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_SET);
         new_state = CHADEMO_STATE_BATT_CHECK;
       }
+
+      /* Disable HV Test */
+      HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
     }
     break;
 
@@ -407,6 +426,18 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
   }
 
   chademo_state = new_state;
+
+  {
+    uint16_t leds = 0;
+    
+    if (errored)
+      leds |= (1 << CHADEMO_STATE_ERROR);
+
+    if (chademo_state > 0)
+      leds |= (1 << chademo_state);
+
+    ioexp_set_direction(IOEXP_BY_LED, ~leds);
+  }
 }
 
 /**
@@ -451,6 +482,12 @@ static void chademo_check_vehicle_permission(void)
 
   k_perm = phy_ok;
   chg_perm = (phy_ok && can_ok);
+
+  /* Check for Vehicle Pilot signal */
+  if (HAL_GPIO_ReadPin(CHADEMO_CP_GPIO_Port, CHADEMO_CP_Pin) == GPIO_PIN_SET)
+    cp_ready = true;
+  else
+    cp_ready = false;
 }
 
 /**
@@ -660,7 +697,7 @@ void chademo_process(void)
     break;
 
     case CHADEMO_STATE_START:
-      if (!errored && solax_contactor_enabled())
+      if (!errored)
       {
         /* Signal to the vehicle that we're ready to start */
         HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_SET);
@@ -668,12 +705,6 @@ void chademo_process(void)
 
       if (HAL_GetTick() > state_time + CHADEMO_CAN_TIMEOUT)
       {
-        if (!solax_contactor_enabled())
-        {
-          snprintf(last_error, ERROR_LEN,
-                  "Timed out waiting for request from Inverter");
-        }
-
         if (last_update == 0)
         {
           snprintf(last_error, ERROR_LEN,
@@ -685,7 +716,7 @@ void chademo_process(void)
       }
 
       /* Check that we're allowed to enable and are receiving CAN messages */
-      if (solax_contactor_enabled() && last_update > 0)
+      if (last_update > 0)
       {
         chademo_transition_state(CHADEMO_STATE_PARAM_CHK);
       }
@@ -819,14 +850,7 @@ void chademo_process(void)
       solax_set_max_dc_chg_current(can_data.vehicle.msgid_102.charge_current_requested * 10);
       solax_set_max_dc_dis_current(can_data.charger.msgid_208.discharge_current_max * 10);
 
-      if (!solax_contactor_enabled())
-      {
-        snprintf(last_error, ERROR_LEN,
-                 "Inverter Permission Revoked");
-        chademo_transition_state(CHADEMO_STATE_STOP);
-      }
-
-      if (!chg_perm)
+      if (!chg_perm || !cp_ready)
       {
         snprintf(last_error, ERROR_LEN,
                  "Charge Permission Revoked");
@@ -958,7 +982,7 @@ void chademo_process(void)
   if (start_pending && !stop_pending)
   {
     start_pending = false;
-    if (!errored)
+    if (!errored && cp_ready)
     {
       if (chademo_state == CHADEMO_STATE_OFF)
       {
@@ -996,8 +1020,92 @@ void chademo_process(void)
     if (HAL_GetTick() > error_time + 500)
     {
       error_time = HAL_GetTick();
-      HAL_GPIO_TogglePin(LED_GPIO_Port, CHADEMO_Pin);
+      HAL_GPIO_TogglePin(LED_GPIO_Port, LED3_Pin);
     }
+  }
+
+  /* Handle User Buttons */
+  if (HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_SET)
+    button2_time = 0;
+
+  switch (chademo_state)
+  {
+    case CHADEMO_STATE_OFF:
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO2_Pin, GPIO_PIN_RESET);
+      if (cp_ready)
+      {
+        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_SET);
+
+        /* Button Press Starts */
+        if (button2_time == 0 &&
+            HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
+        {
+          button2_time = HAL_GetTick();
+          chademo_start();
+        }
+      }
+      else
+      {
+        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_RESET);
+      }
+    break;
+
+    case CHADEMO_STATE_START:
+    case CHADEMO_STATE_PARAM_CHK:
+    case CHADEMO_STATE_PERM_OK:
+    case CHADEMO_STATE_INS_TEST_BASE:
+    case CHADEMO_STATE_INS_TEST:
+    case CHADEMO_STATE_BATT_CHECK:
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_RESET);
+
+      if (HAL_GetTick() > button_time + 500)
+      {
+        button_time = HAL_GetTick();
+        HAL_GPIO_TogglePin(GPIO1_GPIO_Port, GPIO2_Pin);
+      }
+
+      /* Button Press Stops */
+      if (button2_time == 0 &&
+          HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
+      {
+        button2_time = HAL_GetTick();
+        chademo_stop();
+      }
+    break;
+
+    case CHADEMO_STATE_ON:
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO2_Pin, GPIO_PIN_SET);
+
+      /* Button Press Stops */
+      if (button2_time == 0 &&
+          HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
+      {
+        button2_time = HAL_GetTick();
+        chademo_stop();
+      }
+    break;
+
+    case CHADEMO_STATE_STOP:
+    case CHADEMO_STATE_WELD_CHECK:
+    case CHADEMO_STATE_WAIT_K_OFF:
+    case CHADEMO_STATE_WAIT_VEHICLE_OFF:
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO2_Pin, GPIO_PIN_RESET);
+      if (HAL_GetTick() > button_time + 500)
+      {
+        button_time = HAL_GetTick();
+        HAL_GPIO_TogglePin(GPIO1_GPIO_Port, GPIO1_Pin);
+      }
+    break;
+
+    case CHADEMO_STATE_ERROR:
+      if (HAL_GetTick() > button_time + 500)
+      {
+        button_time = HAL_GetTick();
+        HAL_GPIO_TogglePin(GPIO1_GPIO_Port, GPIO1_Pin);
+        HAL_GPIO_TogglePin(GPIO1_GPIO_Port, GPIO2_Pin);
+      }
+    break;
   }
 
   /* Check that we are receiving regular CAN messages from ChaDeMo */

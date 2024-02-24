@@ -25,7 +25,7 @@
 #define INA219_ACC_SHUNT        (0.005)  // 5mR Shunt resistor
 #define INA219_ACC_CURRENT_LSB  (0.001)  // 1mA per LSB
 
-#define INA219_HV_ADDR          (0x40)
+#define INA219_HV_ADDR          (0x44)  // Main board: 0x40, Daughter board: 0x44
 #define INA219_HV_SHUNT         (0.1)  // 100mR Shunt resistor
 #define INA219_HV_CURRENT_LSB   (0.000050)  // 50uA per LSB
 
@@ -56,7 +56,7 @@ bool sensor_init(void)
     ret = false;
   }
 
-  if (HAL_OK != MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero) || ibatt_zero < 100)
+  if (HAL_OK != MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero))
   {
     ret = false;
   }
@@ -75,7 +75,16 @@ bool sensor_init(void)
   */
 HAL_StatusTypeDef sensor_zero_ibatt(void)
 {
-  return MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero);
+  HAL_StatusTypeDef ret;
+  ret = MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero);
+
+  if (ret == HAL_OK)
+  {
+    if (ibatt_zero < 100)
+      ret = HAL_ERROR;
+  }
+
+  return ret;
 }
 
 /**
@@ -96,6 +105,15 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     {
       uint16_t tmp;
       ret = MAX22530_read_register(MAX22530_ADC1, &tmp);
+      if (ret == HAL_OK)
+        *val = (int32_t)tmp * MAX22530_VREF / 4096 * (4.7 + 1500) * 10 / 4.7 / 1000;
+    }
+    break;
+
+    case SENSOR_INV_VOLTAGE: // V x10
+    {
+      uint16_t tmp;
+      ret = MAX22530_read_register(MAX22530_ADC2, &tmp);
       if (ret == HAL_OK)
         *val = (int32_t)tmp * MAX22530_VREF / 4096 * (4.7 + 1500) * 10 / 4.7 / 1000;
     }

@@ -17,12 +17,12 @@
   ******************************************************************************
   */
 #include "usbd_cdc_if.h"
+#include "modbus.h"
 #include <string.h>
 
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "usart.h"
-#include "modbus.h"
 
 /* USER CODE BEGIN 0 */
 
