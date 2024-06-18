@@ -63,7 +63,7 @@ HAL_StatusTypeDef ina219_read_reg(uint8_t addr, uint8_t reg, int16_t *data)
   HAL_StatusTypeDef ret = HAL_OK;
   uint8_t buf[2];
 
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+  comm_session(true);
 
   if (HAL_I2C_Mem_Read(&hi2c1, addr << 1, reg, I2C_MEMADD_SIZE_8BIT, buf, 2, I2C_TIMEOUT) != HAL_OK)
   {
@@ -75,7 +75,7 @@ HAL_StatusTypeDef ina219_read_reg(uint8_t addr, uint8_t reg, int16_t *data)
     *data |= buf[1];
   }
 
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+  comm_session(false);
 
   return ret;
 }

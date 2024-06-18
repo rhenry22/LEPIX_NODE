@@ -177,8 +177,8 @@ struct _solax_data solax_data = {
 
     /* BMS_Limits */
     .msg_1872 = {
-      .slave_voltage_max = ABSOLUTE_MAX_VOLTAGE / 100,
-      .slave_voltage_min = ABSOLUTE_MIN_VOLTAGE / 100
+      .slave_voltage_max = ABSOLUTE_MAX_VOLTAGE * 10,
+      .slave_voltage_min = ABSOLUTE_MIN_VOLTAGE * 10
     },
 
     /* BMS_CellData */
@@ -227,7 +227,7 @@ struct _solax_data solax_data = {
 
     /* BMS_PackData */
     .msg_1873 = {
-      .voltage = 3800,
+      .voltage = 0,
       .current = 0,
       .soc = 25,
       .energy = BATTERY_WH_MAX / 10 / 2
@@ -251,6 +251,13 @@ static uint16_t max_discharge_current = 0;          /* Max DC discharge current 
 static bool contactor_close = false;                /* Has the inverter requested contactor close? */
 
 static char last_error[ERROR_LEN+1] = {0};          /* Last error string */
+
+static void solax_open_contactors(void)
+{
+  HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);
+  solax_data.bms.msg_1875.contactor = 0;
+}
 
 static HAL_StatusTypeDef solax_send_message(uint32_t id, uint8_t *data, uint8_t len)
 {
@@ -329,14 +336,18 @@ static HAL_StatusTypeDef solax_send_standard_response(void)
   return ret;
 }
 
-static void solax_update_values(void)
+static HAL_StatusTypeDef solax_update_values(void)
 {
-  int32_t voltage; /* V x10 */
-  int32_t current; /* A x10 */
+  HAL_StatusTypeDef ret = HAL_OK;
+
+  int32_t voltage;  /* Battery Voltage (x10 V) */
+  int32_t current;  /* Battery Current (x10 A) */
 
   /* Update Measured Values */
-  sensor_get_value(SENSOR_INV_VOLTAGE, &voltage);
-  sensor_get_value(SENSOR_BATT_CURRENT, &current);
+  if (ret == HAL_OK)
+    ret =  sensor_get_value(SENSOR_BATT_CURRENT, &current);
+  if (ret == HAL_OK)
+    ret = sensor_get_value(SENSOR_INV_VOLTAGE, &voltage);
 
   /* BMS_PackData */
   solax_data.bms.msg_1873.voltage = voltage;
@@ -391,12 +402,23 @@ static void solax_update_values(void)
 
   if (solax_data.bms.msg_1873.soc <= SOLAX_MINIMUM_SOC)
     solax_data.bms.msg_1872.discharge_max = 0;
+
+  return ret;
 }
 
 static HAL_StatusTypeDef solax_update_state(void)
 {
   HAL_StatusTypeDef ret = HAL_OK;
   SOLAX_STATE s = state;
+
+  int32_t batt_voltage;  /* Battery Voltage (x10 V) */
+  int32_t inv_voltage;   /* Inverter Voltage (x10 V) */
+
+  /* Update Measured Values */
+  if (ret == HAL_OK)
+    ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
+  if (ret == HAL_OK)
+    ret = sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
 
   /* Possible error bit */
   if (solax_data.inverter.msg_1871.data[MSG_1871_STATUS] != 0x0001)
@@ -405,19 +427,9 @@ static HAL_StatusTypeDef solax_update_state(void)
     snprintf(last_error, ERROR_LEN,
              "Unhandled Inverter Status: %d",
              solax_data.inverter.msg_1871.data[MSG_1871_STATUS]);
+    solax_open_contactors();
     contactor_close = false;
     ret = HAL_ERROR;
-  }
-
-  /* Make sure we open the contactors if requested / errored */
-  if (!contactor_close)
-  {
-    HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);
-    solax_data.bms.msg_1875.contactor = 0;
-
-    if (state < SOLAX_FAULT)
-      state = SOLAX_BATTERY_ANNOUNCE;
   }
 
   if (ret == HAL_OK)
@@ -426,10 +438,7 @@ static HAL_StatusTypeDef solax_update_state(void)
       case SOLAX_BATTERY_ANNOUNCE:
         /* BMS Announce */
         solax_send_message(0x100A001, (uint8_t*)&solax_data.bms.msg_100A001, 0);
-
-        HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);
-        solax_data.bms.msg_1875.contactor = 0;
+        solax_open_contactors();
 
         if (contactor_close)
         {
@@ -439,10 +448,11 @@ static HAL_StatusTypeDef solax_update_state(void)
       break;
 
       case SOLAX_REQUEST_CONTACTOR_CLOSE:
-        /* Stay in this state until ChaDeMo starts up */
-        if (chademo_get_state() == CHADEMO_STATE_ON)
+        if (contactor_close)
         {
-          if (contactor_close)
+          /* Stay in this state until ChaDeMo starts up */
+          if ((chademo_get_state() == CHADEMO_STATE_ON) && 
+              (batt_voltage / 10 > ABSOLUTE_MIN_VOLTAGE))
           {
             /* Respond that battery is connecting */
             solax_send_message(0x1801, (uint8_t*)&solax_data.bms.msg_1801, 8);
@@ -453,20 +463,18 @@ static HAL_StatusTypeDef solax_update_state(void)
             state = SOLAX_CONTACTOR_PRECHARGE;
           }
         }
+        else
+        {
+          state = SOLAX_BATTERY_ANNOUNCE;
+        }
       break;
 
       case SOLAX_CONTACTOR_PRECHARGE:
       {
-        int32_t batt_voltage;
-        int32_t inv_voltage;
-
-        sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
-        sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
-
         /* Check that we're outputting a sensible voltage */
-
-        if (batt_voltage == inv_voltage)
+        if (batt_voltage / 50 == inv_voltage / 50)
         {
+          /* Tell the inverter we're on */
           solax_data.bms.msg_1875.contactor = 2;
 
           /* Enable Main contactor */
@@ -484,14 +492,27 @@ static HAL_StatusTypeDef solax_update_state(void)
             state = SOLAX_CONTACTOR_CLOSED;
           }
         }
+        else
+        {
+          solax_open_contactors();
+          contactor_close = false;
+          snprintf(last_error, ERROR_LEN, "Precharge failed to stabilise within 1s (%d, %d).", inv_voltage, batt_voltage);
+          state = SOLAX_FAULT;
+        }
       }
       break;
 
       case SOLAX_CONTACTOR_CLOSED:
       {
-        if (chademo_get_state() >= CHADEMO_STATE_STOP)
+        if (chademo_get_state() > CHADEMO_STATE_ON)
         {
-          snprintf(last_error, ERROR_LEN, "Vehicle stopping");
+          /* Warn the inverter that we're shutting down */
+          solax_data.bms.msg_1875.contactor = 0;
+        }
+
+        if (chademo_get_state() == CHADEMO_STATE_OFF)
+        {
+          snprintf(last_error, ERROR_LEN, "ChaDeMo Stopped");
           state = SOLAX_BATTERY_ANNOUNCE;
         }
 
@@ -506,6 +527,7 @@ static HAL_StatusTypeDef solax_update_state(void)
 
       case SOLAX_FAULT:
       case SOLAX_UPDATING_FW:
+        solax_open_contactors();
         contactor_close = false;
       break;
     }

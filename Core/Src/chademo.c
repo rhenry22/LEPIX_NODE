@@ -850,10 +850,10 @@ void chademo_process(void)
       solax_set_max_dc_chg_current(can_data.vehicle.msgid_102.charge_current_requested * 10);
       solax_set_max_dc_dis_current(can_data.charger.msgid_208.discharge_current_max * 10);
 
-      if (!chg_perm || !cp_ready)
+      if (!chg_perm)// || !cp_ready)
       {
         snprintf(last_error, ERROR_LEN,
-                 "Charge Permission Revoked");
+                 "Charge Permission Revoked (%d, %d, %d)", chg_perm, k_perm, cp_ready);
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 

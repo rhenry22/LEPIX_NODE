@@ -61,7 +61,7 @@
 
 #define DEBUG_CONTROLLER
 
-#define JSON_UPDATE_TIME    (1000)
+#define JSON_UPDATE_TIME    (30000)
 #define MB_SLAVE_METER      (1)
 
 #define MB_SLAVE_INVERTER   (247)
@@ -114,6 +114,8 @@ static uint32_t loop_time_max = 0;    /* Maximum loop time observed */
 static uint8_t cmd_buf[APP_RX_DATA_SIZE];  /* Buffer for stdin commands */
 static uint16_t cmd_buf_len = 0;      /* Length of stdin buffer */
 
+static uint8_t comm_count = 0;        /* Number of active comm sessions (I2C / SPI / UART) */
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -125,6 +127,23 @@ void JumpToBootloader(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+void comm_session(bool start_stop)
+{
+  if (start_stop)
+  {
+    if (comm_count == 0)
+      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+    comm_count++;
+  }
+  else
+  {
+    if (comm_count > 0)
+      comm_count--;
+
+    if (comm_count == 0)
+      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+  }
+}
 /**
   * @brief  Forcibly shut everything down
   * @retval None
@@ -634,7 +653,7 @@ int main(void)
     if (power_offset == 0 &&
         chademo_get_state() == CHADEMO_STATE_ON)
     {
-      chademo_stop();
+      //chademo_stop();
     }
 
     /* Check startup */

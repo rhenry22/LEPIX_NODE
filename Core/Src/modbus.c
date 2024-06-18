@@ -147,7 +147,7 @@ void modbus_tx_complete(void)
 {
   /* Put Transceiver back into RX mode */
   HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+  comm_session(false);
 
   if (mb_tx_cb)
     mb_tx_cb();
@@ -193,7 +193,7 @@ void modbus_tx_end(void)
   modbus_tx_add_byte((crc >> 8) & 0xff);
 
   HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+  comm_session(true);
   HAL_UART_Transmit_DMA(&huart2, &tx_buffer[0], tx_index);
 }
 
