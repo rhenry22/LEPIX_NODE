@@ -96,7 +96,7 @@ bool ina219_init(uint8_t addr, uint16_t cal)
   halRet = ina219_read_reg(addr, 0x00, &data);
   if (halRet == HAL_OK)
   {
-    // Configure PGA to +/- 40mV and 16V bus voltage range
+    /* Configure PGA to +/- 40mV and 16V bus voltage range */
     data &= ~(CONFIG_BRNG | CONFIG_PG1 | CONFIG_PG0);
     halRet = ina219_write_reg(addr, 0x00, data);
   }

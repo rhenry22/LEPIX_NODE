@@ -14,14 +14,14 @@
 
 typedef enum
 {
-  SENSOR_ACC_CURRENT,       // Current from 12V supply (uA)
-  SENSOR_HV_TEST_CURRENT,   // Current into HV DCDC Test module (uA)
+  SENSOR_ACC_CURRENT,       /* Current from 12V supply (uA) */
+  SENSOR_HV_TEST_CURRENT,   /* Current into HV DCDC Test module (uA) */
 
-  SENSOR_BATT_VOLTAGE,      // HV Battery Voltage (V x10)
-  SENSOR_INV_VOLTAGE,       // HV Inverter Voltage (V x10)
-  SENSOR_BATT_CURRENT,      // HV Battery Current (A x10)
+  SENSOR_BATT_VOLTAGE,      /* HV Battery Voltage (V x10) */
+  SENSOR_INV_VOLTAGE,       /* HV Inverter Voltage (V x10) */
+  SENSOR_BATT_CURRENT,      /* HV Battery Current (A x10) */
 
-  SENSOR_EVSE_PP            // EVSE PP Voltage (mV)
+  SENSOR_EVSE_PP            /* EVSE PP Voltage (mV) */
 } SENSOR_SOURCE;
 
 bool sensor_init(void);

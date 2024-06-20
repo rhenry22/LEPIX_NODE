@@ -37,13 +37,13 @@
 #include "solax.h"
 #include "sensor.h"
 
-//#define DEBUG_CHADEMO
+/* #define DEBUG_CHADEMO */
 
 /* 
  * Leakage is monitored by the Inverter and we will cause problems if done in
  * multiple places 
  */
-//#define LEAK_TEST
+/* #define LEAK_TEST */
 
 #define MESSAGE_INTERVAL      (100)
 

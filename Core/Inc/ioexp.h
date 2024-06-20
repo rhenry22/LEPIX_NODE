@@ -13,4 +13,4 @@ bool ioexp_set_direction(uint8_t addr, uint16_t dir);
 bool ioexp_set_output(uint8_t addr, uint16_t out);
 bool ioexp_get_input(uint8_t addr, uint16_t *in);
 
-#endif // _IOEXP_H_
+#endif /* _IOEXP_H_ */

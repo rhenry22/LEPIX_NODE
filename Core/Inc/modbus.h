@@ -30,4 +30,4 @@ void modbus_tx_complete(void);
 HAL_StatusTypeDef modbus_read(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t *data);
 HAL_StatusTypeDef modbus_write(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t data);
 
-#endif // _MODBUS_H_
+#endif /* _MODBUS_H_ */

@@ -90,7 +90,7 @@ void evse_tim_CaptureCallback(TIM_HandleTypeDef *htim)
         cp_active = 0;
         cp_first_rise = 0;
 
-        // Only apply if we have a valid length PWM cycle (1kHz)
+        /* Only apply if we have a valid length PWM cycle (1kHz) */
         if (time > 900 && time < 1100)
         {
           if (cp_pwm >= 10)
@@ -133,7 +133,7 @@ void evse_tim_CaptureCallback(TIM_HandleTypeDef *htim)
   */
 bool evse_init(evse_current_changed_cb *cb)
 {
-  // Start the CP PWM timer
+  /* Start the CP PWM timer */
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
 

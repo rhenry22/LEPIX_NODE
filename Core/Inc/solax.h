@@ -14,18 +14,18 @@
 
 enum
 {
-  FOX_BATT_V = 11006,     // (V x10)
-  FOX_BATT_I = 11007,     // (A x10)
-  FOX_BATT_P = 11008,     // (W)
+  FOX_BATT_V = 11006,     /* (V x10) */
+  FOX_BATT_I = 11007,     /* (A x10) */
+  FOX_BATT_P = 11008,     /* (W) */
 
-  FOX_GRID_V = 11009,     // Grid Voltage (V x10)
-  FOX_GRID_I = 11010,     // Grid Current (A x10)
-  FOX_GRID_P1 = 11011,    // Grid Phase R Power (W)
-  FOX_GRID_P2 = 11012,    // Grid Phase Q Power (W)
-  FOX_GRID_P3 = 11013,    // Grid Phase S Power (W)
+  FOX_GRID_V = 11009,     /* Grid Voltage (V x10) */
+  FOX_GRID_I = 11010,     /* Grid Current (A x10) */
+  FOX_GRID_P1 = 11011,    /* Grid Phase R Power (W) */
+  FOX_GRID_P2 = 11012,    /* Grid Phase Q Power (W) */
+  FOX_GRID_P3 = 11013,    /* Grid Phase S Power (W) */
 
-  FOX_INV_STATE = 11056,  // Inverter Status
-  FOX_BATT_STATE = 11057, // Battery Status
+  FOX_INV_STATE = 11056,  /* Inverter Status */
+  FOX_BATT_STATE = 11057, /* Battery Status */
 
   FOX_FAULT_1 = 11061,
   FOX_FAULT_2 = 11062,

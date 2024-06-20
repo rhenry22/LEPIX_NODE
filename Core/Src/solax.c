@@ -199,7 +199,7 @@ struct _solax_data solax_data = {
     /* BMS_Status */
     .msg_1875 = {
       .pack_temp = 180,
-      .num_batts = 0,//SOLAX_N_PACKS,
+      .num_batts = 0, //SOLAX_N_PACKS,
       .contactor = 0
     },
 
@@ -389,7 +389,7 @@ static HAL_StatusTypeDef solax_update_values(void)
 
   // ToDo: Add temperature monitoring
 #if 0
-  //BMS_Status
+  /* BMS_Status */
   SOLAX_1875.data.u8[0] = (uint8_t)temperature_average;
   SOLAX_1875.data.u8[1] = (temperature_average >> 8);
 #endif

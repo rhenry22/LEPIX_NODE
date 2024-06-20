@@ -377,7 +377,7 @@ void emergency_stop(void)
   volatile uint32_t i;
 
   /* Stop Everything in the system */
-  //__disable_irq();
+  __disable_irq();
 
   /* Turn Off EVSE */
   HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);

@@ -164,17 +164,17 @@ void modbus_process(uint8_t *data, uint16_t len)
 {
   if (init)
   {
-    // Rely on the timeout to signal the packet end
-    // Check the CRC
+    /* Rely on the timeout to signal the packet end */
+    /* Check the CRC */
     uint16_t crc = modbus_calculate_crc(&data[0], len);
     uint8_t addr = data[0];
 
-    // Remove CRC from len
+    /* Remove CRC from len */
     len -= 2;
 
     if (crc == 0 && len >= 3)
     {
-      // Good CRC, let our app know
+      /* Good CRC, let our app know */
       if (addr == read_addr)
       {
         if (read_ptr)
@@ -189,40 +189,11 @@ HAL_StatusTypeDef modbus_read(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t *
 {
   HAL_StatusTypeDef ret = HAL_ERROR;
 
-  if (init)
+  if (read_ptr == NULL)
   {
-    ret = HAL_TIMEOUT;
-
-    // Get a lock on the ModBus
-    if (xSemaphoreTake(mbMutex, COMM_TIMEOUT))
-    {
-      tx_index = 0;
-      memset(tx_buffer, 0, BUFFER_LEN);
-
-      read_reg = reg;
-      read_addr = addr;
-      read_ptr = data;
-
-      // Send our device address, function and data length
-      modbus_tx_add_byte(addr);
-      modbus_tx_add_byte(fn);
-      modbus_tx_uint16(reg);
-      modbus_tx_uint16(1);
-      modbus_tx_end();
-
-      // Wait for TX to complete
-      if (xSemaphoreTake(txMutex, COMM_TIMEOUT))
-      {
-        // Wait for RX message
-        if (xSemaphoreTake(rxMutex, COMM_TIMEOUT))
-        {
-          ret = HAL_OK;
-        }
-      }
-
-      // Release the ModBus
-      xSemaphoreGive(mbMutex);
-    }
+    read_ptr = data;
+    ret = modbus_write(addr, fn, reg, 1);
+    read_ptr = NULL;
   }
 
   return ret;
@@ -236,7 +207,7 @@ HAL_StatusTypeDef modbus_write(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t 
   {
     ret = HAL_TIMEOUT;
 
-    // Get a lock on the ModBus
+    /* Get a lock on the ModBus */
     if (xSemaphoreTake(mbMutex, COMM_TIMEOUT))
     {
       tx_index = 0;
@@ -244,26 +215,25 @@ HAL_StatusTypeDef modbus_write(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t 
 
       read_reg = reg;
       read_addr = addr;
-      read_ptr = NULL;
 
-      // Send our device address, function and data length
+      /* Send our device address, function and data length */
       modbus_tx_add_byte(addr);
       modbus_tx_add_byte(fn);
       modbus_tx_uint16(reg);
       modbus_tx_uint16(data);
       modbus_tx_end();
 
-      // Wait for TX to complete
+      /* Wait for TX to complete */
       if (xSemaphoreTake(txMutex, COMM_TIMEOUT))
       {
-        // Wait for RX message
+        /* Wait for RX message */
         if (xSemaphoreTake(rxMutex, COMM_TIMEOUT))
         {
           ret = HAL_OK;
         }
       }
 
-      // Release the ModBus
+      /* Release the ModBus */
       xSemaphoreGive(mbMutex);
     }
   }

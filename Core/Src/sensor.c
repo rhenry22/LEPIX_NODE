@@ -22,12 +22,12 @@
 #include "adc.h"
 
 #define INA219_ACC_ADDR         (0x41)
-#define INA219_ACC_SHUNT        (0.005)  // 5mR Shunt resistor
-#define INA219_ACC_CURRENT_LSB  (0.001)  // 1mA per LSB
+#define INA219_ACC_SHUNT        (0.005)     /* 5mR Shunt resistor */
+#define INA219_ACC_CURRENT_LSB  (0.001)     /* 1mA per LSB */
 
-#define INA219_HV_ADDR          (0x44)  // Main board: 0x40, Daughter board: 0x44
-#define INA219_HV_SHUNT         (0.1)  // 100mR Shunt resistor
-#define INA219_HV_CURRENT_LSB   (0.000050)  // 50uA per LSB
+#define INA219_HV_ADDR          (0x44)      /* Main board: 0x40, Daughter board: 0x44 */
+#define INA219_HV_SHUNT         (0.1)       /* 100mR Shunt resistor */
+#define INA219_HV_CURRENT_LSB   (0.000050)  /* 50uA per LSB */
 
 static uint16_t ibatt_zero = 2048;
 
@@ -101,7 +101,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
 
   switch (src)
   {
-    case SENSOR_BATT_VOLTAGE: // V x10
+    case SENSOR_BATT_VOLTAGE: /* V x10 */
     {
       uint16_t tmp;
       ret = MAX22530_read_register(MAX22530_ADC1, &tmp);
@@ -110,7 +110,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     }
     break;
 
-    case SENSOR_INV_VOLTAGE: // V x10
+    case SENSOR_INV_VOLTAGE: /* V x10 */
     {
       uint16_t tmp;
       ret = MAX22530_read_register(MAX22530_ADC2, &tmp);
@@ -119,7 +119,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     }
     break;
 
-    case SENSOR_ACC_CURRENT: // uA
+    case SENSOR_ACC_CURRENT: /* uA */
     {
       int16_t reg;
       ret = ina219_read_reg(INA219_ACC_ADDR, 0x04, &reg);
@@ -128,7 +128,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     }
     break;
 
-    case SENSOR_HV_TEST_CURRENT: // uA
+    case SENSOR_HV_TEST_CURRENT: /* uA */
     {
       int16_t reg;
       ret = ina219_read_reg(INA219_HV_ADDR, 0x04, &reg);
@@ -137,7 +137,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     }
     break;
 
-    case SENSOR_BATT_CURRENT: // A x10
+    case SENSOR_BATT_CURRENT: /* A x10 */
     {
       uint16_t tmp;
       ret = MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &tmp);
@@ -146,7 +146,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     }
     break;
 
-    case SENSOR_EVSE_PP: // mV
+    case SENSOR_EVSE_PP: /* mV */
     {
       uint16_t tmp;
       ret = MX_ADC1_Get_Sample(ADC_EVSE_PP, &tmp);

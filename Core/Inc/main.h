@@ -47,7 +47,7 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
-//#define ESP_FLASH_MODE
+/* #define ESP_FLASH_MODE */
 
 /* USER CODE END EM */
 

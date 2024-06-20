@@ -37,4 +37,4 @@ bool MAX22530_Init(void);
 HAL_StatusTypeDef MAX22530_read_register(uint8_t reg, uint16_t *data);
 HAL_StatusTypeDef MAX22530_write_register(uint8_t reg, uint16_t data);
 
-#endif // _MAX22530_H_
+#endif /* _MAX22530_H_ */

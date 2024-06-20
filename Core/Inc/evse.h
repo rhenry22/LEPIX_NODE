@@ -6,10 +6,10 @@
 
 typedef enum
 {
-  EVSE_PP_NONE,     // Plug not inserted
-  EVSE_PP_PRESSED,  // Plug inserted, button pressed
-  EVSE_PP_INSERTED, // Plug inserted, not pressed
-  EVSE_PP_ERROR     // Invalid reading
+  EVSE_PP_NONE,     /* Plug not inserted */
+  EVSE_PP_PRESSED,  /* Plug inserted, button pressed */
+  EVSE_PP_INSERTED, /* Plug inserted, not pressed */
+  EVSE_PP_ERROR     /* Invalid reading */
 } EVSE_PP;
 
 

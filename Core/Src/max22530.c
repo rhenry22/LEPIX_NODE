@@ -83,7 +83,7 @@ bool MAX22530_Init(void)
   uint16_t val;
   HAL_StatusTypeDef s;
 
-  // Clear any CS glitches
+  /* Clear any CS glitches */
   HAL_GPIO_WritePin(SPI1_BATT_CS__GPIO_Port, SPI1_BATT_CS__Pin, GPIO_PIN_RESET);
   HAL_Delay(1);
   HAL_GPIO_WritePin(SPI1_BATT_CS__GPIO_Port, SPI1_BATT_CS__Pin, GPIO_PIN_SET);
