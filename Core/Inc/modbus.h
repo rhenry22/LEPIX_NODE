@@ -23,20 +23,11 @@ typedef enum
     MB_WRITE_HOLDING        = 0x06
 } MB_FUNC;
 
-typedef void (*modbus_m_rx_cb)(uint8_t addr, MB_FUNC type, uint16_t reg, uint8_t *data, uint16_t len);
-typedef void (*modbus_s_rx_cb)(uint8_t addr, MB_FUNC type, uint8_t *data, uint16_t len);
-typedef void (*modbus_tx_cb)(void);
-
-bool modbus_init(modbus_m_rx_cb m_rx_fn, modbus_s_rx_cb s_rx_fn, modbus_tx_cb tx_fn);
+bool modbus_init(void);
 void modbus_process(uint8_t *data, uint16_t len);
 void modbus_tx_complete(void);
 
-void modbus_tx_begin(uint8_t addr, uint8_t func, uint8_t len);
-void modbus_tx_uint8(uint8_t data);
-void modbus_tx_uint16(uint16_t data);
-void modbus_tx_float(float data);
-void modbus_tx_end(void);
-
-HAL_StatusTypeDef modbus_read(uint8_t addr, uint8_t fn, uint16_t reg);
+HAL_StatusTypeDef modbus_read(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t *data);
+HAL_StatusTypeDef modbus_write(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t data);
 
 #endif // _MODBUS_H_

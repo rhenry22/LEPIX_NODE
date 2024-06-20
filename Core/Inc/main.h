@@ -56,6 +56,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
+void JumpToBootloader(void);
 void stdio_parser(uint8_t *ptr, uint16_t len);
 void comm_session(bool start_stop);
 void emergency_stop(void);

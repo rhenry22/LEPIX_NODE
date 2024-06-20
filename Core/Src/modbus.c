@@ -9,23 +9,30 @@
  *
  *  @author Richard Taylor <richard@artaylor.co.uk>
  */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+#include "main.h"
+#include "cmsis_os.h"
+
 #include <string.h>
 #include <stdio.h>
 #include "usart.h"
 #include "modbus.h"
 
 #define BUFFER_LEN  (16)
+#define COMM_TIMEOUT  (100)
 
 static uint8_t tx_index = 0;
 static uint8_t tx_buffer[BUFFER_LEN];
 
-static modbus_m_rx_cb mb_m_rx_cb = NULL;
-static modbus_s_rx_cb mb_s_rx_cb = NULL;
-static modbus_tx_cb mb_tx_cb = NULL;
-
-static bool read_pending = false;
+static SemaphoreHandle_t mbMutex; /* Caller has use of ModBud */
+static SemaphoreHandle_t txMutex; /* Wait for TX Complete */
+static SemaphoreHandle_t rxMutex; /* Wait for RX */
 static uint16_t read_reg = 0;
 static uint8_t read_addr = 0;
+static uint16_t *read_ptr = 0;
+static bool init = false;
 
 static const uint16_t modbus_crc_table[] = {
 0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
@@ -63,17 +70,6 @@ static const uint16_t modbus_crc_table[] = {
 
 /**
   * @brief  Adds the byte to the tx buffer ready for CRC calculation
-  * @param  data Byte of data to append.
-  * @retval None
-  */
-static void modbus_tx_add_byte(uint8_t data)
-{
-  if (tx_index < BUFFER_LEN)
-    tx_buffer[tx_index++] = data;
-}
-
-/**
-  * @brief  Adds the byte to the tx buffer ready for CRC calculation
   * @param  data Buffer containing data
   * @param  len Length of data in bytes
   * @retval uint8_t resulting CRC
@@ -93,99 +89,23 @@ static uint16_t modbus_calculate_crc(uint8_t *data, uint16_t len)
 }
 
 /**
-  * @brief  Initialise Modbus module
-  * @param  rx_cb Read Process Callback
-  * @param  tx_cb Write complete callback
-  * @retval bool true: Success, false: Failure
-  */
-bool modbus_init(modbus_m_rx_cb m_rx_cb, modbus_s_rx_cb s_rx_cb, modbus_tx_cb tx_cb)
-{
-  mb_m_rx_cb = m_rx_cb;
-  mb_s_rx_cb = s_rx_cb;
-  mb_tx_cb = tx_cb;
-
-  tx_index = 0;
-  memset(tx_buffer, 0, BUFFER_LEN);
-
-  HAL_UART_Setup_UART2();
-
-  return true;
-}
-
-/**
-  * @brief  Non ISR processing function.
+  * @brief  Adds the byte to the tx buffer ready for CRC calculation
+  * @param  data Byte of data to append.
   * @retval None
   */
-void modbus_process(uint8_t *data, uint16_t len)
+static void modbus_tx_add_byte(uint8_t data)
 {
-  // Rely on the timeout to signal the packet end
-  // Check the CRC
-  uint16_t crc = modbus_calculate_crc(&data[0], len);
-  uint8_t addr = data[0];
-
-  // Remove CRC from len
-  len -= 2;
-
-  if (crc == 0 && len >= 3)
-  {
-    // Good CRC, let our app know
-    if (read_pending && addr == read_addr)
-    {
-      read_pending = false;
-      if (mb_m_rx_cb)
-        mb_m_rx_cb(addr, data[1], read_reg, &data[2], len - 2);
-    }
-    else
-    {
-      if (mb_s_rx_cb)
-        mb_s_rx_cb(addr, data[1], &data[2], len - 2);
-    }
-  }
+  if (tx_index < BUFFER_LEN)
+    tx_buffer[tx_index++] = data;
 }
 
-void modbus_tx_complete(void)
+static void modbus_tx_uint16(uint16_t data)
 {
-  /* Put Transceiver back into RX mode */
-  HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
-  comm_session(false);
-
-  if (mb_tx_cb)
-    mb_tx_cb();
-}
-
-void modbus_tx_begin(uint8_t addr, uint8_t func, uint8_t len)
-{
-  tx_index = 0;
-  memset(tx_buffer, 0, BUFFER_LEN);
-
-  // Send our device address, function and data length
-  modbus_tx_add_byte(addr);
-  modbus_tx_add_byte(func);
-  modbus_tx_add_byte(len);
-}
-
-void modbus_tx_uint8(uint8_t data)
-{
+  modbus_tx_add_byte(data >> 8);
   modbus_tx_add_byte(data);
 }
 
-void modbus_tx_uint16(uint16_t data)
-{
-  uint8_t *ptr = (uint8_t*)&data;
-  modbus_tx_add_byte(ptr[1]);
-  modbus_tx_add_byte(ptr[0]);
-}
-
-void modbus_tx_float(float data)
-{
-  uint8_t *ptr = (uint8_t*)&data;
-  modbus_tx_add_byte(ptr[3]);
-  modbus_tx_add_byte(ptr[2]);
-  modbus_tx_add_byte(ptr[1]);
-  modbus_tx_add_byte(ptr[0]);
-}
-
-void modbus_tx_end(void)
+static void modbus_tx_end(void)
 {
   uint16_t crc = modbus_calculate_crc(&tx_buffer[0], tx_index);
 
@@ -197,25 +117,156 @@ void modbus_tx_end(void)
   HAL_UART_Transmit_DMA(&huart2, &tx_buffer[0], tx_index);
 }
 
-
-HAL_StatusTypeDef modbus_read(uint8_t addr, uint8_t fn, uint16_t reg)
+void modbus_tx_complete(void)
 {
-  if (read_pending)
-    return HAL_BUSY;
+  /* Put Transceiver back into RX mode */
+  HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
+  comm_session(false);
 
+  if (init)
+  {
+    BaseType_t xHigherPriorityTaskWoken;
+    xSemaphoreGiveFromISR(txMutex, &xHigherPriorityTaskWoken);
+  }
+}
+
+/**
+  * @brief  Initialise Modbus module
+  * @retval bool true: Success, false: Failure
+  */
+bool modbus_init(void)
+{
   tx_index = 0;
   memset(tx_buffer, 0, BUFFER_LEN);
 
-  read_reg = reg;
-  read_addr = addr;
-  read_pending = true;
+  if (HAL_OK != HAL_UART_Setup_UART2())
+    return false;
 
-  // Send our device address, function and data length
-  modbus_tx_add_byte(addr);
-  modbus_tx_add_byte(fn);
-  modbus_tx_uint16(reg);
-  modbus_tx_uint16(1);
-  modbus_tx_end();
+  mbMutex = xSemaphoreCreateBinary();
+  txMutex = xSemaphoreCreateBinary();
+  rxMutex = xSemaphoreCreateBinary();
 
-  return HAL_OK;
+  if (mbMutex)
+  {
+    xSemaphoreGive(mbMutex);
+  }
+
+  init = (mbMutex != NULL && txMutex != NULL && rxMutex != NULL);
+
+  return init;
+}
+
+/**
+  * @brief  Non ISR processing function.
+  * @retval None
+  */
+void modbus_process(uint8_t *data, uint16_t len)
+{
+  if (init)
+  {
+    // Rely on the timeout to signal the packet end
+    // Check the CRC
+    uint16_t crc = modbus_calculate_crc(&data[0], len);
+    uint8_t addr = data[0];
+
+    // Remove CRC from len
+    len -= 2;
+
+    if (crc == 0 && len >= 3)
+    {
+      // Good CRC, let our app know
+      if (addr == read_addr)
+      {
+        if (read_ptr)
+          *read_ptr = data[3] << 8 | data[4];
+        xSemaphoreGive(rxMutex);
+      }
+    }
+  }
+}
+
+HAL_StatusTypeDef modbus_read(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t *data)
+{
+  HAL_StatusTypeDef ret = HAL_ERROR;
+
+  if (init)
+  {
+    ret = HAL_TIMEOUT;
+
+    // Get a lock on the ModBus
+    if (xSemaphoreTake(mbMutex, COMM_TIMEOUT))
+    {
+      tx_index = 0;
+      memset(tx_buffer, 0, BUFFER_LEN);
+
+      read_reg = reg;
+      read_addr = addr;
+      read_ptr = data;
+
+      // Send our device address, function and data length
+      modbus_tx_add_byte(addr);
+      modbus_tx_add_byte(fn);
+      modbus_tx_uint16(reg);
+      modbus_tx_uint16(1);
+      modbus_tx_end();
+
+      // Wait for TX to complete
+      if (xSemaphoreTake(txMutex, COMM_TIMEOUT))
+      {
+        // Wait for RX message
+        if (xSemaphoreTake(rxMutex, COMM_TIMEOUT))
+        {
+          ret = HAL_OK;
+        }
+      }
+
+      // Release the ModBus
+      xSemaphoreGive(mbMutex);
+    }
+  }
+
+  return ret;
+}
+
+HAL_StatusTypeDef modbus_write(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t data)
+{
+  HAL_StatusTypeDef ret = HAL_ERROR;
+
+  if (init)
+  {
+    ret = HAL_TIMEOUT;
+
+    // Get a lock on the ModBus
+    if (xSemaphoreTake(mbMutex, COMM_TIMEOUT))
+    {
+      tx_index = 0;
+      memset(tx_buffer, 0, BUFFER_LEN);
+
+      read_reg = reg;
+      read_addr = addr;
+      read_ptr = NULL;
+
+      // Send our device address, function and data length
+      modbus_tx_add_byte(addr);
+      modbus_tx_add_byte(fn);
+      modbus_tx_uint16(reg);
+      modbus_tx_uint16(data);
+      modbus_tx_end();
+
+      // Wait for TX to complete
+      if (xSemaphoreTake(txMutex, COMM_TIMEOUT))
+      {
+        // Wait for RX message
+        if (xSemaphoreTake(rxMutex, COMM_TIMEOUT))
+        {
+          ret = HAL_OK;
+        }
+      }
+
+      // Release the ModBus
+      xSemaphoreGive(mbMutex);
+    }
+  }
+
+  return ret;
 }

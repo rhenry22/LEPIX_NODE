@@ -16,10 +16,14 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "main.h"
+#include "cmsis_os.h"
+
 #include "tim.h"
 
 #include "sensor.h"
-#include "main.h"
 #include "evse.h"
 
 #define PP_UNPLUGGED_MIN      (2800)
@@ -41,12 +45,22 @@ static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
 
 static evse_current_changed_cb *evse_cb = NULL;
 
+static osThreadId_t taskHandle;
+static const osThreadAttr_t taskAttributes = {
+  .name = "evseTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+
+static void evseTask(void *argument);
+
 /**
   * @brief  Period elapsed callback in non-blocking mode
   * @param  htim TIM handle
   * @retval None
   */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void evse_tim_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim == &htim2)
   {
@@ -61,7 +75,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   * @param  htim TIM IC handle
   * @retval None
   */
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+void evse_tim_CaptureCallback(TIM_HandleTypeDef *htim)
 {
   if (htim == &htim2)
   {
@@ -125,7 +139,9 @@ bool evse_init(evse_current_changed_cb *cb)
 
   evse_cb = cb;
 
-  return true;
+  taskHandle = osThreadNew(evseTask, NULL, &taskAttributes);
+
+  return (taskHandle != NULL);
 }
 
 /**
@@ -163,6 +179,20 @@ EVSE_PP evse_get_pp(void)
   }
 
   return pp;
+}
+
+/**
+  * @brief  Thread monitoring the EVSE state.
+  * @param  argument: Not used
+  * @retval None
+  */
+static void evseTask(void *argument)
+{
+  for (;;)
+  {
+    evse_process();
+    osDelay(100);
+  }
 }
 
 /**

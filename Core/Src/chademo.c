@@ -21,6 +21,11 @@
  *  @author Richard Taylor <richard@artaylor.co.uk>
  */
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "main.h"
+#include "cmsis_os.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -231,6 +236,15 @@ static uint8_t chademo_118[8] = {0x10, 0x64, 0x00, 0xB0, 0x00, 0x1E, 0x00, 0x8F}
 /* For V2X */
 static uint8_t chademo_208[8] = {0xFF, 0xF4, 0x01, 0xF0, 0x00, 0x00, 0xFA, 0x00};
 static uint8_t chademo_209[8] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+static osThreadId_t taskHandle;
+static const osThreadAttr_t taskAttributes = {
+  .name = "chademoTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+void chademoTask(void *argument);
 
 static HAL_StatusTypeDef chademo_send_message(uint32_t id, uint8_t* data)
 {
@@ -670,7 +684,9 @@ bool chademo_init(void)
 
   can_data.vehicle.msgid_102.status = STATUS_CONTACTOR_OPEN;
 
-  return true;
+  taskHandle = osThreadNew(chademoTask, NULL, &taskAttributes);
+
+  return (taskHandle != NULL);
 }
 
 /**
@@ -1222,4 +1238,18 @@ void chademo_json_update(void)
     printf("}");
 #endif
   printf("}");
+}
+
+/**
+  * @brief  Function implementing the chademo thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+void chademoTask(void *argument)
+{
+  for (;;)
+  {
+    chademo_process();
+    osDelay(10);
+  }
 }

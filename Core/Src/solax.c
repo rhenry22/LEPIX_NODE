@@ -13,6 +13,12 @@
  *  @bug No known bugs.
  */
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "main.h"
+#include "cmsis_os.h"
+#include "semphr.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -22,6 +28,7 @@
 #include "sensor.h"
 #include "chademo.h"
 #include "solax.h"
+#include "modbus.h"
 
 #define DEBUG_SOLAX
 
@@ -250,7 +257,30 @@ static uint16_t max_charge_current = 0;             /* Max DC charge current (A 
 static uint16_t max_discharge_current = 0;          /* Max DC discharge current (A x10) */
 static bool contactor_close = false;                /* Has the inverter requested contactor close? */
 
+static int16_t grid_power = 0;                      /* Reported Grid import / export */
+static int16_t inv_state = 0;                       /* Inverter State */
+static int16_t power_offset = 0;                    /* Offset from actual power (i.e. charge / discharge) */
+
 static char last_error[ERROR_LEN+1] = {0};          /* Last error string */
+
+static osThreadId_t taskHandle;
+static const osThreadAttr_t taskAttributes = {
+  .name = "solaxTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+static SemaphoreHandle_t msgMutex;
+
+static osThreadId_t taskHandle2;
+static const osThreadAttr_t taskAttributes2 = {
+  .name = "solaxModbusTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+static SemaphoreHandle_t pwrMutex;
+
+void solaxTask(void *argument);
+void solaxModbusTask(void *argument);
 
 static void solax_open_contactors(void)
 {
@@ -454,9 +484,6 @@ static HAL_StatusTypeDef solax_update_state(void)
           if ((chademo_get_state() == CHADEMO_STATE_ON) && 
               (batt_voltage / 10 > ABSOLUTE_MIN_VOLTAGE))
           {
-            /* Respond that battery is connecting */
-            solax_send_message(0x1801, (uint8_t*)&solax_data.bms.msg_1801, 8);
-
             /* Enable Precharge contactor */
             HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_SET);
 
@@ -496,7 +523,7 @@ static HAL_StatusTypeDef solax_update_state(void)
         {
           solax_open_contactors();
           contactor_close = false;
-          snprintf(last_error, ERROR_LEN, "Precharge failed to stabilise within 1s (%d, %d).", inv_voltage, batt_voltage);
+          snprintf(last_error, ERROR_LEN, "Precharge failed to stabilise within 1s (%ld, %ld).", inv_voltage, batt_voltage);
           state = SOLAX_FAULT;
         }
       }
@@ -510,7 +537,7 @@ static HAL_StatusTypeDef solax_update_state(void)
           solax_data.bms.msg_1875.contactor = 0;
         }
 
-        if (chademo_get_state() == CHADEMO_STATE_OFF)
+        if (chademo_get_state() > CHADEMO_STATE_STOP)
         {
           snprintf(last_error, ERROR_LEN, "ChaDeMo Stopped");
           state = SOLAX_BATTERY_ANNOUNCE;
@@ -544,9 +571,12 @@ static void solax_process_frame(void)
   /* Process the frame */
   switch (solax_data.inverter.msg_1871.frame_id)
   {
-    case 0x01: /* Status update */
+    case 0x01: /* Request Status */
       /* These are the frames that count */
       last_update = HAL_GetTick();
+
+      /* Send CAN messages */
+      solax_send_standard_response();
     break;
 
     case 0x02: /* Command */
@@ -555,6 +585,9 @@ static void solax_process_frame(void)
         contactor_close = true;
       else
         contactor_close = false;
+
+      /* Respond that we're here and connecting */
+      solax_send_message(0x1801, (uint8_t*)&solax_data.bms.msg_1801, 8);
     break;
 
     case 0x03: /* Time Update (heartbeat) */
@@ -588,81 +621,164 @@ static void solax_process_frame(void)
 
 /**
   * @brief  Process CAN2 Solax data
-  * @param  None
+  * @param  argument: Not used
   * @retval None
   */
-void solax_process(void)
+void solaxTask(void *argument)
 {
   CAN_RxHeaderTypeDef RxHeader;
   uint8_t data[8];
   uint8_t msg_limit = 10;
 
-  while (HAL_CAN_GetRxFifoFillLevel(&hcan2, CAN_RX_FIFO1) > 0)
+  for (;;)
   {
-    /* Read the message */
-    if (HAL_OK == HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &RxHeader, data))
+    /* Wait for messages, or 1000ms timeout */
+    xSemaphoreTake(msgMutex, 1000);
+
+    while (HAL_CAN_GetRxFifoFillLevel(&hcan2, CAN_RX_FIFO1) > 0)
     {
+      /* Read the message */
+      if (HAL_OK == HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &RxHeader, data))
+      {
 #ifdef DEBUG_SOLAX
       //printf("> 0x%04lX (%ld): ", RxHeader.ExtId, RxHeader.DLC);
       //dump_packet(data, RxHeader.DLC);
 #endif
 
-      if (RxHeader.IDE != CAN_ID_EXT)
-      {
-        snprintf(last_error, ERROR_LEN,
-                 "Unexpected CAN message: 0x%04lX, len %ld",
-                 RxHeader.StdId, RxHeader.DLC);
-        continue;
+        if (RxHeader.IDE != CAN_ID_EXT)
+        {
+          snprintf(last_error, ERROR_LEN,
+                  "Unexpected CAN message: 0x%04lX, len %ld",
+                  RxHeader.StdId, RxHeader.DLC);
+          continue;
+        }
+
+        switch (RxHeader.ExtId)
+        {
+          case 0x1871:
+            memcpy(&solax_data.inverter.msg_1871, data, 8);
+            solax_process_frame();
+          break;
+
+          default:
+            snprintf(last_error, ERROR_LEN,
+                    "Unhandled CAN message from Inverter: 0x%08lX, len %ld",
+                    RxHeader.ExtId, RxHeader.DLC);
+          break;
+        }
       }
 
-      switch (RxHeader.ExtId)
-      {
-        case 0x1871:
-          memcpy(&solax_data.inverter.msg_1871, data, 8);
-          solax_process_frame();
+      if (msg_limit-- == 0)
         break;
+    }
 
-        default:
-          snprintf(last_error, ERROR_LEN,
-                   "Unhandled CAN message from Inverter: 0x%08lX, len %ld",
-                   RxHeader.ExtId, RxHeader.DLC);
-        break;
+    /* Update voltage / current values */
+    solax_update_values();
+
+    /* Update our data and send BMS messages. */
+    if (HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE &&
+        HAL_GetTick() < last_update + SOLAX_UPDATE_RATE) 
+    {
+      bms_update = HAL_GetTick();
+
+      /* Update the state machine */
+      solax_update_state();
+    }
+
+    /* Shut down if we timeout receiving messages */
+    if (HAL_GetTick() > last_update + SOLAX_TIMEOUT && (state > SOLAX_BATTERY_ANNOUNCE))
+    {
+      snprintf(last_error, ERROR_LEN,
+                "No CAN messages received in %lds", (HAL_GetTick() - last_update) / 1000);
+      state = SOLAX_BATTERY_ANNOUNCE;
+    }
+  }
+}
+
+/**
+  * @brief  Control Solax Power output via ModBus
+  * @param  argument: Not used
+  * @retval None
+  */
+void solaxModbusTask(void *argument)
+{
+  for (;;)
+  {
+    HAL_StatusTypeDef ret;
+    uint16_t rem;
+    uint16_t en;
+
+    /* Read the current Grid (Inverter Output) power */
+    ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_GRID_P1, (uint16_t*)&grid_power);
+
+    /* Read the Inverter State and Enable Setting */
+    if (ret == HAL_OK)
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_INV_STATE, (uint16_t*)&inv_state);
+    else
+      inv_state = -1;
+
+    if (ret == HAL_OK)
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &en);
+
+    /* Check and set the remote power timeout */
+    ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_TIMER, &rem);
+    if (ret == HAL_OK)
+    {
+      if (rem != 30)
+      {
+        modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_TIMER, 30);
       }
     }
 
-    if (msg_limit-- == 0)
-      break;
-  }
+    /* Update the power register regularly */
+    if (ret == HAL_OK)
+      ret = modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_POWER, power_offset);
 
-  /* Update voltage / current values */
-  solax_update_values();
+    if (ret == HAL_OK)
+    {
+      /* Enable / Disable Inverter Operation depending on power setting */
+      if (power_offset == 0)
+      {
+        if (en)
+          ret = modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_SYS_EN, 0);
+      }
+      else
+      {
+        if (!en)
+          ret = modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_SYS_EN, 1);
+      }
+    }
 
-  /* Update our data and send BMS messages. */
-  if (HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE &&
-      HAL_GetTick() < last_update + SOLAX_UPDATE_RATE) 
-  {
-    bms_update = HAL_GetTick();
-
-    /* Update the state machine */
-    solax_update_state();
-
-    /* Send CAN messages */
-    solax_send_standard_response();
-  }
-
-  /* Shut down if we timeout receiving messages */
-  if (HAL_GetTick() > last_update + SOLAX_TIMEOUT && (state > SOLAX_BATTERY_ANNOUNCE))
-  {
-    snprintf(last_error, ERROR_LEN,
-              "No CAN messages received in %lds", (HAL_GetTick() - last_update) / 1000);
-    state = SOLAX_BATTERY_ANNOUNCE;
+    /* Update periodically or on an external change */
+    xSemaphoreTake(pwrMutex, 10000);
   }
 }
 
 bool solax_init(void)
 {
-  return true;
+  taskHandle = osThreadNew(solaxTask, NULL, &taskAttributes);
+  taskHandle2 = osThreadNew(solaxModbusTask, NULL, &taskAttributes2);
+  msgMutex = xSemaphoreCreateBinary();
+  pwrMutex = xSemaphoreCreateBinary();
+
+  return (taskHandle != NULL && taskHandle2 != NULL && msgMutex != NULL && pwrMutex != NULL);
 }
+
+void solax_kick(void)
+{
+  BaseType_t pxHigherPriorityTaskWoken;
+  xSemaphoreGiveFromISR(msgMutex, &pxHigherPriorityTaskWoken);
+}
+
+void solax_set_output_power(int16_t power)
+{
+  if (power_offset != power)
+  {
+    power_offset = power;
+    xSemaphoreGive(pwrMutex);
+  }
+}
+
 
 /**
   * @brief  Set the maximum current to be drawn from the EVSE
@@ -778,6 +894,9 @@ void solax_json_update(void)
   {
     printf(",\"last_error\":\"%s\"", last_error);
   }
+  printf(", \"inv_state\":%d", inv_state);
+  printf(", \"grid_power\":%d", grid_power);
+  printf(", \"power_offset\":%d", power_offset);
 
 #ifdef DEBUG_SOLAX
   printf(",\"last_update\":%ld", HAL_GetTick() - last_update);

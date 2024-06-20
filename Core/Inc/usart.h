@@ -45,8 +45,8 @@ void MX_USART2_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
-void HAL_UART_Setup_UART1(void);
-void HAL_UART_Setup_UART2(void);
+HAL_StatusTypeDef HAL_UART_Setup_UART1(void);
+HAL_StatusTypeDef HAL_UART_Setup_UART2(void);
 void HAL_UART_Process(void);
 
 HAL_StatusTypeDef HAL_UART_Write_UART1(uint8_t *ptr, uint16_t len, uint32_t timeout);
