@@ -363,7 +363,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
           /* Start Earth Leakage Test */
           HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
 #else
-          /* Start Isolation / Short Circuit Test */
+        /* Start Isolation / Short Circuit Test */
         HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
 #endif
         }
@@ -1190,6 +1190,7 @@ void chademo_json_update(void)
 {
   printf("\"chademo\":{");
     printf("\"state\":%d", chademo_state);
+    printf(",\"cp_ready\":%d", cp_ready);
     printf(",\"voltage\":%ld,\"current\":%ld,\"power\":%ld",
           measured_voltage/10,
           measured_current/10,

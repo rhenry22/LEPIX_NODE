@@ -259,6 +259,9 @@ static bool contactor_close = false;                /* Has the inverter requeste
 
 static int16_t grid_power = 0;                      /* Reported Grid import / export */
 static int16_t inv_state = 0;                       /* Inverter State */
+#ifdef DEBUG_SOLAX
+static uint16_t inv_fault[8] = {0};                 /* Inverter Fault registers */
+#endif
 static int16_t power_offset = 0;                    /* Offset from actual power (i.e. charge / discharge) */
 
 static char last_error[ERROR_LEN+1] = {0};          /* Last error string */
@@ -721,6 +724,17 @@ void solaxModbusTask(void *argument)
     else
       inv_state = -1;
 
+#ifdef DEBUG_SOLAX
+    if (ret == HAL_OK && inv_state >= 4)
+    {
+      int i;
+      for (i=0; i<8; ++i)
+      {
+        ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_FAULT_1 + i, (uint16_t*)&inv_fault[i]);
+      }
+    }
+#endif
+
     if (ret == HAL_OK)
       ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &en);
 
@@ -897,6 +911,9 @@ void solax_set_battery_soc(uint16_t soc)
   */
 void solax_json_update(void)
 {
+#ifdef DEBUG_SOLAX
+  int i;
+#endif
   printf("\"solax\":{");
 
   printf("\"state\":%d", state);
@@ -911,6 +928,14 @@ void solax_json_update(void)
 
 #ifdef DEBUG_SOLAX
   printf(",\"last_update\":%ld", HAL_GetTick() - last_update);
+  printf(", \"inv_fault\":[");
+  for (i=0; i<8; ++i)
+  {
+    printf("%d", inv_fault[i]);
+    if (i<7)
+      printf(",");
+  }
+  printf("]");
   printf(",\"contactor_req\":%d", contactor_close);
   printf(", \"max_chg_current\":%d, \"max_dis_current\":%d",
          solax_data.bms.msg_1872.charge_max,

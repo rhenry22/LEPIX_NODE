@@ -62,7 +62,7 @@
 
 #define DEBUG_CONTROLLER
 
-#define JSON_UPDATE_TIME    (30000)
+#define JSON_UPDATE_TIME    (5000)
 
 /* USER CODE END PM */
 
@@ -511,23 +511,31 @@ static void process_stdin_line(uint8_t *ptr, uint16_t len)
         power_offset = strtol(tok, NULL, 10);
       }
     }
-    else if (0 == strcmp(tok, "reset"))
-    {
-      HAL_NVIC_SystemReset();
-    }
-    else if (0 == strcmp(tok, "modbus"))
+    else if (0 == strcmp(tok, "evse"))
     {
       tok = strtok(NULL, " ");
       if (tok)
       {
-        if (0 == strcmp(tok, "read"))
+        switch (strtol(tok, NULL, 10))
         {
-          tok = strtok(NULL, " ");
-          if (tok)
-          {
-          }
+          case 0:
+            /* Disable the CP line */
+            HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
+          break;
+
+          case 1:
+            /* Enable the CP line */
+            HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
+          break;
+
+          default:
+          break;
         }
       }
+    }
+    else if (0 == strcmp(tok, "reset"))
+    {
+      HAL_NVIC_SystemReset();
     }
   }
 }
