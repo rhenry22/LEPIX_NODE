@@ -441,6 +441,9 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
   chademo_state = new_state;
 
+  /* Let Solax know we've updated state */
+  solax_kick();
+
   {
     uint16_t leds = 0;
     

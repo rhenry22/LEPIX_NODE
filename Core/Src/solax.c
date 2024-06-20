@@ -766,8 +766,15 @@ bool solax_init(void)
 
 void solax_kick(void)
 {
-  BaseType_t pxHigherPriorityTaskWoken;
-  xSemaphoreGiveFromISR(msgMutex, &pxHigherPriorityTaskWoken);
+  if (xPortIsInsideInterrupt())
+  {
+    BaseType_t pxHigherPriorityTaskWoken;
+    xSemaphoreGiveFromISR(msgMutex, &pxHigherPriorityTaskWoken);
+  }
+  else
+  {
+    xSemaphoreGive(msgMutex);
+  }
 }
 
 void solax_set_output_power(int16_t power)
