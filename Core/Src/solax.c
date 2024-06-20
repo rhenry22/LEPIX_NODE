@@ -672,25 +672,29 @@ void solaxTask(void *argument)
         break;
     }
 
-    /* Update voltage / current values */
-    solax_update_values();
-
-    /* Update our data and send BMS messages. */
-    if (HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE &&
-        HAL_GetTick() < last_update + SOLAX_UPDATE_RATE) 
+    /* Only update if we've seen any messages */
+    if (last_update > 0)
     {
-      bms_update = HAL_GetTick();
+      /* Update voltage / current values */
+      solax_update_values();
 
-      /* Update the state machine */
-      solax_update_state();
-    }
+      /* Update our data and send BMS messages. */
+      if (HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE &&
+          HAL_GetTick() < last_update + SOLAX_UPDATE_RATE)
+      {
+        bms_update = HAL_GetTick();
 
-    /* Shut down if we timeout receiving messages */
-    if (HAL_GetTick() > last_update + SOLAX_TIMEOUT && (state > SOLAX_BATTERY_ANNOUNCE))
-    {
-      snprintf(last_error, ERROR_LEN,
-                "No CAN messages received in %lds", (HAL_GetTick() - last_update) / 1000);
-      state = SOLAX_BATTERY_ANNOUNCE;
+        /* Update the state machine */
+        solax_update_state();
+      }
+
+      /* Shut down if we timeout receiving messages */
+      if (HAL_GetTick() > last_update + SOLAX_TIMEOUT)
+      {
+        snprintf(last_error, ERROR_LEN,
+                  "No CAN messages received in %lds", (HAL_GetTick() - last_update) / 1000);
+        state = SOLAX_BATTERY_ANNOUNCE;
+      }
     }
   }
 }
