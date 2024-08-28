@@ -255,6 +255,7 @@ void mainTaskEntry(void *argument)
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Modbus interface.\"}]\n");
     error = true;
   }
+  HAL_UART_Setup_UART1();
 
   if (!error)
     printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
@@ -537,6 +538,10 @@ static void process_stdin_line(uint8_t *ptr, uint16_t len)
     {
       HAL_NVIC_SystemReset();
     }
+    else if (0 == strcmp(tok, "flash"))
+    {
+      JumpToBootloader();
+    }
   }
 }
 
@@ -578,7 +583,7 @@ void stdio_parser(uint8_t *ptr, uint16_t len)
     /* Buffer overflow */
     cmd_buf_len = 0;
   }
-
+#if 0
   /* Fast response for when hacking around */
   if (len == 1)
   {
@@ -613,6 +618,7 @@ void stdio_parser(uint8_t *ptr, uint16_t len)
       break;
     }
   }
+  #endif
 }
 
 /* USER CODE END Application */
