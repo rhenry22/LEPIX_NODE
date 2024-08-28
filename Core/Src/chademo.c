@@ -58,8 +58,8 @@
 #define ISOLATION_MIN_VOLTAGE (3500)
 #define DEFAULT_MIN_SOC       (25)
 
-#define CONTACTOR_CLOSED_V    (500)
-#define CONTACTOR_OPEN_V      (100)
+#define CONTACTOR_CLOSED_V    (1000) // 50v (x10)
+#define CONTACTOR_OPEN_V      (900)  // 10v (x10)
 
 /* MSG ID 0x102 Bits */
 #define FAULT_OVER_VOLT       (1 << 0)
@@ -326,12 +326,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
     case CHADEMO_STATE_PERM_OK:
     {
-      /* Lock the connector */
-      HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(LED_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
-
-      can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
-
       /*  Check for contact welding */
       if (measured_voltage > CONTACTOR_OPEN_V ||
           !(can_data.vehicle.msgid_102.status & (STATUS_CONTACTOR_OPEN)))
@@ -343,6 +337,12 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       }
       else
       {
+        /* Lock the connector */
+        HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LED_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+
+        can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
+
         /* Enable HV DCDC Test source(s) */
         HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
