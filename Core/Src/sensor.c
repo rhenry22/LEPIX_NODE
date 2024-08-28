@@ -142,7 +142,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
       uint16_t tmp;
       ret = MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &tmp);
       if (ret == HAL_OK)
-        *val = ((int32_t)tmp - ibatt_zero) * 1000 / 2095;
+        *val = ((int32_t)tmp - ibatt_zero) * 1000 / 3250; //2095
     }
     break;
 
