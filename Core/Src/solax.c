@@ -30,7 +30,7 @@
 #include "solax.h"
 #include "modbus.h"
 
-#define DEBUG_SOLAX
+//#define DEBUG_SOLAX
 
 /* Battery size in Wh (Maximum value for most inverters is 60000 [60kWh],
  * you can use larger batteries but do not set value over 60000!
@@ -259,6 +259,7 @@ static bool contactor_close = false;                /* Has the inverter requeste
 
 static int16_t grid_power = 0;                      /* Reported Grid import / export */
 static int16_t inv_state = 0;                       /* Inverter State */
+static int16_t inv_temp = 0;                        /* Inverter Temperature */
 #ifdef DEBUG_SOLAX
 static uint16_t inv_fault[8] = {0};                 /* Inverter Fault registers */
 #endif
@@ -718,6 +719,10 @@ void solaxModbusTask(void *argument)
     /* Read the current Grid (Inverter Output) power */
     ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_GRID_P1, (uint16_t*)&grid_power);
 
+    /* Read the inverter temperature */
+    if (ret == HAL_OK)
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_TEMP_INV, (uint16_t*)&inv_temp);
+
     /* Read the Inverter State and Enable Setting */
     if (ret == HAL_OK)
       ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_INV_STATE, (uint16_t*)&inv_state);
@@ -737,6 +742,16 @@ void solaxModbusTask(void *argument)
 
     if (ret == HAL_OK)
       ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &en);
+
+    /* Check and set the remote power enable */
+    ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_EN, &rem);
+    if (ret == HAL_OK)
+    {
+      if (rem != 1)
+      {
+        modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_EN, 1);
+      }
+    }
 
     /* Check and set the remote power timeout */
     ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_TIMER, &rem);
@@ -923,6 +938,7 @@ void solax_json_update(void)
     printf(",\"last_error\":\"%s\"", last_error);
   }
   printf(", \"inv_state\":%d", inv_state);
+  printf(", \"inv_temp\":%d", inv_temp);
   printf(", \"grid_power\":%d", grid_power);
   printf(", \"power_offset\":%d", power_offset);
 

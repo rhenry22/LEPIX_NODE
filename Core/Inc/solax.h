@@ -24,6 +24,9 @@ enum
   FOX_GRID_P2 = 11012,    /* Grid Phase Q Power (W) */
   FOX_GRID_P3 = 11013,    /* Grid Phase S Power (W) */
 
+  FOX_TEMP_INV = 11024,    /* Inverter Temp. (degC x10) */
+  FOX_TEMP_ENV = 11025,    /* Environment Temp. (degC x10) */
+
   FOX_INV_STATE = 11056,  /* Inverter Status */
   FOX_BATT_STATE = 11057, /* Battery Status */
 
