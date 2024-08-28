@@ -229,6 +229,7 @@ void JumpToBootloader(void)
   volatile uint32_t *magic = (volatile uint32_t *)0x20000000;
   *magic = 0xB007DF00;
 
+  __disable_irq();
   NVIC_SystemReset();
 }
 
