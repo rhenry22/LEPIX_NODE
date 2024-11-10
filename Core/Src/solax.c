@@ -257,6 +257,7 @@ static uint16_t max_charge_current = 0;             /* Max DC charge current (A 
 static uint16_t max_discharge_current = 0;          /* Max DC discharge current (A x10) */
 static bool contactor_close = false;                /* Has the inverter requested contactor close? */
 
+static bool init_done = false;                      /* One time init */
 static int16_t grid_power = 0;                      /* Reported Grid import / export */
 static int16_t inv_state = 0;                       /* Inverter State */
 static int16_t inv_temp = 0;                        /* Inverter Temperature */
@@ -719,15 +720,15 @@ void solaxModbusTask(void *argument)
     /* Read the current Grid (Inverter Output) power */
     ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_GRID_P1, (uint16_t*)&grid_power);
 
+    if (ret != HAL_OK)
+    {
+      inv_state = -1;
+      init_done = false;
+    }
+
     /* Read the inverter temperature */
     if (ret == HAL_OK)
       ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_TEMP_INV, (uint16_t*)&inv_temp);
-
-    /* Read the Inverter State and Enable Setting */
-    if (ret == HAL_OK)
-      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_INV_STATE, (uint16_t*)&inv_state);
-    else
-      inv_state = -1;
 
 #ifdef DEBUG_SOLAX
     if (ret == HAL_OK && inv_state >= 4)
@@ -740,32 +741,46 @@ void solaxModbusTask(void *argument)
     }
 #endif
 
-    if (ret == HAL_OK)
-      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &en);
-
-    /* Check and set the remote power enable */
-    ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_EN, &rem);
-    if (ret == HAL_OK)
+    if (!init_done)
     {
-      if (rem != 1)
+      /* Check and set the remote power enable */
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_EN, &rem);
+      if (ret == HAL_OK)
       {
-        modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_EN, 1);
+        if (rem != 1)
+        {
+          modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_EN, 1);
+        }
       }
-    }
 
-    /* Check and set the remote power timeout */
-    ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_TIMER, &rem);
-    if (ret == HAL_OK)
-    {
-      if (rem != 30)
+      /* Check and set the remote power timeout */
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_TIMER, &rem);
+      if (ret == HAL_OK)
       {
-        modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_TIMER, 30);
+        if (rem != 30)
+        {
+          modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_TIMER, 30);
+        }
       }
+
+      if (ret == HAL_OK)
+        init_done = true;
     }
 
     /* Update the power register regularly */
     if (ret == HAL_OK)
       ret = modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_POWER, power_offset);
+
+    /* Check to see if the inverter is enabled */
+    if (ret == HAL_OK)
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &en);
+
+    if (en)
+    {
+      /* Read the Inverter State when Enabled */
+      if (ret == HAL_OK)
+        ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_INV_STATE, (uint16_t*)&inv_state);
+    }
 
     if (ret == HAL_OK)
     {
