@@ -56,7 +56,8 @@
 #define LEAKAGE_CURRENT_MAX   (250 * 500 / 5)  /* 100Ohm/V == 500kOhm == 250uA (@ 500V)*/
 #define LEAK_TEST_TIME        (1000)  /* Between 200ms and 1000ms */
 #define ISOLATION_MIN_VOLTAGE (3500)
-#define DEFAULT_MIN_SOC       (25)
+#define DEFAULT_MIN_SOC       (SOLAX_MINIMUM_SOC)
+#define ACC_CURRENT_MAX       (800 * 1000)  /* 800mA */
 
 #define CONTACTOR_CLOSED_V    (1000) // 50v (x10)
 #define CONTACTOR_OPEN_V      (900)  // 10v (x10)
@@ -379,8 +380,12 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     case CHADEMO_STATE_INS_TEST:
     {
       int32_t hv_current;
+      int32_t acc_current;  /* 12V ACC Current in uA */
 
       ret = sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
+      if (ret == HAL_OK)
+        ret = sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
+
       /* Check that HV Test current is below threshold */
       if (ret != HAL_OK || hv_current > leak_base + LEAKAGE_CURRENT_MAX)
       {
@@ -393,11 +398,20 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 #endif
         new_state = CHADEMO_STATE_ERROR;
       }
-      /* Check that we are able to bring up the HV Test current is below threshold */
+      /* Check that we are able to bring up the HV Test voltage */
       else if (measured_voltage < ISOLATION_MIN_VOLTAGE)
       {
         snprintf(last_error, ERROR_LEN,
                  "Isolation test failed (%ld V).", measured_voltage / 10);
+        new_state = CHADEMO_STATE_ERROR;
+      }
+      /* Check that the connector is properly locked */
+      else if (acc_current > ACC_CURRENT_MAX)
+      {
+        can_data.charger.msgid_109.fault_status &= ~MSG109_CONN_LOCK;
+
+        snprintf(last_error, ERROR_LEN,
+                 "Connector Lock failed. High ACC current (%ld mA).", acc_current / 1000);
         new_state = CHADEMO_STATE_ERROR;
       }
       else
@@ -861,13 +875,11 @@ void chademo_process(void)
     {
       int32_t voltage = measured_voltage / 10;
       int32_t current = measured_current / 10;
+      uint8_t max_dc_chg_current = can_data.vehicle.msgid_102.charge_current_requested * 10;
+      uint8_t max_dc_dis_current = can_data.charger.msgid_208.discharge_current_max * 10;
       uint16_t soc = can_data.vehicle.msgid_102.charge_rate;
 
       available_energy = soc * rated_capacity / 100;
-
-      /* Update allowed currents */
-      solax_set_max_dc_chg_current(can_data.vehicle.msgid_102.charge_current_requested * 10);
-      solax_set_max_dc_dis_current(can_data.charger.msgid_208.discharge_current_max * 10);
 
       if (!chg_perm)// || !cp_ready)
       {
@@ -881,7 +893,7 @@ void chademo_process(void)
       {
         snprintf(last_error, ERROR_LEN,
                  "Maximum Voltage (%ldV) Reached.", voltage);
-        chademo_transition_state(CHADEMO_STATE_STOP);
+        max_dc_chg_current = 0;
       }
 
       /* V2X Limits */
@@ -889,13 +901,13 @@ void chademo_process(void)
       {
         snprintf(last_error, ERROR_LEN,
                  "Minimum Voltage (%ldV) Reached.", voltage);
-        chademo_transition_state(CHADEMO_STATE_STOP);
+        max_dc_dis_current = 0;
       }
 
-      if (current >= can_data.charger.msgid_208.discharge_current_max)
+      if (current > can_data.charger.msgid_208.discharge_current_max)
       {
         snprintf(last_error, ERROR_LEN,
-                 "Maximum Current %ldA) Reached.", current);
+                 "Maximum Current %ldA) Exceeded.", current);
         chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
@@ -903,7 +915,7 @@ void chademo_process(void)
       {
         snprintf(last_error, ERROR_LEN,
                 "Minimum SoC (%d%%) Reached.", soc);
-        chademo_transition_state(CHADEMO_STATE_STOP);
+        max_dc_dis_current = 0;
       }
 
       // ToDo: Consider decrementing the minute counter!
@@ -921,6 +933,10 @@ void chademo_process(void)
       /* Update Solax Data */
       solax_set_battery_capacity(available_energy * 100);
       solax_set_battery_soc(can_data.vehicle.msgid_102.charge_rate);
+
+      /* Update allowed currents */
+      solax_set_max_dc_chg_current(max_dc_chg_current);
+      solax_set_max_dc_dis_current(max_dc_dis_current);
     }
     break;
 

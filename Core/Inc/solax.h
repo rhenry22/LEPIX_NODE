@@ -7,8 +7,8 @@
 #define SOLAX_MINIMUM_SUPPORTED_VOLTAGE (288)
 #define SOLAX_MAXIMUM_SUPPORTED_CURRENT (40)
 
-#define SOLAX_MAXIMUM_SOC               (90)
-#define SOLAX_MINIMUM_SOC               (20)
+#define SOLAX_MAXIMUM_SOC               (100)
+#define SOLAX_MINIMUM_SOC               (15)
 
 #define MB_SLAVE_INVERTER   (247)
 
