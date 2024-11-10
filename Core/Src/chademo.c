@@ -13,7 +13,6 @@
  *  ToDo:
  *  Analog handshake should go via connector lock detection and inverter shutoff in HW
  *  (i.e. separate from CPU)
- *  Monitor lock solenoid current and set CONN Lock flag to zero if it fails.
  *
  *  Copyright (c) 2023 ARTaylor.co.uk.
  *  All rights reserved.
@@ -927,7 +926,7 @@ void chademo_process(void)
       {
         snprintf(last_error, ERROR_LEN,
                  "Max Charge Time Reached");
-        chademo_transition_state(CHADEMO_STATE_STOP);
+        //chademo_transition_state(CHADEMO_STATE_STOP);
       }
 
       /* Update Solax Data */
