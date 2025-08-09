@@ -31,6 +31,7 @@ void chademo_set_max_power(uint32_t power);
 CHADEMO_STATE chademo_get_state(void);
 int32_t chademo_get_power(void);
 
+int chademo_process_cmd(char **args, int argc);
 void chademo_json_update(void);
 
 #endif /* _CHADEMO_H_ */

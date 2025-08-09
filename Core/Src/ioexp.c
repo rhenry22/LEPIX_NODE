@@ -2,7 +2,6 @@
  *  @brief Functions to control a TCA9535 I2C GPIO Expander
  *
  *  @author Richard Taylor <richard@artaylor.co.uk>
- *  @bug No known bugs.
  */
 
 #include <stdint.h>

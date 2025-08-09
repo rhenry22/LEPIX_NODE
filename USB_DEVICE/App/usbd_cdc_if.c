@@ -303,7 +303,8 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     break;
 
     case CDC_SEND_BREAK:
-      NVIC_SystemReset();
+      //NVIC_SystemReset();
+      JumpToBootloader();
     break;
 
     default:
