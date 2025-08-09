@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -43,12 +44,13 @@
 #define ABSOLUTE_MAX_VOLTAGE (NUM_CELLS * CELL_MAX_VOLTAGE / 1000)
 #define ABSOLUTE_MIN_VOLTAGE (NUM_CELLS * CELL_MIN_VOLTAGE / 1000)
 
-#define SOLAX_TIMEOUT     (5000)
-#define SOLAX_UPDATE_RATE (1000)
-#define SOLAX_N_PACKS     (7)
+#define SOLAX_TIMEOUT             (5000)
+#define SOLAX_UPDATE_RATE         (1000)
+#define SOLAX_N_PACKS             (7)
+#define SOLAX_PRECHARGE_DELTA_MAX (50)  /* Allow 5V delta after 1s precharge */
 
-#define MSG_1871_STATUS     (1)
-#define MSG_1871_CONTACTOR  (3)
+#define MSG_1871_STATUS           (1)
+#define MSG_1871_CONTACTOR        (3)
 
 typedef enum _solax_state
 {
@@ -458,13 +460,13 @@ static HAL_StatusTypeDef solax_update_state(void)
   /* Possible error bit */
   if (solax_data.inverter.msg_1871.data[MSG_1871_STATUS] != 0x0001)
   {
-    state = SOLAX_FAULT;
+    //state = SOLAX_FAULT;
     snprintf(last_error, ERROR_LEN,
              "Unhandled Inverter Status: %d",
              solax_data.inverter.msg_1871.data[MSG_1871_STATUS]);
-    solax_open_contactors();
-    contactor_close = false;
-    ret = HAL_ERROR;
+    //solax_open_contactors();
+    //contactor_close = false;
+    //ret = HAL_ERROR;
   }
 
   if (ret == HAL_OK)
@@ -486,10 +488,10 @@ static HAL_StatusTypeDef solax_update_state(void)
         if (contactor_close)
         {
           /* Stay in this state until ChaDeMo starts up */
-          if ((chademo_get_state() == CHADEMO_STATE_ON) && 
+          if ((chademo_get_state() == CHADEMO_STATE_ON) &&
               (batt_voltage / 10 > ABSOLUTE_MIN_VOLTAGE))
           {
-            /* Enable Precharge contactor */
+            /* Close Precharge contactor */
             HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_SET);
 
             state = SOLAX_CONTACTOR_PRECHARGE;
@@ -503,13 +505,14 @@ static HAL_StatusTypeDef solax_update_state(void)
 
       case SOLAX_CONTACTOR_PRECHARGE:
       {
+        int32_t precharge_delta = labs(batt_voltage - inv_voltage);
         /* Check that we're outputting a sensible voltage */
-        if (batt_voltage / 50 == inv_voltage / 50)
+        if (precharge_delta < SOLAX_PRECHARGE_DELTA_MAX)
         {
           /* Tell the inverter we're on */
           solax_data.bms.msg_1875.contactor = 2;
 
-          /* Enable Main contactor */
+          /* Close Main contactor */
           HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_SET);
 
           /* The contactors cause our current measurement to offset. */
@@ -685,7 +688,7 @@ void solaxTask(void *argument)
 
       /* Update our data and send BMS messages. */
       if (HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE &&
-          HAL_GetTick() < last_update + SOLAX_UPDATE_RATE)
+          HAL_GetTick() < last_update + SOLAX_TIMEOUT)
       {
         bms_update = HAL_GetTick();
 
