@@ -9,7 +9,6 @@
  *  All rights reserved.
  *
  *  @author Richard Taylor <richard@artaylor.co.uk>
- *  @bug No known bugs.
  */
 
 #include <stdio.h>
@@ -22,7 +21,7 @@
 #include "adc.h"
 
 #define INA219_ACC_ADDR         (0x41)
-#define INA219_ACC_SHUNT        (0.005)     /* 5mR Shunt resistor */
+#define INA219_ACC_SHUNT        (0.010)     /* 10mR Shunt resistor */
 #define INA219_ACC_CURRENT_LSB  (0.001)     /* 1mA per LSB */
 
 #define INA219_HV_ADDR          (0x44)      /* Main board: 0x40, Daughter board: 0x44 */
@@ -40,12 +39,14 @@ bool sensor_init(void)
 {
   bool ret = true;
   uint16_t val;
-
+#ifdef ENABLE_MAX22530
   if (!MAX22530_Init())
   {
     ret = false;
   }
+#endif
 
+#ifdef ENABLE_INA219
   if (!ina219_init(INA219_ACC_ADDR, 0.04096 / (INA219_ACC_CURRENT_LSB * INA219_ACC_SHUNT)))
   {
     ret = false;
@@ -55,6 +56,7 @@ bool sensor_init(void)
   {
     ret = false;
   }
+#endif
 
   if (HAL_OK != MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero))
   {
@@ -101,6 +103,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
 
   switch (src)
   {
+#ifdef ENABLE_MAX22530
     case SENSOR_BATT_VOLTAGE: /* V x10 */
     {
       uint16_t tmp;
@@ -118,7 +121,9 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
         *val = (int32_t)tmp * MAX22530_VREF / 4096 * (4.7 + 1500) * 10 / 4.7 / 1000;
     }
     break;
+#endif
 
+#ifdef ENABLE_INA219
     case SENSOR_ACC_CURRENT: /* uA */
     {
       int16_t reg;
@@ -136,6 +141,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
         *val = (int32_t)reg * (1000000 * INA219_HV_CURRENT_LSB);
     }
     break;
+#endif
 
     case SENSOR_BATT_CURRENT: /* A x10 */
     {
@@ -155,9 +161,23 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     }
     break;
 
-    default:
-      assert_failed((uint8_t*)__FILE__, __LINE__);
+    case SENSOR_CP: /* RAWh << 16 | RAWl */
+    {
+      uint16_t tmph, tmpl;
+      ret = MX_ADC2_Get_Sample_Avgs(ADC2_CCS2_CP, &tmph, &tmpl);
+      //printf("MX_ADC2_Get_Sample_Avgs(%d): %ld, %ld\n", ret, tmph, tmpl);
+      if (ret == HAL_OK)
+      {
+        *val = tmph << 16 | tmpl;
+      }
+    }
     break;
+
+    default:
+#ifdef  USE_FULL_ASSERT
+      assert_failed((uint8_t*)__FILE__, __LINE__);
+#endif
+      break;
   }
 
   return ret;

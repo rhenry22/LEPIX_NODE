@@ -2,6 +2,7 @@
 #define _SOLAX_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #define SOLAX_MAXIMUM_SUPPORTED_VOLTAGE (450)
 #define SOLAX_MINIMUM_SUPPORTED_VOLTAGE (288)
@@ -51,6 +52,9 @@ enum
 
 bool solax_init(void);
 void solax_kick(void);
+
+void solax_enable(void);
+void solax_disable(void);
 
 void solax_set_output_power(int16_t power);
 

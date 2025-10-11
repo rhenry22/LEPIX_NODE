@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define IOEXP_RG_LED    (0x21)
-#define IOEXP_BY_LED    (0x20)
+#define IOEXP_TOP_LEDS  (0x21)
+#define IOEXP_BOT_LEDS  (0x20)
 #define IOEXP_IO        (0x22)
 
 bool ioexp_init(uint8_t addr);

@@ -10,7 +10,6 @@
  *    https://github.com/dalathegreat/BYD-Battery-Emulator-For-Gen24
  *
  *  @author Richard Taylor <richard@artaylor.co.uk>
- *  @bug No known bugs.
  */
 
 #include "FreeRTOS.h"
@@ -27,7 +26,6 @@
 
 #include "can.h"
 #include "sensor.h"
-#include "chademo.h"
 #include "solax.h"
 #include "modbus.h"
 
@@ -226,7 +224,7 @@ struct _solax_data solax_data = {
     .msg_1881 = { .serial = { 0x00, 0x35, 0x53, 0x42, 0x4D, 0x53, 0x46, 0x41 }},
     .msg_1882 = { .serial = { 0x00, 0x31, 0x33, 0x41, 0x42, 0x30, 0x35, 0x30 }},
 
-    /* The following will be updated once ChaDeMo starts up */
+    /* The following will be updated once EV Comms starts up */
 
     /* BMS_Limits */
     .msg_1872 = {
@@ -251,7 +249,7 @@ struct _solax_data solax_data = {
 };
 
 static SOLAX_STATE state = SOLAX_BATTERY_ANNOUNCE;  /* BMS state machine */
-static uint16_t max_ac_power = 0;                /* Maximum current limit advertised by EVSE (W x1) */
+static uint16_t max_ac_power = 0;                   /* Maximum current limit advertised by EVSE (W x1) */
 static uint32_t t_zero_set = 0;                     /* Time at which current request set to zero (debug / check inverter response) */
 static uint32_t last_update = 0;                    /* Last time we saw a CAN message */
 static uint32_t bms_update = 0;                     /* Last time we sent our CAN messages */
@@ -260,6 +258,7 @@ static uint16_t max_discharge_current = 0;          /* Max DC discharge current 
 static bool contactor_close = false;                /* Has the inverter requested contactor close? */
 
 static bool init_done = false;                      /* One time init */
+static bool enabled = false;                        /* Have we been told to start? */
 static int16_t grid_power = 0;                      /* Reported Grid import / export */
 static int16_t inv_state = 0;                       /* Inverter State */
 static int16_t inv_temp = 0;                        /* Inverter Temperature */
@@ -291,7 +290,7 @@ void solaxModbusTask(void *argument);
 
 static void solax_open_contactors(void)
 {
-  HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);
   solax_data.bms.msg_1875.contactor = 0;
 }
@@ -375,16 +374,17 @@ static HAL_StatusTypeDef solax_send_standard_response(void)
 
 static HAL_StatusTypeDef solax_update_values(void)
 {
-  HAL_StatusTypeDef ret = HAL_OK;
+  HAL_StatusTypeDef ret = HAL_ERROR;
 
-  int32_t voltage;  /* Battery Voltage (x10 V) */
-  int32_t current;  /* Battery Current (x10 A) */
+  int32_t voltage = -1;  /* Battery Voltage (x10 V) */
+  int32_t current = -1;  /* Battery Current (x10 A) */
 
+#ifdef ENABLE_MAX22530
   /* Update Measured Values */
-  if (ret == HAL_OK)
-    ret =  sensor_get_value(SENSOR_BATT_CURRENT, &current);
+  ret =  sensor_get_value(SENSOR_BATT_CURRENT, &current);
   if (ret == HAL_OK)
     ret = sensor_get_value(SENSOR_INV_VOLTAGE, &voltage);
+#endif
 
   /* BMS_PackData */
   solax_data.bms.msg_1873.voltage = voltage;
@@ -445,29 +445,20 @@ static HAL_StatusTypeDef solax_update_values(void)
 
 static HAL_StatusTypeDef solax_update_state(void)
 {
-  HAL_StatusTypeDef ret = HAL_OK;
+  HAL_StatusTypeDef ret = HAL_ERROR;
   SOLAX_STATE s = state;
 
   int32_t batt_voltage;  /* Battery Voltage (x10 V) */
   int32_t inv_voltage;   /* Inverter Voltage (x10 V) */
 
+#ifdef ENABLE_MAX22530
   /* Update Measured Values */
-  if (ret == HAL_OK)
-    ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
+  ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
   if (ret == HAL_OK)
     ret = sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
+#endif
 
-  /* Possible error bit */
-  if (solax_data.inverter.msg_1871.data[MSG_1871_STATUS] != 0x0001)
-  {
-    //state = SOLAX_FAULT;
-    snprintf(last_error, ERROR_LEN,
-             "Unhandled Inverter Status: %d",
-             solax_data.inverter.msg_1871.data[MSG_1871_STATUS]);
-    //solax_open_contactors();
-    //contactor_close = false;
-    //ret = HAL_ERROR;
-  }
+
 
   if (ret == HAL_OK)
   {
@@ -487,12 +478,11 @@ static HAL_StatusTypeDef solax_update_state(void)
       case SOLAX_REQUEST_CONTACTOR_CLOSE:
         if (contactor_close)
         {
-          /* Stay in this state until ChaDeMo starts up */
-          if ((chademo_get_state() == CHADEMO_STATE_ON) &&
-              (batt_voltage / 10 > ABSOLUTE_MIN_VOLTAGE))
+          /* Stay in this state until we're enabled externally */
+          if (enabled && (batt_voltage / 10 > ABSOLUTE_MIN_VOLTAGE))
           {
             /* Close Precharge contactor */
-            HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_SET);
 
             state = SOLAX_CONTACTOR_PRECHARGE;
           }
@@ -539,15 +529,12 @@ static HAL_StatusTypeDef solax_update_state(void)
 
       case SOLAX_CONTACTOR_CLOSED:
       {
-        if (chademo_get_state() > CHADEMO_STATE_ON)
+        if (!enabled)
         {
-          /* Warn the inverter that we're shutting down */
+          /* Let the inverter know that we're shutting down */
           solax_data.bms.msg_1875.contactor = 0;
-        }
 
-        if (chademo_get_state() > CHADEMO_STATE_STOP)
-        {
-          snprintf(last_error, ERROR_LEN, "ChaDeMo Stopped");
+          snprintf(last_error, ERROR_LEN, "Stop Request");
           state = SOLAX_BATTERY_ANNOUNCE;
         }
 
@@ -826,6 +813,16 @@ void solax_kick(void)
   {
     xSemaphoreGive(msgMutex);
   }
+}
+
+void solax_enable(void)
+{
+  enabled = true;
+}
+
+void solax_disable(void)
+{
+  enabled = false;
 }
 
 void solax_set_output_power(int16_t power)

@@ -63,6 +63,10 @@ void emergency_stop(void);
 void trigger_json_update(void);
 void dump_packet(uint8_t *data, uint8_t len);
 
+int app_process_cmd_power(char **args, int argc);
+int app_process_cmd_hv(char **args, int argc);
+
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -72,6 +76,8 @@ void dump_packet(uint8_t *data, uint8_t len);
 #define EVSE_PP_GPIO_Port GPIOA
 #define EVSE_CP_Pin GPIO_PIN_1
 #define EVSE_CP_GPIO_Port GPIOA
+#define CCS2_CP_Pin GPIO_PIN_2
+#define CCS2_CP_GPIO_Port GPIOA
 #define ADC1_VAC_Pin GPIO_PIN_4
 #define ADC1_VAC_GPIO_Port GPIOA
 #define SPI1_BATT_CS__Pin GPIO_PIN_4
@@ -100,8 +106,8 @@ void dump_packet(uint8_t *data, uint8_t len);
 #define LED3_GPIO_Port GPIOE
 #define GPIO_INT__Pin GPIO_PIN_14
 #define GPIO_INT__GPIO_Port GPIOE
-#define OD1_EN_Pin GPIO_PIN_10
-#define OD1_EN_GPIO_Port GPIOB
+#define CCS2_PWM_Pin GPIO_PIN_10
+#define CCS2_PWM_GPIO_Port GPIOB
 #define OD2_EN_Pin GPIO_PIN_11
 #define OD2_EN_GPIO_Port GPIOB
 #define OD3_EN_Pin GPIO_PIN_12
@@ -127,6 +133,8 @@ void dump_packet(uint8_t *data, uint8_t len);
 
 #define ADC_EVSE_PP     (0)
 #define ADC_BATT_CURR   (1)
+
+#define ADC2_CCS2_CP    (0)
 
 #define ERROR_LEN       (128)
 

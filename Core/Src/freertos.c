@@ -19,7 +19,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
-#include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
 #include "semphr.h"
@@ -27,12 +26,11 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "iwdg.h"
 #include "usart.h"
-
-#include "usbd_cdc_if.h"
 
 #include "chademo.h"
 #include "evse.h"
@@ -56,10 +54,6 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 
-#define ENABLE_EVSE
-#define ENABLE_CHADEMO
-#define ENABLE_SOLAX
-
 #define DEBUG_CONTROLLER
 
 #define JSON_UPDATE_TIME    (5000)
@@ -68,13 +62,35 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+enum ccs_state
+{
+  CCS_OFF = 0,                      /* CP Pilot Signal Off */
+  CCS_PILOT,                        /* CP Pilot Signal at 5% */
+  CCS_ERROR = 8
+};
+
+/* Upper / Red (bits 8-15) and Lower / Green (bits 0-7) Debug Leds */
+enum debug_leds
+{
+  DBG_LED_HV_TEST = 0,
+  DBG_LED_ISO_TEST,
+  DBG_LED_PRECHARGE,
+  DBG_LED_HV_ENABLED,
+
+  DBG_LED_PP_INSERTED = 8,
+  DBG_LED_CP_READY,
+  DBG_LED_MAX_CURRENT,
+};
 
 static bool error = false;            /* Whether we are in the error state */
 static int32_t power_offset = 0;      /* Offset from actual power (i.e. charge / discharge) */
-static uint8_t cmd_buf[APP_RX_DATA_SIZE];  /* Buffer for stdin commands */
-static uint16_t cmd_buf_len = 0;      /* Length of stdin buffer */
+
+static uint16_t debug_leds = 0;       /* Combined state of debug leds */
 
 static uint8_t comm_count = 0;        /* Number of active comm sessions (I2C / SPI / UART) */
+
+/* CCS Related Variables */
+static enum ccs_state ccs_state = CCS_OFF;
 
 /* USER CODE END Variables */
 /* Definitions for mainTask */
@@ -100,7 +116,8 @@ const osSemaphoreAttr_t jsonMutex_attributes = {
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 
-static void evse_changed_cb(EVSE_PP pp, uint8_t current);
+static void pp_changed_cb(EVSE_PP pp, uint8_t current);
+static void cp_changed_cb(EVSE_CP cp);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -201,18 +218,28 @@ void mainTaskEntry(void *argument)
   /* Power Up ESP8266 */
   HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
 
-  /* Initialise Red/Green IO expander and clear LEDs */
-  if (ioexp_init(IOEXP_RG_LED))
+  /* Initialise Top IO expander and clear LEDs */
+  if (ioexp_init(IOEXP_TOP_LEDS))
   {
-    ioexp_set_output(IOEXP_RG_LED, 0x0000);
-    ioexp_set_direction(IOEXP_RG_LED, 0xffff);
+    ioexp_set_direction(IOEXP_TOP_LEDS, 0xFFFF);
+    ioexp_set_output(IOEXP_TOP_LEDS, 0x0000);
+  }
+  else
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Top LED IO Expander.\"}]\n");
+    error = true;
   }
 
-  /* Initialise Blue/Yellow IO expander and clear LEDs */
-  if (ioexp_init(IOEXP_BY_LED))
+  /* Initialise Bottom LED IO expander and clear LEDs */
+  if (ioexp_init(IOEXP_BOT_LEDS))
   {
-    ioexp_set_output(IOEXP_BY_LED, 0x0000);
-    ioexp_set_direction(IOEXP_BY_LED, 0xffff);
+    ioexp_set_direction(IOEXP_BOT_LEDS, 0xFFFF);
+    ioexp_set_output(IOEXP_BOT_LEDS, 0x0000);
+  }
+  else
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Bottom LED IO Expander.\"}]\n");
+    error = true;
   }
 
   /* Give USB and ESP a chance to start up */
@@ -227,7 +254,7 @@ void mainTaskEntry(void *argument)
   }
 
 #ifdef ENABLE_EVSE
-  if (!evse_init(&evse_changed_cb))
+  if (!evse_init(&pp_changed_cb, &cp_changed_cb))
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise EVSE interface.\"}]\n");
     error = true;
@@ -260,8 +287,10 @@ void mainTaskEntry(void *argument)
   if (!error)
     printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
 
+#ifdef ENABLE_CHADEMO
   /* Set Maximum DC power. Import / Export will be controlled separately. */
   chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
+#endif
 
   MX_IWDG_Init();
 
@@ -274,6 +303,17 @@ void mainTaskEntry(void *argument)
       emergency_stop();
     }
 
+    /* Leds (Top 2 rows) */
+    {
+      static uint16_t old_leds = 0;
+      if (debug_leds != old_leds)
+      {
+        old_leds = debug_leds;
+        ioexp_set_direction(IOEXP_TOP_LEDS, ~debug_leds);
+      }
+    }
+
+#ifdef ENABLE_CHADEMO
     /* Debug LEDs */
     {
       static uint16_t old_leds = 0;
@@ -288,7 +328,7 @@ void mainTaskEntry(void *argument)
       if (leds != old_leds)
       {
         old_leds = leds;
-        ioexp_set_direction(IOEXP_RG_LED, ~leds);
+        ioexp_set_direction(IOEXP_BOT_LEDS, ~leds);
       }
     }
 
@@ -313,13 +353,26 @@ void mainTaskEntry(void *argument)
       power_offset = 0;
     }
 
+    /* Set Solax state based on ChaDeMo */
+    if (chademo_get_state() == CHADEMO_STATE_ON)
+    {
+      solax_enable();
+      solax_kick();
+    }
+    if (chademo_get_state() > CHADEMO_STATE_STOP)
+    {
+      solax_disable();
+      solax_kick();
+    }
+#endif
+
     /* Update the inverter power */
     solax_set_output_power(power_offset);
 
     /* Kick the Watchdog */
     HAL_IWDG_Refresh(&hiwdg);
 
-	osDelay(100);
+	  osDelay(100);
   }
   /* USER CODE END mainTaskEntry */
 }
@@ -341,11 +394,20 @@ void jsonTaskEntry(void *argument)
     xSemaphoreTake(jsonMutexHandle, JSON_UPDATE_TIME);
 
 #ifdef DEBUG_CONTROLLER
-    int32_t acc_current;
-    int32_t hv_current;
+    int32_t acc_current = -1;
+    int32_t hv_current = -1;
+    int32_t batt_voltage = -1;
+    int32_t inv_voltage = -1;
 
+#ifdef ENABLE_INA219
     sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
     sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
+#endif
+#ifdef ENABLE_MAX22530
+    sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
+    sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
+#endif
+
 #endif
 
     printf("{\"controller\":{");
@@ -354,13 +416,17 @@ void jsonTaskEntry(void *argument)
 #ifdef DEBUG_CONTROLLER
     printf(",\"acc_current\":%ld", acc_current / 1000);
     printf(",\"hv_current\":%ld", hv_current);
+    printf(",\"batt_voltage\":%ld", batt_voltage);
+    printf(",\"inv_voltage\":%ld", inv_voltage);
 #endif
     printf(",");
     evse_json_update();
     printf(",");
     solax_json_update();
+#ifdef ENABLE_CHADEMO
     printf(",");
     chademo_json_update();
+#endif
     printf("}}\n");
   }
   /* USER CODE END jsonTaskEntry */
@@ -383,7 +449,7 @@ void emergency_stop(void)
   /* Turn Off EVSE */
   HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
 
-  /* Force ChaDeMo contactors off */
+  /* Force DC contactors off */
   HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
 
@@ -445,7 +511,7 @@ void trigger_json_update(void)
   * @param  current Maximum AC current (in / out)
   * @retval None
   */
-static void evse_changed_cb(EVSE_PP pp, uint8_t current)
+static void pp_changed_cb(EVSE_PP pp, uint8_t current)
 {
   switch (pp)
   {
@@ -453,6 +519,7 @@ static void evse_changed_cb(EVSE_PP pp, uint8_t current)
       /* Enable the CP Line */
       /* This tells the EVSE to start charging (supply power) */
       HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
+      debug_leds |= (1 << DBG_LED_PP_INSERTED);
     break;
 
     default:
@@ -466,6 +533,7 @@ static void evse_changed_cb(EVSE_PP pp, uint8_t current)
       /* Update the inverter max */
       power_offset = 0;
       chademo_stop();
+      debug_leds &= ~(1 << DBG_LED_PP_INSERTED);
     break;
   }
 
@@ -476,149 +544,90 @@ static void evse_changed_cb(EVSE_PP pp, uint8_t current)
 }
 
 /**
-  * @brief  Process a line of stdin data
-  * @param  ptr Pointer to received data
-  * @param  len length of data
+  * @brief  EVSE CP callback.
+  * @param  cp Current vehicle state
   * @retval None
   */
-static void process_stdin_line(uint8_t *ptr, uint16_t len)
+static void cp_changed_cb(EVSE_CP cp)
 {
-  char *tok;
-
-  tok = strtok((char*)ptr, " \r\n");
-  if (tok)
-  {
-    if (0 == strcmp(tok, "chademo"))
-    {
-      tok = strtok(NULL, " ");
-      if (tok)
-      {
-        if (0 == strcmp(tok, "start"))
-        {
-          chademo_start();
-        }
-        else if (0 == strcmp(tok, "stop"))
-        {
-          power_offset = 0;
-          chademo_stop();
-        }
-      }
-    }
-    else if (0 == strcmp(tok, "power"))
-    {
-      tok = strtok(NULL, " ");
-      if (tok)
-      {
-        power_offset = strtol(tok, NULL, 10);
-      }
-    }
-    else if (0 == strcmp(tok, "evse"))
-    {
-      tok = strtok(NULL, " ");
-      if (tok)
-      {
-        switch (strtol(tok, NULL, 10))
-        {
-          case 0:
-            /* Disable the CP line */
-            HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
-          break;
-
-          case 1:
-            /* Enable the CP line */
-            HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
-          break;
-
-          default:
-          break;
-        }
-      }
-    }
-    else if (0 == strcmp(tok, "reset"))
-    {
-      HAL_NVIC_SystemReset();
-    }
-    else if (0 == strcmp(tok, "flash"))
-    {
-      JumpToBootloader();
-    }
-  }
+  if (cp > EVSE_CP_B)
+    debug_leds |= (1 << DBG_LED_CP_READY);
+  else
+    debug_leds &= ~(1 << DBG_LED_CP_READY);
 }
 
+/* Command Handlers (Application Level) */
+
 /**
-  * @brief  Process data received on stdin
-  * @param  ptr Pointer to received data
-  * @param  len length of data
-  * @retval None
+  * @brief  Process Power Setting command
+  * @param  args Command arguments
+  * @param  argc Number of arguments
+  * @retval Status (0 = OK, -1 = Error / Unknown Command)
   */
-void stdio_parser(uint8_t *ptr, uint16_t len)
+int app_process_cmd_power(char **args, int argc)
 {
-  uint32_t i;
-
-  if (len < (APP_RX_DATA_SIZE - cmd_buf_len))
+  if (argc >= 1)
   {
-    uint8_t *c = &cmd_buf[cmd_buf_len];
+    power_offset = strtol(args[0], NULL, 10);
+  }
+  return 0;
+}
 
-    memcpy(&cmd_buf[cmd_buf_len], ptr, len);
-    cmd_buf_len += len;
 
-    for (i=0; i<len; ++i, ++c)
+/**
+  * @brief  Process HV Test commands
+  * @param  args Command arguments
+  * @param  argc Number of arguments
+  * @retval Status (0 = OK, -1 = Error / Unknown Command)
+  */
+int app_process_cmd_hv(char **args, int argc)
+{
+  if (argc >= 2)
+  {
+    if (0 == strcmp(args[0], "src"))
     {
-      if (*c == '\n' || *c == '\r')
+      switch (strtol(args[1], NULL, 10))
       {
-        uint32_t offset = cmd_buf_len - len + i;
+        case 0:
+          /* Disable HV Test Source */
+          HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
+          HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
+          debug_leds &= ~(1 << DBG_LED_HV_TEST);
+        break;
 
-        /* Ensure we're null terminated */
-        cmd_buf[offset] = 0;
+        case 1:
+          /* Enable HV Test Source */
+          HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
+          HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
+          debug_leds |= (1 << DBG_LED_HV_TEST);
+        break;
 
-        /* Process this line */
-        process_stdin_line(&cmd_buf[0], offset);
-        cmd_buf_len = 0;
-        memset(cmd_buf, 0, APP_RX_DATA_SIZE);
+        default:
+        break;
+      }
+    }
+    else if (0 == strcmp(args[0], "iso"))
+    {
+      switch (strtol(args[1], NULL, 10))
+      {
+        case 0:
+          /* Disable ISO Test */
+          HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
+          debug_leds &= ~(1 << DBG_LED_ISO_TEST);
+        break;
+
+        case 1:
+          /* Enable ISO Test */
+          HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
+          debug_leds |= (1 << DBG_LED_ISO_TEST);
+        break;
+
+        default:
+        break;
       }
     }
   }
-  else
-  {
-    /* Buffer overflow */
-    cmd_buf_len = 0;
-  }
-#if 0
-  /* Fast response for when hacking around */
-  if (len == 1)
-  {
-    switch (ptr[0])
-    {
-      case '1':
-        chademo_start();
-      break;
-
-      case '2':
-        power_offset = 0;
-        chademo_stop();
-      break;
-
-      case '3':
-        HAL_NVIC_SystemReset();
-      break;
-
-      case '4':
-        JumpToBootloader();
-      break;
-
-      case '+':
-        power_offset += 100;
-      break;
-
-      case '-':
-        power_offset -= 100;
-      break;
-
-      default:
-      break;
-    }
-  }
-  #endif
+  return 0;
 }
 
 /* USER CODE END Application */

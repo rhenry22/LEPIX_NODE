@@ -270,7 +270,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 {
   /* Used for Sensor reads */
   int32_t val;
-  HAL_StatusTypeDef ret;
+  HAL_StatusTypeDef ret = HAL_ERROR;
 
   state_time = HAL_GetTick();
 
@@ -352,9 +352,10 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
     case CHADEMO_STATE_INS_TEST_BASE:
     {
+#ifdef ENABLE_INA219
         /* Store the HV DCDC current before applying to connector */
         ret = sensor_get_value(SENSOR_HV_TEST_CURRENT, &val);
-
+#endif
         if (ret == HAL_OK)
         {
           leak_base = val;
@@ -378,12 +379,14 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
     case CHADEMO_STATE_INS_TEST:
     {
-      int32_t hv_current;
+      int32_t hv_current = -1;
       int32_t acc_current;  /* 12V ACC Current in uA */
 
+#ifdef ENABLE_INA219
       ret = sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
       if (ret == HAL_OK)
         ret = sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
+#endif
 
       /* Check that HV Test current is below threshold */
       if (ret != HAL_OK || hv_current > leak_base + LEAKAGE_CURRENT_MAX)
@@ -459,14 +462,14 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
   {
     uint16_t leds = 0;
-    
+
     if (errored)
       leds |= (1 << CHADEMO_STATE_ERROR);
 
     if (chademo_state > 0)
       leds |= (1 << chademo_state);
 
-    ioexp_set_direction(IOEXP_BY_LED, ~leds);
+    ioexp_set_direction(IOEXP_BOT_LEDS, ~leds);
   }
 }
 
@@ -600,7 +603,7 @@ static void chademo_process_can(void)
 HAL_StatusTypeDef chademo_send_messages(void)
 {
   static uint32_t last_send = 0;
-  HAL_StatusTypeDef ret = HAL_OK;
+  HAL_StatusTypeDef ret = HAL_ERROR;
 
   /* Send Charger messages every 100ms */
   if (HAL_GetTick() < last_send + MESSAGE_INTERVAL)
@@ -608,8 +611,10 @@ HAL_StatusTypeDef chademo_send_messages(void)
 
   last_send = HAL_GetTick();
 
+#ifdef ENABLE_MAX22530
   /* Update our Voltage, Current and Power measurements */
   ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &measured_voltage);
+#endif
   if (ret != HAL_OK)
     return ret;
   ret = sensor_get_value(SENSOR_BATT_CURRENT, &measured_current);
@@ -1195,6 +1200,28 @@ CHADEMO_STATE chademo_get_state(void)
 int32_t chademo_get_power(void)
 {
   return measured_power;
+}
+
+/**
+  * @brief  Process command line input for the chademo module
+  * @param  args Argument list
+  * @param  argc Number of arguments
+  * @retval Status (0 = OK, -1 = Error / Unknown Command)
+  */
+int chademo_process_cmd(char **args, int argc)
+{
+  if (argc >= 1)
+  {
+    if (0 == strcmp(args[0], "start"))
+    {
+      chademo_start();
+    }
+    else if (0 == strcmp(args[0], "stop"))
+    {
+      chademo_stop();
+    }
+  }
+  return 0;
 }
 
 /**
