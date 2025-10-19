@@ -290,8 +290,8 @@ void solaxModbusTask(void *argument);
 
 static void solax_open_contactors(void)
 {
-  HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_RESET);
   solax_data.bms.msg_1875.contactor = 0;
 }
 
@@ -482,7 +482,7 @@ static HAL_StatusTypeDef solax_update_state(void)
           if (enabled && (batt_voltage / 10 > ABSOLUTE_MIN_VOLTAGE))
           {
             /* Close Precharge contactor */
-            HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_SET);
 
             state = SOLAX_CONTACTOR_PRECHARGE;
           }
@@ -503,7 +503,7 @@ static HAL_StatusTypeDef solax_update_state(void)
           solax_data.bms.msg_1875.contactor = 2;
 
           /* Close Main contactor */
-          HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_SET);
+          HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_SET);
 
           /* The contactors cause our current measurement to offset. */
           ret = sensor_zero_ibatt();

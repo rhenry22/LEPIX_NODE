@@ -38,9 +38,9 @@
 
 /* #define DEBUG_CHADEMO */
 
-/* 
+/*
  * Leakage is monitored by the Inverter and we will cause problems if done in
- * multiple places 
+ * multiple places
  */
 /* #define LEAK_TEST */
 

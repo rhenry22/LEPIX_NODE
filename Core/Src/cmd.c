@@ -9,30 +9,34 @@
  */
 
 #include "FreeRTOS.h"
-//#include "task.h"
-//#include "main.h"
-//#include "cmsis_os.h"
-//#include "semphr.h"
+#include "cmsis_os.h"
+#include "semphr.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-//#include "iwdg.h"
-//#include "usart.h"
 #include "usbd_cdc_if.h"
 
 #include "chademo.h"
 #include "evse.h"
-//#include "ioexp.h"
-//#include "modbus.h"
-//#include "sensor.h"
-//#include "solax.h"
 
-#define MAX_CMD_ARGS        (8)     /* Maximum number of command arguments */
+#define MAX_CMD_ARGS        (8)             /* Maximum number of command arguments */
 
-static uint8_t cmd_buf[APP_RX_DATA_SIZE];  /* Buffer for stdin commands */
-static uint16_t cmd_buf_len = 0;      /* Length of stdin buffer */
+static osThreadId_t taskHandle;
+static const osThreadAttr_t taskAttributes = {
+  .name = "cmdTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+static SemaphoreHandle_t cmdMutexHandle;
+
+
+static uint8_t cmd_buf[APP_RX_DATA_SIZE];   /* Buffer for stdin commands */
+static uint16_t cmd_buf_len = 0;            /* Length of stdin buffer */
+
+static uint8_t line_buf[APP_RX_DATA_SIZE];  /* Buffer for command line */
+static uint16_t line_buf_len;               /* Length of command buffer */
 
 /**
   * @brief  Process Reset command
@@ -141,10 +145,23 @@ void stdio_parser(uint8_t *ptr, uint16_t len)
         /* Ensure we're null terminated */
         cmd_buf[offset] = 0;
 
-        /* Process this line */
-        process_stdin_line(&cmd_buf[0], offset);
+        /* The input was likely received from IRQ context */
+        /* Process in our own task */
+        memcpy(&line_buf[0], &cmd_buf[0], offset);
+        line_buf_len = offset;
+
         cmd_buf_len = 0;
         memset(cmd_buf, 0, APP_RX_DATA_SIZE);
+
+        if (xPortIsInsideInterrupt())
+        {
+            BaseType_t pxHigherPriorityTaskWoken;
+            xSemaphoreGiveFromISR(cmdMutexHandle, &pxHigherPriorityTaskWoken);
+        }
+        else
+        {
+            xSemaphoreGive(cmdMutexHandle);
+        }
       }
     }
   }
@@ -153,4 +170,33 @@ void stdio_parser(uint8_t *ptr, uint16_t len)
     /* Buffer overflow */
     cmd_buf_len = 0;
   }
+}
+
+/**
+  * @brief  Process commands from stdin
+  * @param  argument: Not used
+  * @retval None
+  */
+void cmdTask(void *argument)
+{
+    while (1)
+    {
+        xSemaphoreTake(cmdMutexHandle, 1000);
+
+        if (line_buf_len > 0)
+        {
+            /* Process the command */
+            process_stdin_line(&line_buf[0], line_buf_len);
+            line_buf_len = 0;
+            memset(line_buf, 0, APP_RX_DATA_SIZE);
+        }
+    }
+}
+
+bool cmd_init(void)
+{
+  taskHandle = osThreadNew(cmdTask, NULL, &taskAttributes);
+  cmdMutexHandle = xSemaphoreCreateBinary();
+
+  return (taskHandle != NULL && cmdMutexHandle != NULL);
 }

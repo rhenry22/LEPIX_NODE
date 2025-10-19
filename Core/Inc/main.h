@@ -57,6 +57,7 @@ void Error_Handler(void);
 /* USER CODE BEGIN EFP */
 
 void JumpToBootloader(void);
+bool cmd_init(void);
 void stdio_parser(uint8_t *ptr, uint16_t len);
 void comm_session(bool start_stop);
 void emergency_stop(void);
@@ -108,10 +109,10 @@ int app_process_cmd_hv(char **args, int argc);
 #define GPIO_INT__GPIO_Port GPIOE
 #define CCS2_PWM_Pin GPIO_PIN_10
 #define CCS2_PWM_GPIO_Port GPIOB
-#define OD2_EN_Pin GPIO_PIN_11
-#define OD2_EN_GPIO_Port GPIOB
-#define OD3_EN_Pin GPIO_PIN_12
-#define OD3_EN_GPIO_Port GPIOB
+#define CTMAIN_EN_Pin GPIO_PIN_11
+#define CTMAIN_EN_GPIO_Port GPIOB
+#define CTPRE_EN_Pin GPIO_PIN_12
+#define CTPRE_EN_GPIO_Port GPIOB
 #define GPIO1_Pin GPIO_PIN_13
 #define GPIO1_GPIO_Port GPIOB
 #define GPIO2_Pin GPIO_PIN_14

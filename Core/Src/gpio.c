@@ -59,8 +59,8 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, LEAK_TEST_EN_Pin|ISO_TEST_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, CHADEMO_LOCK_Pin|CHADEMO_SEQ1_Pin|CHADEMO_SEQ2_Pin|OD2_EN_Pin
-                          |OD3_EN_Pin|GPIO1_Pin|GPIO2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, CHADEMO_LOCK_Pin|CHADEMO_SEQ1_Pin|CHADEMO_SEQ2_Pin|CTMAIN_EN_Pin
+                          |CTPRE_EN_Pin|GPIO1_Pin|GPIO2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, EVSE_CHARGE_EN_Pin|ESP_EN_Pin, GPIO_PIN_RESET);
@@ -89,8 +89,8 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : PBPin PBPin PBPin PBPin
                            PBPin PBPin PBPin */
-  GPIO_InitStruct.Pin = CHADEMO_LOCK_Pin|CHADEMO_SEQ1_Pin|CHADEMO_SEQ2_Pin|OD2_EN_Pin
-                          |OD3_EN_Pin|GPIO1_Pin|GPIO2_Pin;
+  GPIO_InitStruct.Pin = CHADEMO_LOCK_Pin|CHADEMO_SEQ1_Pin|CHADEMO_SEQ2_Pin|CTMAIN_EN_Pin
+                          |CTPRE_EN_Pin|GPIO1_Pin|GPIO2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

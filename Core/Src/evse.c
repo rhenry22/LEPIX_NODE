@@ -33,7 +33,7 @@
 static uint32_t last_pp_check = 0;
 static EVSE_PP pp = EVSE_PP_NONE;
 static EVSE_CP cp = EVSE_CP_ERROR;
-
+static uint8_t ccs2_pwm = 100;
 static uint16_t cp_loops = 0;
 static uint32_t cp_rise = 0;
 static uint32_t cp_fall = 0;
@@ -103,7 +103,7 @@ void evse_tim_CaptureCallback(TIM_HandleTypeDef *htim)
           if (cp_pwm < 3)                       /* No charging Allowed */
             max_current = 0;
           else if (3 <= cp_pwm && cp_pwm <= 7)  /* ISO 15118 */
-            max_current = 1;
+            max_current = 2;
           else if (7 < cp_pwm && cp_pwm < 8)    /* No charging Allowed */
             max_current = 0;
           else if (8 <= cp_pwm && cp_pwm < 10)  /* 6A Max */
@@ -205,12 +205,15 @@ EVSE_CP evse_get_cp(void)
     adcl = val & 0xffff;
     adch = (val >> 16) & 0xffff;
 
-    int32_t cp_h = ((int32_t)adch - 2040) * 130 / 2056 + 5; // 11.9, 9.1, 5.9
+    int32_t cp_h = ((int32_t)adch - 1663) * 120 / 1613; // 11.9, 9.1, 5.9
+    int32_t cp_l = ((int32_t)adcl - 1563) * 120 / 1613;
+
+    //printf("CP CPH=%ld, CPL=%ld, ADCH=%ld, ADCL=%ld\n", cp_h, cp_l, adch, adcl);
+
     cp_h /= 10;
-    int32_t cp_l = ((int32_t)adcl - 1960) * 135 / 1960 + 5;
     cp_l /= 10;
 
-    if (cp_l > -10)
+    if (ccs2_pwm < 100 && cp_l > -10)        /* Proper connection should not impact -'ve pulse */
       cp = EVSE_CP_ERROR;
     else if (cp_h >= 10)
       cp = EVSE_CP_A;
@@ -251,6 +254,8 @@ void evse_set_cp(uint8_t pwm)
   {
     Error_Handler();
   }
+
+  ccs2_pwm = pwm;
 }
 
 /**
@@ -322,36 +327,40 @@ void evse_process(void)
   */
 int evse_process_cmd(char **args, int argc)
 {
-  int ret = 0;
-  if (argc >= 2)
+  int ret = -1;
+  if (argc >= 2 && 0 == strcmp(args[0], "chg-en"))
   {
-    if (0 == strcmp(args[0], "pp"))
+    switch (strtol(args[1], NULL, 10))
     {
-      switch (strtol(args[1], NULL, 10))
-      {
-        case 0:
-          /* Disable the CP line */
-          HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
-        break;
+      case 0:
+        /* Disable the CP line */
+        HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
+        ret = 0;
+      break;
 
-        case 1:
-          /* Enable the CP line */
-          HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
-        break;
+      case 1:
+        /* Enable the CP line */
+        HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
+        ret = 0;
+      break;
 
-        default:
-          ret = -1;
-        break;
-      }
+      default:
+      break;
     }
-    else if (0 == strcmp(args[0], "cp"))
+  }
+  else if (argc >= 2 && 0 == strcmp(args[0], "pwm"))
+  {
+    uint32_t pwm = strtol(args[1], NULL, 10);
+    if (pwm <= 100)
     {
-      uint32_t pwm = strtol(args[1], NULL, 10);
-      if (pwm <= 100)
-        evse_set_cp(pwm);
-      else
-        ret = -1;
+      evse_set_cp(pwm);
+      ret = 0;
     }
+  }
+  else if (argc >= 1 && 0 == strcmp(args[0], "get"))
+  {
+    trigger_json_update();
+    ret = 0;
   }
   return ret;
 }
@@ -362,13 +371,12 @@ int evse_process_cmd(char **args, int argc)
   */
 void evse_json_update(void)
 {
-  printf("\"evse\":{\"max_current\":%ld", max_current);
+  printf("\"evse\":{\"max_current\":%ld,\"pp\":%d, \"cp\":%d, \"pwm\":%d",
+         max_current, pp, cp, ccs2_pwm);
 
   if (strnlen(last_error, ERROR_LEN))
   {
-    printf(",\"pp\":%d, \"cp\":%d, \"last_error\":\"%s\"",
-          pp, cp,
-          last_error);
+    printf(", \"last_error\":\"%s\"", last_error);
   }
 
   printf("}");

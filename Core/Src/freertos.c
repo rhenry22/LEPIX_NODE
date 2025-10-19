@@ -79,7 +79,7 @@ enum debug_leds
 
   DBG_LED_PP_INSERTED = 8,
   DBG_LED_CP_READY,
-  DBG_LED_MAX_CURRENT,
+  DBG_LED_CP_CHARGE,
 };
 
 static bool error = false;            /* Whether we are in the error state */
@@ -212,7 +212,7 @@ void mainTaskEntry(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN mainTaskEntry */
 
-  /* Turn on the EVSE */
+  /* Request supply from the EVSE */
   HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
 
   /* Power Up ESP8266 */
@@ -245,6 +245,12 @@ void mainTaskEntry(void *argument)
   /* Give USB and ESP a chance to start up */
   osDelay(3000);
 
+  if (!cmd_init())
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise command parser.\"}]\n");
+    error = true;
+  }
+
   /* Initialise Sensors and Peripherals */
 
   if (!sensor_init())
@@ -258,6 +264,10 @@ void mainTaskEntry(void *argument)
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise EVSE interface.\"}]\n");
     error = true;
+  }
+  else
+  {
+    evse_set_cp(100);
   }
 #endif
 
@@ -410,6 +420,21 @@ void jsonTaskEntry(void *argument)
 
 #endif
 
+#ifndef ENABLE_CHADEMO
+    /* Display Batt and Inverter Voltages on LEDs (300-500v) */
+    {
+      int32_t b;
+      int32_t i;
+      b = (batt_voltage - 3000) * 8 / 2000;
+      if (b < 0) b = 0;
+      b = ((1 >> b) - 1) & 0xff;
+      i = (inv_voltage - 3000) * 8 / 2000;
+      if (i < 0) i = 0;
+      i = ((1 >> i) - 1) & 0xff;
+      ioexp_set_direction(IOEXP_BOT_LEDS, ~(b << 8 | i));
+    }
+#endif
+
     printf("{\"controller\":{");
     printf("\"power_offset\":%ld", power_offset);
     printf(",\"timestamp\":%ld", HAL_GetTick());
@@ -502,7 +527,15 @@ void comm_session(bool start_stop)
   */
 void trigger_json_update(void)
 {
-  xSemaphoreGive(jsonMutexHandle);
+  if (xPortIsInsideInterrupt())
+  {
+    BaseType_t pxHigherPriorityTaskWoken;
+    xSemaphoreGiveFromISR(jsonMutexHandle, &pxHigherPriorityTaskWoken);
+  }
+  else
+  {
+    xSemaphoreGive(jsonMutexHandle);
+  }
 }
 
 /**
@@ -550,10 +583,15 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
   */
 static void cp_changed_cb(EVSE_CP cp)
 {
-  if (cp > EVSE_CP_B)
+  if (cp >= EVSE_CP_B)
     debug_leds |= (1 << DBG_LED_CP_READY);
   else
     debug_leds &= ~(1 << DBG_LED_CP_READY);
+
+  if (cp >= EVSE_CP_C)
+    debug_leds |= (1 << DBG_LED_CP_CHARGE);
+  else
+    debug_leds &= ~(1 << DBG_LED_CP_CHARGE);
 }
 
 /* Command Handlers (Application Level) */
@@ -566,11 +604,12 @@ static void cp_changed_cb(EVSE_CP cp)
   */
 int app_process_cmd_power(char **args, int argc)
 {
-  if (argc >= 1)
+  if (argc == 1)
   {
     power_offset = strtol(args[0], NULL, 10);
+    return 0;
   }
-  return 0;
+  return -1;
 }
 
 
@@ -582,52 +621,59 @@ int app_process_cmd_power(char **args, int argc)
   */
 int app_process_cmd_hv(char **args, int argc)
 {
-  if (argc >= 2)
+  int ret = -1;
+  if (argc >= 2 && 0 == strcmp(args[0], "src"))
   {
-    if (0 == strcmp(args[0], "src"))
+    switch (strtol(args[1], NULL, 10))
     {
-      switch (strtol(args[1], NULL, 10))
-      {
-        case 0:
-          /* Disable HV Test Source */
-          HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-          HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
-          debug_leds &= ~(1 << DBG_LED_HV_TEST);
-        break;
+      case 0:
+        /* Disable HV Test Source */
+        HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
+        debug_leds &= ~(1 << DBG_LED_HV_TEST);
+        ret = 0;
+      break;
 
-        case 1:
-          /* Enable HV Test Source */
-          HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
-          HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
-          debug_leds |= (1 << DBG_LED_HV_TEST);
-        break;
+      case 1:
+        /* Enable HV Test Source */
+        HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
+        debug_leds |= (1 << DBG_LED_HV_TEST);
+        ret = 0;
+      break;
 
-        default:
-        break;
-      }
-    }
-    else if (0 == strcmp(args[0], "iso"))
-    {
-      switch (strtol(args[1], NULL, 10))
-      {
-        case 0:
-          /* Disable ISO Test */
-          HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
-          debug_leds &= ~(1 << DBG_LED_ISO_TEST);
-        break;
-
-        case 1:
-          /* Enable ISO Test */
-          HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
-          debug_leds |= (1 << DBG_LED_ISO_TEST);
-        break;
-
-        default:
-        break;
-      }
+      default:
+      break;
     }
   }
-  return 0;
+  else if (argc >= 2 && 0 == strcmp(args[0], "iso"))
+  {
+    switch (strtol(args[1], NULL, 10))
+    {
+      case 0:
+        /* Disable ISO Test */
+        HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
+        debug_leds &= ~(1 << DBG_LED_ISO_TEST);
+        ret = 0;
+      break;
+
+      case 1:
+        /* Enable ISO Test */
+        HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
+        debug_leds |= (1 << DBG_LED_ISO_TEST);
+        ret = 0;
+      break;
+
+      default:
+      break;
+    }
+  }
+  else if (argc >= 1 && 0 == strcmp(args[0], "get"))
+  {
+    trigger_json_update();
+    ret = 0;
+  }
+  return ret;
 }
 
 /* USER CODE END Application */
