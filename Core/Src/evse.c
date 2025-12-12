@@ -21,9 +21,11 @@
 #include "sensor.h"
 #include "evse.h"
 
-#define PP_UNPLUGGED_MIN      (2800)
-#define PP_PRESSED_MIN        (2400)
-#define PP_INSERTED_MIN       (1400)
+//# define DEBUG_EVSE
+
+#define PP_UNPLUGGED_MIN      (2100) //2240
+#define PP_PRESSED_MIN        (1900) //2010
+#define PP_INSERTED_MIN       (1300) //1480
 #define PP_CHECK_INTERVAL     (100)
 
 #define EVSE_DEFAULT_CURRENT  (0)
@@ -168,6 +170,16 @@ EVSE_PP evse_get_pp(void)
     last_pp_check = HAL_GetTick();
 
     ret = sensor_get_value(SENSOR_EVSE_PP, &val);
+
+#ifdef DEBUG_EVSE
+    static int32_t pp_val = 0;
+    if (pp_val != val)
+    {
+      pp_val = val;
+      printf("EVSE PP ADC Value: %ld\n", val);
+    }
+#endif
+
     if (HAL_OK != ret)
     {
       pp = EVSE_PP_ERROR;
@@ -371,7 +383,7 @@ int evse_process_cmd(char **args, int argc)
   */
 void evse_json_update(void)
 {
-  printf("\"evse\":{\"max_current\":%ld,\"pp\":%d, \"cp\":%d, \"pwm\":%d",
+  printf("\"evse\":{\"ac\":{\"max_current\":%ld,\"pp\":%d}, \"ccs2\":{\"cp\":%d, \"pwm\":%d}",
          max_current, pp, cp, ccs2_pwm);
 
   if (strnlen(last_error, ERROR_LEN))

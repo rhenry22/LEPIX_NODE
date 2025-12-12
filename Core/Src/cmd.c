@@ -19,6 +19,7 @@
 #include "usbd_cdc_if.h"
 
 #include "chademo.h"
+#include "solax.h"
 #include "evse.h"
 
 #define MAX_CMD_ARGS        (8)             /* Maximum number of command arguments */
@@ -80,7 +81,11 @@ static const cmd_entry_t cmd_table[] = {
 #ifdef ENABLE_CHADEMO
     { "chademo", chademo_process_cmd },
 #endif
+#ifdef ENABLE_SOLAX
+    { "solax", solax_process_cmd },
+#endif
     { "hv", app_process_cmd_hv },
+    { "leds", app_process_cmd_leds },
 };
 
 /**

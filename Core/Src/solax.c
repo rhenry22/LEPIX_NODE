@@ -252,6 +252,7 @@ static SOLAX_STATE state = SOLAX_BATTERY_ANNOUNCE;  /* BMS state machine */
 static uint16_t max_ac_power = 0;                   /* Maximum current limit advertised by EVSE (W x1) */
 static uint32_t t_zero_set = 0;                     /* Time at which current request set to zero (debug / check inverter response) */
 static uint32_t last_update = 0;                    /* Last time we saw a CAN message */
+static uint32_t solax_last_cmd = 0;                 /* Last time we received a command */
 static uint32_t bms_update = 0;                     /* Last time we sent our CAN messages */
 static uint16_t max_charge_current = 0;             /* Max DC charge current (A x10) */
 static uint16_t max_discharge_current = 0;          /* Max DC discharge current (A x10) */
@@ -691,6 +692,17 @@ void solaxTask(void *argument)
         state = SOLAX_BATTERY_ANNOUNCE;
       }
     }
+
+    /* Check to see if our commander has vanished */
+    if (solax_last_cmd > 0 && HAL_GetTick() - solax_last_cmd > SOLAX_TIMEOUT)
+    {
+      snprintf(last_error, ERROR_LEN,
+                "No commands received from host in %lds", (HAL_GetTick() - solax_last_cmd) / 1000);
+      state = SOLAX_BATTERY_ANNOUNCE;
+      solax_set_output_power(0);
+      solax_disable();
+      solax_last_cmd = 0;
+    }
   }
 }
 
@@ -818,11 +830,13 @@ void solax_kick(void)
 void solax_enable(void)
 {
   enabled = true;
+  solax_kick();
 }
 
 void solax_disable(void)
 {
   enabled = false;
+  solax_kick();
 }
 
 void solax_set_output_power(int16_t power)
@@ -933,6 +947,77 @@ void solax_set_battery_capacity(uint32_t energy)
 void solax_set_battery_soc(uint16_t soc)
 {
   solax_data.bms.msg_1873.soc = soc;
+  solax_last_cmd = HAL_GetTick();
+}
+
+/**
+  * @brief  Process command line input for the solax module
+  * @param  args Argument list
+  * @param  argc Number of arguments
+  * @retval Status (0 = OK, -1 = Error / Unknown Command)
+  */
+int solax_process_cmd(char **args, int argc)
+{
+  int ret = 0;
+
+  if (argc >= 2 && 0 == strcmp(args[0], "dc_max_i"))
+  {
+    /* Set the maximum charge and discharge current (A x 10) */
+    solax_set_max_dc_dis_current(strtol(args[1], NULL, 10));
+    solax_set_max_dc_chg_current(strtol(args[1], NULL, 10));
+  }
+  else if (argc >= 2 && 0 == strcmp(args[0], "dc_max_v"))
+  {
+    solax_set_battery_voltage_max(strtol(args[1], NULL, 10));
+  }
+  else if (argc >= 2 && 0 == strcmp(args[0], "dc_min_v"))
+  {
+    solax_set_battery_voltage_min(strtol(args[1], NULL, 10));
+  }
+  else if (argc >= 2 && 0 == strcmp(args[0], "dc_tgt_v"))
+  {
+    solax_set_battery_voltage_tgt(strtol(args[1], NULL, 10));
+  }
+  else if (argc >= 2 && 0 == strcmp(args[0], "soc"))
+  {
+    solax_set_battery_soc(strtol(args[1], NULL, 10));
+  }
+  else if (argc >= 2 && 0 == strcmp(args[0], "enable"))
+  {
+    if (strtol(args[1], NULL, 10))
+    {
+      solax_enable();
+    }
+    else
+    {
+      solax_set_output_power(0);
+      solax_disable();
+    }
+  }
+/*
+  else if (argc >= 2 && 0 == strcmp(args[0], "contactor"))
+  {
+    int val = strtol(args[1], NULL, 10);
+    if (val & 0x01)
+      HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_SET);
+    else
+      HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_RESET);
+
+    if (val & 0x02)
+      HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_SET);
+    else
+      HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_RESET);
+  }
+*/
+  else
+  {
+    ret = -1;
+  }
+
+  if (ret == 0)
+    solax_last_cmd = HAL_GetTick();
+
+  return ret;
 }
 
 /**

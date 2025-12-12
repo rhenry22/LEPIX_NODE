@@ -66,6 +66,7 @@ void dump_packet(uint8_t *data, uint8_t len);
 
 int app_process_cmd_power(char **args, int argc);
 int app_process_cmd_hv(char **args, int argc);
+int app_process_cmd_leds(char **args, int argc);
 
 
 /* USER CODE END EFP */
@@ -109,10 +110,10 @@ int app_process_cmd_hv(char **args, int argc);
 #define GPIO_INT__GPIO_Port GPIOE
 #define CCS2_PWM_Pin GPIO_PIN_10
 #define CCS2_PWM_GPIO_Port GPIOB
-#define CTMAIN_EN_Pin GPIO_PIN_11
-#define CTMAIN_EN_GPIO_Port GPIOB
-#define CTPRE_EN_Pin GPIO_PIN_12
+#define CTPRE_EN_Pin GPIO_PIN_11
 #define CTPRE_EN_GPIO_Port GPIOB
+#define CTMAIN_EN_Pin GPIO_PIN_12
+#define CTMAIN_EN_GPIO_Port GPIOB
 #define GPIO1_Pin GPIO_PIN_13
 #define GPIO1_GPIO_Port GPIOB
 #define GPIO2_Pin GPIO_PIN_14

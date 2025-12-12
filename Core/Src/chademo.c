@@ -213,8 +213,6 @@ static bool cp_ready = false;               /* Is the car plugged in? */
 
 static uint32_t state_time = 0;             /* Time that the last state transition happened */
 static uint32_t error_time = 0;             /* Timer to flash LED on error */
-static uint32_t button_time = 0;            /* Timer for button LED(s) */
-static uint32_t button2_time = 0;           /* Timer for button Press / Hold */
 
 static bool errored = false;                /* If we hit any errors, prevent starting again */
 static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
@@ -1061,90 +1059,6 @@ void chademo_process(void)
       error_time = HAL_GetTick();
       HAL_GPIO_TogglePin(LED_GPIO_Port, LED3_Pin);
     }
-  }
-
-  /* Handle User Buttons */
-  if (HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_SET)
-    button2_time = 0;
-
-  switch (chademo_state)
-  {
-    case CHADEMO_STATE_OFF:
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO2_Pin, GPIO_PIN_RESET);
-      if (cp_ready)
-      {
-        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_SET);
-
-        /* Button Press Starts */
-        if (button2_time == 0 &&
-            HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
-        {
-          button2_time = HAL_GetTick();
-          chademo_start();
-        }
-      }
-      else
-      {
-        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_RESET);
-      }
-    break;
-
-    case CHADEMO_STATE_START:
-    case CHADEMO_STATE_PARAM_CHK:
-    case CHADEMO_STATE_PERM_OK:
-    case CHADEMO_STATE_INS_TEST_BASE:
-    case CHADEMO_STATE_INS_TEST:
-    case CHADEMO_STATE_BATT_CHECK:
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_RESET);
-
-      if (HAL_GetTick() > button_time + 500)
-      {
-        button_time = HAL_GetTick();
-        HAL_GPIO_TogglePin(GPIO1_GPIO_Port, GPIO2_Pin);
-      }
-
-      /* Button Press Stops */
-      if (button2_time == 0 &&
-          HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
-      {
-        button2_time = HAL_GetTick();
-        chademo_stop();
-      }
-    break;
-
-    case CHADEMO_STATE_ON:
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO2_Pin, GPIO_PIN_SET);
-
-      /* Button Press Stops */
-      if (button2_time == 0 &&
-          HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
-      {
-        button2_time = HAL_GetTick();
-        chademo_stop();
-      }
-    break;
-
-    case CHADEMO_STATE_STOP:
-    case CHADEMO_STATE_WELD_CHECK:
-    case CHADEMO_STATE_WAIT_K_OFF:
-    case CHADEMO_STATE_WAIT_VEHICLE_OFF:
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO2_Pin, GPIO_PIN_RESET);
-      if (HAL_GetTick() > button_time + 500)
-      {
-        button_time = HAL_GetTick();
-        HAL_GPIO_TogglePin(GPIO1_GPIO_Port, GPIO1_Pin);
-      }
-    break;
-
-    case CHADEMO_STATE_ERROR:
-      if (HAL_GetTick() > button_time + 500)
-      {
-        button_time = HAL_GetTick();
-        HAL_GPIO_TogglePin(GPIO1_GPIO_Port, GPIO1_Pin);
-        HAL_GPIO_TogglePin(GPIO1_GPIO_Port, GPIO2_Pin);
-      }
-    break;
   }
 
   /* Check that we are receiving regular CAN messages from ChaDeMo */

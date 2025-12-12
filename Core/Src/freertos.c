@@ -19,12 +19,13 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
+#include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
-#include "semphr.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "semphr.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,26 +57,28 @@
 
 #define DEBUG_CONTROLLER
 
-#define JSON_UPDATE_TIME    (5000)
+#define JSON_UPDATE_TIME         (5000)
 
+#define HIGH_VOLTAGE_THRESHOLD   (500) /* 50V */
+#define HIGH_VOLTAGE_TIMEOUT     (10000) /* Allow the HV source to be left on for this duration (max) */
+
+#define BUTTON_DEBOUNCE_TIME     (150)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-enum ccs_state
-{
-  CCS_OFF = 0,                      /* CP Pilot Signal Off */
-  CCS_PILOT,                        /* CP Pilot Signal at 5% */
-  CCS_ERROR = 8
-};
 
 /* Upper / Red (bits 8-15) and Lower / Green (bits 0-7) Debug Leds */
 enum debug_leds
 {
   DBG_LED_HV_TEST = 0,
   DBG_LED_ISO_TEST,
-  DBG_LED_PRECHARGE,
-  DBG_LED_HV_ENABLED,
+  DBG_LED_CT_PRE,
+  DBG_LED_CT_MAIN,
+  DBG_LED_STAT_RED_INV,
+  DBG_LED_STAT_RED_EV,
+  DBG_LED_HV_INV,
+  DBG_LED_HV_BATT,
 
   DBG_LED_PP_INSERTED = 8,
   DBG_LED_CP_READY,
@@ -84,13 +87,10 @@ enum debug_leds
 
 static bool error = false;            /* Whether we are in the error state */
 static int32_t power_offset = 0;      /* Offset from actual power (i.e. charge / discharge) */
-
 static uint16_t debug_leds = 0;       /* Combined state of debug leds */
 
 static uint8_t comm_count = 0;        /* Number of active comm sessions (I2C / SPI / UART) */
-
-/* CCS Related Variables */
-static enum ccs_state ccs_state = CCS_OFF;
+static uint32_t hv_time = 0;          /* When the HV source was enabled */
 
 /* USER CODE END Variables */
 /* Definitions for mainTask */
@@ -324,24 +324,6 @@ void mainTaskEntry(void *argument)
     }
 
 #ifdef ENABLE_CHADEMO
-    /* Debug LEDs */
-    {
-      static uint16_t old_leds = 0;
-      uint16_t leds = 0;
-
-      if (GPIO_PIN_SET == HAL_GPIO_ReadPin(CHADEMO_CP_GPIO_Port, CHADEMO_CP_Pin))
-        leds |= 1 << 8;
-
-      if (GPIO_PIN_RESET == HAL_GPIO_ReadPin(CHADEMO_CHARGE_ALLOWED__GPIO_Port, CHADEMO_CHARGE_ALLOWED__Pin))
-        leds |= 1 << 9;
-
-      if (leds != old_leds)
-      {
-        old_leds = leds;
-        ioexp_set_direction(IOEXP_BOT_LEDS, ~leds);
-      }
-    }
-
     /* Check shutdown */
     if (power_offset == 0 &&
         chademo_get_state() == CHADEMO_STATE_ON)
@@ -367,14 +349,35 @@ void mainTaskEntry(void *argument)
     if (chademo_get_state() == CHADEMO_STATE_ON)
     {
       solax_enable();
-      solax_kick();
     }
     if (chademo_get_state() > CHADEMO_STATE_STOP)
     {
       solax_disable();
-      solax_kick();
     }
 #endif
+
+    /* User Buttons and LEDs */
+    {
+      static uint32_t button_time = 0;            /* Timer for button LED(s) */
+
+      if (HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_SET)
+        button_time = 0;
+
+      /* Button Press */
+      if ((button_time == 0 || (HAL_GetTick() - button_time) > BUTTON_DEBOUNCE_TIME) &&
+          HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
+      {
+        button_time = HAL_GetTick();
+        printf("{\"controller\":[{\"button\":1}]}\n");
+      }
+    }
+
+    /* Check HV Source */
+    if (hv_time != 0 && HAL_GetTick() - hv_time > HIGH_VOLTAGE_TIMEOUT)
+    {
+      app_process_cmd_hv((char*[]){"iso", "0"}, 2);
+      app_process_cmd_hv((char*[]){"src", "0"}, 2);
+    }
 
     /* Update the inverter power */
     solax_set_output_power(power_offset);
@@ -403,9 +406,9 @@ void jsonTaskEntry(void *argument)
     /* Send regular JSON messages */
     xSemaphoreTake(jsonMutexHandle, JSON_UPDATE_TIME);
 
-#ifdef DEBUG_CONTROLLER
     int32_t acc_current = -1;
     int32_t hv_current = -1;
+    int32_t batt_current = -1;
     int32_t batt_voltage = -1;
     int32_t inv_voltage = -1;
 
@@ -418,9 +421,8 @@ void jsonTaskEntry(void *argument)
     sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
 #endif
 
-#endif
+    sensor_get_value(SENSOR_BATT_CURRENT, &batt_current);
 
-#ifndef ENABLE_CHADEMO
     /* Display Batt and Inverter Voltages on LEDs (300-500v) */
     {
       int32_t b;
@@ -433,17 +435,38 @@ void jsonTaskEntry(void *argument)
       i = ((1 >> i) - 1) & 0xff;
       ioexp_set_direction(IOEXP_BOT_LEDS, ~(b << 8 | i));
     }
-#endif
+
+    /* Update Debug LEDs */
+    if (batt_voltage > HIGH_VOLTAGE_THRESHOLD)
+      debug_leds |= (1 << DBG_LED_HV_BATT);
+    else
+      debug_leds &= ~(1 << DBG_LED_HV_BATT);
+
+    if (inv_voltage > HIGH_VOLTAGE_THRESHOLD)
+      debug_leds |= (1 << DBG_LED_HV_INV);
+    else
+      debug_leds &= ~(1 << DBG_LED_HV_INV);
+
+    if (HAL_GPIO_ReadPin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin) == GPIO_PIN_SET)
+      debug_leds |= (1 << DBG_LED_CT_PRE);
+    else
+      debug_leds &= ~(1 << DBG_LED_CT_PRE);
+
+    if (HAL_GPIO_ReadPin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin) == GPIO_PIN_SET)
+      debug_leds |= (1 << DBG_LED_CT_MAIN);
+    else
+      debug_leds &= ~(1 << DBG_LED_CT_MAIN);
 
     printf("{\"controller\":{");
     printf("\"power_offset\":%ld", power_offset);
     printf(",\"timestamp\":%ld", HAL_GetTick());
-#ifdef DEBUG_CONTROLLER
-    printf(",\"acc_current\":%ld", acc_current / 1000);
+
+    printf(",\"acc_current\":%ld", acc_current);
     printf(",\"hv_current\":%ld", hv_current);
-    printf(",\"batt_voltage\":%ld", batt_voltage);
-    printf(",\"inv_voltage\":%ld", inv_voltage);
-#endif
+    printf(",\"batt_voltage\":%ld", batt_voltage / 10);
+    printf(",\"batt_current\":%ld", batt_current / 10);
+    printf(",\"inv_voltage\":%ld", inv_voltage / 10);
+
     printf(",");
     evse_json_update();
     printf(",");
@@ -565,7 +588,10 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
     case EVSE_PP_PRESSED:
       /* Update the inverter max */
       power_offset = 0;
-      chademo_stop();
+      solax_set_output_power(0);
+#ifdef ENABLE_CHADEMO
+      chademo_stop(); /* Ensure ChaDeMo is stopped */
+#endif
       debug_leds &= ~(1 << DBG_LED_PP_INSERTED);
     break;
   }
@@ -574,6 +600,8 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
   /* Update the inverter max (BMS / DC handled by ChaDeMo). */
   solax_set_max_ac_current(current);
 #endif
+
+  trigger_json_update();
 }
 
 /**
@@ -588,10 +616,16 @@ static void cp_changed_cb(EVSE_CP cp)
   else
     debug_leds &= ~(1 << DBG_LED_CP_READY);
 
-  if (cp >= EVSE_CP_C)
+  if (cp >= EVSE_CP_C) {
     debug_leds |= (1 << DBG_LED_CP_CHARGE);
-  else
+  }
+  else {
     debug_leds &= ~(1 << DBG_LED_CP_CHARGE);
+    solax_set_output_power(0);
+    solax_disable();
+  }
+
+  trigger_json_update();
 }
 
 /* Command Handlers (Application Level) */
@@ -607,9 +641,49 @@ int app_process_cmd_power(char **args, int argc)
   if (argc == 1)
   {
     power_offset = strtol(args[0], NULL, 10);
+    solax_set_output_power(power_offset);
     return 0;
   }
   return -1;
+}
+
+int app_process_cmd_leds(char **args, int argc)
+{
+  int ret = 0;
+  if (argc >= 3 && 0 == strcmp(args[0], "debug"))
+  {
+    int16_t mask = strtol(args[1], NULL, 16);
+    int16_t val = strtol(args[2], NULL, 16);
+    debug_leds &= ~mask;
+    debug_leds |= val;
+  }
+  else if (argc >= 3 && 0 == strcmp(args[0], "user"))
+  {
+    int16_t mask = strtol(args[1], NULL, 16);
+    int16_t val = strtol(args[2], NULL, 16);
+
+    if (mask & 0x01)
+    {
+      if (val & 0x01)
+        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_SET);
+      else
+        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_RESET);
+    }
+
+    if (mask & 0x02)
+    {
+      if (val & 0x02)
+        HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, GPIO_PIN_SET);
+      else
+        HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, GPIO_PIN_RESET);
+    }
+  }
+  else
+  {
+    ret = -1;
+  }
+
+  return ret;
 }
 
 
@@ -631,6 +705,7 @@ int app_process_cmd_hv(char **args, int argc)
         HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
         debug_leds &= ~(1 << DBG_LED_HV_TEST);
+        hv_time = 0;
         ret = 0;
       break;
 
@@ -639,6 +714,7 @@ int app_process_cmd_hv(char **args, int argc)
         HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
         debug_leds |= (1 << DBG_LED_HV_TEST);
+        hv_time = HAL_GetTick();
         ret = 0;
       break;
 
