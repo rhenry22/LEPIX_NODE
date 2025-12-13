@@ -63,6 +63,8 @@
 #define HIGH_VOLTAGE_TIMEOUT     (10000) /* Allow the HV source to be left on for this duration (max) */
 
 #define BUTTON_DEBOUNCE_TIME     (150)
+/* How often to toggle flashing LEDs (ms) */
+#define FLASH_TOGGLE_TIME        (500)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -91,6 +93,13 @@ static uint16_t debug_leds = 0;       /* Combined state of debug leds */
 
 static uint8_t comm_count = 0;        /* Number of active comm sessions (I2C / SPI / UART) */
 static uint32_t hv_time = 0;          /* When the HV source was enabled */
+
+/* Flashing LED state: which debug LEDs should flash and which user GPIOs */
+static uint16_t flash_debug_leds = 0; /* Bits for debug LEDs that should flash */
+static uint8_t flash_user_mask = 0;   /* Bits (0x01,0x02) for user GPIOs that should flash */
+static uint8_t user_led_base = 0;     /* Base values for user LEDs (bit0 -> GPIO1, bit1 -> GPIO2) */
+static bool flash_state = false;      /* Current on/off state for flashed LEDs */
+static uint32_t last_flash_toggle = 0;/* Last tick when flash_state toggled */
 
 /* USER CODE END Variables */
 /* Definitions for mainTask */
@@ -313,13 +322,53 @@ void mainTaskEntry(void *argument)
       emergency_stop();
     }
 
-    /* Leds (Top 2 rows) */
+    /* Leds (Top 2 rows) + flashing support */
     {
-      static uint16_t old_leds = 0;
-      if (debug_leds != old_leds)
+      static uint16_t old_display_leds = 0;
+
+      /* Handle flash toggle timing */
+      if (flash_debug_leds != 0 || flash_user_mask != 0)
       {
-        old_leds = debug_leds;
-        ioexp_set_direction(IOEXP_TOP_LEDS, ~debug_leds);
+        uint32_t now = HAL_GetTick();
+        if (last_flash_toggle == 0 || (now - last_flash_toggle) >= FLASH_TOGGLE_TIME)
+        {
+          flash_state = !flash_state;
+          last_flash_toggle = now;
+        }
+      }
+
+      /* Compute the LEDs to display on the top IO expander, applying flashing */
+      uint16_t display_leds = debug_leds;
+      if (flash_debug_leds != 0 && !flash_state)
+      {
+        /* When flash_state is false, clear the flashing bits so they appear off */
+        display_leds &= ~flash_debug_leds;
+      }
+
+      if (display_leds != old_display_leds)
+      {
+        old_display_leds = display_leds;
+        ioexp_set_direction(IOEXP_TOP_LEDS, ~display_leds);
+      }
+
+      /* Update user GPIO LEDs (GPIO1 / GPIO2) according to flash state */
+      /* If a user LED is marked for flashing, show flash_state, otherwise show base value */
+      if (flash_user_mask & 0x01)
+      {
+        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
+      }
+      else
+      {
+        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (user_led_base & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+      }
+
+      if (flash_user_mask & 0x02)
+      {
+        HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
+      }
+      else
+      {
+        HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (user_led_base & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
       }
     }
 
@@ -611,18 +660,25 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
   */
 static void cp_changed_cb(EVSE_CP cp)
 {
-  if (cp >= EVSE_CP_B)
-    debug_leds |= (1 << DBG_LED_CP_READY);
-  else
-    debug_leds &= ~(1 << DBG_LED_CP_READY);
+  switch (cp)
+  {
+    case EVSE_CP_A:
+      solax_disable();
+      debug_leds &= ~(1 << DBG_LED_CP_READY);
+      debug_leds &= ~(1 << DBG_LED_CP_CHARGE);
+    break;
 
-  if (cp >= EVSE_CP_C) {
-    debug_leds |= (1 << DBG_LED_CP_CHARGE);
-  }
-  else {
-    debug_leds &= ~(1 << DBG_LED_CP_CHARGE);
-    solax_set_output_power(0);
-    solax_disable();
+    case EVSE_CP_B:
+      solax_set_output_power(0);
+      debug_leds |= (1 << DBG_LED_CP_READY);
+      debug_leds &= ~(1 << DBG_LED_CP_CHARGE);
+    break;
+
+    case EVSE_CP_C:
+    case EVSE_CP_D:
+      debug_leds |= (1 << DBG_LED_CP_READY);
+      debug_leds |= (1 << DBG_LED_CP_CHARGE);
+    break;
   }
 
   trigger_json_update();
@@ -654,29 +710,58 @@ int app_process_cmd_leds(char **args, int argc)
   {
     int16_t mask = strtol(args[1], NULL, 16);
     int16_t val = strtol(args[2], NULL, 16);
+
+    /* Only modify bits covered by mask */
     debug_leds &= ~mask;
-    debug_leds |= val;
+    debug_leds |= (val & mask);
+    /* Optional 4th arg: "flash" -> add any bits set to 1 (mask & val) to flash list. */
+    if (argc >= 4 && 0 == strcmp(args[3], "flash"))
+    {
+      /* Add bits where mask says and val is 1 */
+      flash_debug_leds |= (mask & val);
+      /* Remove any bits from flash list where mask requested clearing (mask & ~val) */
+      flash_debug_leds &= ~(mask & ~val);
+    }
+    else
+    {
+      /* No explicit "flash" arg -> clear flashing for the bits covered by mask */
+      flash_debug_leds &= ~((uint16_t)mask);
+    }
   }
   else if (argc >= 3 && 0 == strcmp(args[0], "user"))
   {
     int16_t mask = strtol(args[1], NULL, 16);
     int16_t val = strtol(args[2], NULL, 16);
 
-    if (mask & 0x01)
+    /* Update base user LED values */
+    user_led_base &= ~mask;
+    user_led_base |= (val & mask);
+
+    /* Optional flash parameter: add/remove flashing for the bits being set */
+    if (argc >= 4 && 0 == strcmp(args[3], "flash"))
     {
-      if (val & 0x01)
-        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_SET);
-      else
-        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, GPIO_PIN_RESET);
+      /* Add bits where mask says and val is 1 */
+      flash_user_mask |= (mask & val);
+      /* Remove any bits from flash list where mask requested clearing (mask & ~val) */
+      flash_user_mask &= ~(mask & ~val);
+    }
+    else
+    {
+      /* No explicit "flash" arg -> clear flashing for the bits covered by mask */
+      flash_user_mask &= ~mask;
     }
 
-    if (mask & 0x02)
-    {
-      if (val & 0x02)
-        HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, GPIO_PIN_SET);
-      else
-        HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, GPIO_PIN_RESET);
-    }
+    /* Immediately apply the current visible state for user LEDs (honour flash_state)
+       If a user LED is flashing, show flash_state, otherwise show base value */
+    if (flash_user_mask & 0x01)
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
+    else
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (user_led_base & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    if (flash_user_mask & 0x02)
+      HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
+    else
+      HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (user_led_base & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
   }
   else
   {

@@ -16,6 +16,10 @@ evse            : Control the EVSE (Sink) and CCS2 (Source) parameters
   pwm 0-100         : Set the CCS2 CP PWM Value
   get               : Trigger a JSON update
 
+led
+  user <mask> <set> [flash]
+  debug <mask> <set> [flash]
+
 solax           : Solax / FoxESS Inverter Settings
   dc_max_i <current>  : Set the maximum charge and discharge current in A x10
   dc_max_v <voltage>  : Set the maximum battery voltage in V x10
@@ -50,9 +54,9 @@ typedef enum _solax_state {
 } SOLAX_STATE;
 
 {
-  controller:{"power_offset":power in W, "timestamp":tick ms, "acc_current":mA, "hv_current":mA, "batt_voltage":Vx10, "inv_voltage":Vx10},
-  evse:{"max_current":A x10, "pp":EVSE_PP, "cp":CCS2_CP, "pwm":ccs2_pwm},
-  solax:{"state":SOLAX_STATE, "last_error":string, "inv_state":raw state, "inv_temp":Cx10, "grid_power":W, "power_offset":W}
+  controller:{"power_offset":<power in W>, "timestamp":<tick ms>, "acc_current":<mA>, "hv_current":<mA>, "batt_voltage":<Vx10>, "inv_voltage":<Vx10>},
+  evse:{"max_current":<A x10>, "pp":<EVSE_PP>, "cp":<CCS2_CP>, "pwm":<ccs2_pwm>},
+  solax:{"state":<SOLAX_STATE>, "last_error":<string>, "inv_state":<raw state>, "inv_temp":<Cx10>, "grid_power":<W>, "power_offset":<W>}
 }
 
 ## STM32F407 Pinout
