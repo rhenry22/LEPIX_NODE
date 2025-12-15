@@ -321,33 +321,12 @@ int app_process_cmd_hv(char **args, int argc)
 
     if (tgt == 0)
     {
-      /* Disable ISO Test */
-      HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
-      debug_leds &= ~(1 << DBG_LED_ISO_TEST);
-      hv_target = 0;
-
-      /* Disable HV Test Source */
-      HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
-      HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
-      debug_leds &= ~(1 << DBG_LED_HV_TEST);
-
+      hv_iso_test_enable(false, 0);
       ret = 0;
     }
     else if (tgt >= HV_GEN_MIN_VOLTAGE && tgt <= HV_GEN_MAX_VOLTAGE)
     {
-      /* Enable HV Test Source */
-      HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
-      HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-      debug_leds |= (1 << DBG_LED_HV_TEST);
-      hv_time = HAL_GetTick();
-
-      /* Enable ISO Test */
-      HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
-      debug_leds |= (1 << DBG_LED_ISO_TEST);
-
-      hv_target = tgt;
+      hv_iso_test_enable(true, tgt);
       ret = 0;
     }
     else

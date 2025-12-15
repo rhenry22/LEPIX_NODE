@@ -53,7 +53,7 @@
 #define STOP_TIMEOUT          (10000) /* How long to wait for current to drop */
 
 #define STOP_CURRENT          (5)    /* Spec is 5A, but using 0.5A (x10) */
-#define LEAKAGE_CURRENT_MAX   (250 * 500 / 5)  /* 100Ohm/V == 500kOhm == 250uA (@ 500V)*/
+#define ISOLATION_MIN_RES     (500)  /* 500kOhm */
 #define LEAK_TEST_TIME        (1000)  /* Between 200ms and 1000ms */
 #define ISOLATION_MIN_VOLTAGE (3500)
 #define DEFAULT_MIN_SOC       (SOLAX_MINIMUM_SOC)
@@ -205,7 +205,6 @@ struct can_data
 
 static uint32_t last_update = 0;            /* Last time we saw a CAN message */
 static CHADEMO_STATE chademo_state = 0;     /* State Machine State */
-static uint32_t leak_base;                  /* Baseline (Off) current of leakage HV module */
 static struct can_data can_data;            /* Structure holding all CAN message data */
 
 static bool chg_perm = false;               /* Vehicle Charge permission state */
@@ -268,7 +267,6 @@ static HAL_StatusTypeDef chademo_send_message(uint32_t id, uint8_t* data)
 static void chademo_transition_state(CHADEMO_STATE new_state)
 {
   /* Used for Sensor reads */
-  int32_t val;
   HAL_StatusTypeDef ret = HAL_ERROR;
 
   state_time = HAL_GetTick();
@@ -280,11 +278,8 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
   {
     case CHADEMO_STATE_OFF:
       /* These should already be off, but can be used as an emergency stop */
-      HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
+      hv_iso_test_enable(false, 0);
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
 
@@ -344,60 +339,42 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
 
         /* Enable HV DCDC Test source(s) */
-        HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
-        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+        hv_iso_test_enable(true, HV_GEN_MAX_VOLTAGE);
       }
     }
     break;
 
     case CHADEMO_STATE_INS_TEST_BASE:
     {
-#ifdef ENABLE_INA219
-        /* Store the HV DCDC current before applying to connector */
-        ret = sensor_get_value(SENSOR_HV_TEST_CURRENT, &val);
-#endif
-        if (ret == HAL_OK)
-        {
-          leak_base = val;
-
 #ifdef LEAK_TEST
-          /* Start Earth Leakage Test */
-          HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
-#else
-        /* Start Isolation / Short Circuit Test */
-        HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
+        /* Start Earth Leakage Test */
+        HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
+
+        // ToDo: Work out how to do this
 #endif
-        }
-        else
-        {
-          snprintf(last_error, ERROR_LEN,
-                  "Failed to get baseline HV current.");
-          new_state = CHADEMO_STATE_ERROR;
-        }
+        snprintf(last_error, ERROR_LEN,
+                "Failed to get baseline HV current.");
+        new_state = CHADEMO_STATE_ERROR;
     }
     break;
 
     case CHADEMO_STATE_INS_TEST:
     {
-      int32_t hv_current = -1;
       int32_t acc_current;  /* 12V ACC Current in uA */
 
 #ifdef ENABLE_INA219
-      ret = sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
-      if (ret == HAL_OK)
-        ret = sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
+      ret = sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
 #endif
 
       /* Check that HV Test current is below threshold */
-      if (ret != HAL_OK || hv_current > leak_base + LEAKAGE_CURRENT_MAX)
+      if (ret != HAL_OK || hv_iso_resistance < ISOLATION_MIN_RES)
       {
 #ifdef LEAK_TEST
         snprintf(last_error, ERROR_LEN,
                  "Earth leakage test failed (%ld uA).", hv_current - leak_base);
 #else
         snprintf(last_error, ERROR_LEN,
-                 "Short Circuit test failed (%ld uA).", hv_current - leak_base);
+                 "Isolation test failed (%ld kOhm at %ld V).", hv_iso_resistance, measured_voltage / 10);
 #endif
         new_state = CHADEMO_STATE_ERROR;
       }
@@ -425,11 +402,8 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       }
 
       /* Disable HV Test */
-      HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
+      hv_iso_test_enable(false, 0);
     }
     break;
 

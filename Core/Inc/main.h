@@ -70,6 +70,7 @@ extern bool flash_state;
 /* HV Generator variables */
 extern uint32_t hv_time;
 extern uint32_t hv_target;
+extern uint32_t hv_iso_resistance;
 
 extern int32_t power_offset;
 

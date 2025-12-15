@@ -84,6 +84,7 @@ int32_t power_offset = 0;      /* Offset from actual power (i.e. charge / discha
 
 uint32_t hv_time = 0;          /* When the HV source was enabled */
 uint32_t hv_target = 0;        /* Target HV voltage in V */
+uint32_t hv_iso_resistance = -1; /* Measured HV isolation resistance in kOhms */
 
 uint16_t debug_leds = 0;       /* Combined state of debug leds */
 uint16_t flash_debug_leds = 0; /* Bits for debug LEDs that should flash */
@@ -457,7 +458,6 @@ void jsonTaskEntry(void *argument)
     int32_t batt_current = -1;
     int32_t batt_voltage = -1;
     int32_t inv_voltage = -1;
-    uint32_t iso_resistance = -1;
 
 #ifdef ENABLE_INA219
     sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
@@ -515,15 +515,7 @@ void jsonTaskEntry(void *argument)
 
     printf(",\"acc_current\":%ld", acc_current);
     printf(",\"hv_current\":%ld", hv_current);
-    if (hv_current <= HV_DCDC_C || batt_voltage < 1000)  iso_resistance = -1;
-    else
-    {
-      uint32_t p1 = 5 * (hv_current - HV_DCDC_C);
-      uint32_t p2 = HV_DCDC_M * p1 / 100 - HV_DCDC_N * p1 / 100000 * batt_voltage;
-      iso_resistance = batt_voltage * batt_voltage * 10 / p2 - HV_DCDC_O;
-    }
-
-    printf(",\"iso_resistance\":%ld", iso_resistance);
+    printf(",\"iso_resistance\":%ld", hv_iso_resistance);
     printf(",\"batt_voltage\":%ld", batt_voltage / 10);
     printf(",\"batt_current\":%ld", batt_current / 10);
     printf(",\"inv_voltage\":%ld", inv_voltage / 10);
@@ -592,7 +584,18 @@ void hvGenTaskEntry(void *argument)
 
       uint32_t ccr = hv_pwm * (htim1.Init.Period + 1) / 1000;
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, ccr);
+
+      if (hv_current <= HV_DCDC_C || batt_voltage < 1000)
+        hv_iso_resistance = -1;
+      else
+      {
+        uint32_t p1 = 5 * (hv_current - HV_DCDC_C);
+        uint32_t p2 = HV_DCDC_M * p1 / 100 - HV_DCDC_N * p1 / 100000 * batt_voltage;
+        hv_iso_resistance = batt_voltage * batt_voltage * 10 / p2 - HV_DCDC_O;
+      }
     }
+    else
+      hv_iso_resistance = -1;
 
     osDelay(100);
   }
