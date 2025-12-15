@@ -62,8 +62,11 @@ Core/Src/sensor.c \
 Core/Src/solax.c \
 Core/Src/spi.c \
 Core/Src/usart.c \
+Core/Src/util.c \
 Core/Src/stm32f4xx_it.c \
 Core/Src/stm32f4xx_hal_msp.c \
+Core/Src/sysmem.c \
+Core/Src/syscalls.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c \
@@ -80,7 +83,6 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc_ex.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_adc.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_iwdg.c \
@@ -137,7 +139,7 @@ SZ = $(PREFIX)size
 endif
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
-
+ 
 #######################################
 # CFLAGS
 #######################################
@@ -155,7 +157,7 @@ MCU = $(CPU) -mthumb $(FPU) $(FLOAT-ABI)
 
 # macros for gcc
 # AS defines
-AS_DEFS =
+AS_DEFS = 
 
 # C defines
 C_DEFS =  \
@@ -163,7 +165,7 @@ C_DEFS =  \
 -DSTM32F407xx
 
 # AS includes
-AS_INCLUDES =
+AS_INCLUDES = 
 
 # C includes
 C_INCLUDES =  \
@@ -198,11 +200,11 @@ CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
 # LDFLAGS
 #######################################
 # link script
-LDSCRIPT = STM32F407VETx_FLASH.ld
+LDSCRIPT = STM32F407XX_FLASH.ld
 
 # libraries
-LIBS = -lc -lm -lnosys
-LIBDIR =
+LIBS = -lc -lm -lnosys 
+LIBDIR = 
 LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections
 
 # default action: build all
@@ -244,9 +246,10 @@ run:
 	dfu-util -a0 -s 0x8000000:leave
 
 flash:
+#	dfu-util -a0 -D $(BUILD_DIR)/$(TARGET).bin -s 0x8000000:leave
 	scp $(BUILD_DIR)/$(TARGET).bin root@orangepizero2.wifi:~/
 	ssh root@orangepizero2.wifi "dfu-util -a0 -D ~/$(TARGET).bin -s 0x8000000:leave"
-	#dfu-util -a0 -D $(BUILD_DIR)/$(TARGET).bin -s 0x8000000:leave
+
 #######################################
 # clean up
 #######################################
