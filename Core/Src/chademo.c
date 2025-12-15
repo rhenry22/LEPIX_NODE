@@ -35,6 +35,7 @@
 #include "chademo.h"
 #include "solax.h"
 #include "sensor.h"
+#include "tim.h"
 
 /* #define DEBUG_CHADEMO */
 
@@ -279,6 +280,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
   {
     case CHADEMO_STATE_OFF:
       /* These should already be off, but can be used as an emergency stop */
+      HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
@@ -344,6 +346,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         /* Enable HV DCDC Test source(s) */
         HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
       }
     }
     break;
@@ -422,6 +425,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       }
 
       /* Disable HV Test */
+      HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
