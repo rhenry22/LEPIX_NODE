@@ -32,15 +32,47 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
+#include "util.h"
+
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+/* Upper / Red (bits 8-15) and Lower / Green (bits 0-7) Debug Leds */
+enum debug_leds
+{
+  DBG_LED_HV_TEST = 0,
+  DBG_LED_ISO_TEST,
+  DBG_LED_CT_PRE,
+  DBG_LED_CT_MAIN,
+  DBG_LED_STAT_RED_INV,
+  DBG_LED_STAT_RED_EV,
+  DBG_LED_HV_INV,
+  DBG_LED_HV_BATT,
+
+  DBG_LED_PP_INSERTED = 8,
+  DBG_LED_CP_READY,
+  DBG_LED_CP_CHARGE,
+};
 
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+
+/* Debug LED variables */
+extern uint16_t debug_leds;
+extern uint16_t flash_debug_leds;
+extern uint8_t flash_user_mask;
+extern uint8_t user_led_base;
+extern bool flash_state;
+
+/* HV Generator variables */
+extern uint32_t hv_time;
+extern uint32_t hv_target;
+
+extern int32_t power_offset;
+
 
 /* USER CODE END EC */
 
@@ -48,6 +80,9 @@ extern "C" {
 /* USER CODE BEGIN EM */
 
 /* #define ESP_FLASH_MODE */
+
+#define HV_GEN_MAX_VOLTAGE    (500) /* Max HV voltage in V */
+#define HV_GEN_MIN_VOLTAGE    (0)   /* Min HV voltage in V */
 
 /* USER CODE END EM */
 
@@ -59,8 +94,6 @@ void Error_Handler(void);
 void JumpToBootloader(void);
 bool cmd_init(void);
 void stdio_parser(uint8_t *ptr, uint16_t len);
-void comm_session(bool start_stop);
-void emergency_stop(void);
 void trigger_json_update(void);
 void dump_packet(uint8_t *data, uint8_t len);
 
@@ -100,8 +133,8 @@ int app_process_cmd_leds(char **args, int argc);
 #define ESP_FLASH__GPIO_Port GPIOE
 #define ESP_EN_Pin GPIO_PIN_10
 #define ESP_EN_GPIO_Port GPIOE
-#define LED1_Pin GPIO_PIN_11
-#define LED1_GPIO_Port GPIOE
+#define HV_FREQ_Pin GPIO_PIN_11
+#define HV_FREQ_GPIO_Port GPIOE
 #define LED2_Pin GPIO_PIN_12
 #define LED2_GPIO_Port GPIOE
 #define LED3_Pin GPIO_PIN_13

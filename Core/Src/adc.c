@@ -24,21 +24,21 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define NUM_SAMPLES 2
-#define NUM_SAMPLES2 1
+#define NUM_CHANNELS 2
+#define NUM_CHANNELS2 1
 #define MAX_SAMPLE_AGE 95
 #define OVERSAMPLE  128
 
 /* ADC1 Values (Normal Sensors) */
 static volatile uint32_t num_samples = 0;
 static volatile uint32_t last_sample = 0;
-static volatile uint16_t samples[NUM_SAMPLES] = {0};
-static volatile uint32_t samples_avg[NUM_SAMPLES] = {0};
+static volatile uint16_t samples[NUM_CHANNELS] = {0};
+static volatile uint32_t samples_avg[NUM_CHANNELS] = {0};
 
 /* ADC2 Values (CCS2_CP Input) */
-static volatile uint16_t samples2[NUM_SAMPLES2] = {0};
-static volatile uint16_t samples2_h[NUM_SAMPLES2] = {0};
-static volatile uint16_t samples2_l[NUM_SAMPLES2] = {0};
+static volatile uint16_t samples2[NUM_CHANNELS2] = {0};
+static volatile uint16_t samples2_h[NUM_CHANNELS2] = {0};
+static volatile uint16_t samples2_l[NUM_CHANNELS2] = {0};
 
 /* USER CODE END 0 */
 
@@ -100,7 +100,7 @@ void MX_ADC1_Init(void)
   }
   /* USER CODE BEGIN ADC1_Init 2 */
 
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_SAMPLES);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_CHANNELS);
 
   /* USER CODE END ADC1_Init 2 */
 
@@ -242,7 +242,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
     HAL_NVIC_EnableIRQ(ADC_IRQn);
   /* USER CODE BEGIN ADC2_MspInit 1 */
 
-  HAL_ADC_Start_DMA(&hadc2, (uint32_t*)samples2, NUM_SAMPLES2);
+  HAL_ADC_Start_DMA(&hadc2, (uint32_t*)samples2, NUM_CHANNELS2);
 
   /* USER CODE END ADC2_MspInit 1 */
   }
@@ -329,19 +329,19 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
   {
     last_sample = HAL_GetTick();
 
-    for (i=0; i<NUM_SAMPLES; ++i)
+    for (i=0; i<NUM_CHANNELS; ++i)
       samples_avg[i] += samples[i];
     num_samples++;
 
     if (num_samples < OVERSAMPLE)
     {
       /* Keep sampling */
-      HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_SAMPLES);
+      HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_CHANNELS);
     }
   }
   else if (adcHandle == &hadc2)
   {
-    for (i=0; i<NUM_SAMPLES2; ++i)
+    for (i=0; i<NUM_CHANNELS2; ++i)
     {
       if (samples2[i] < samples2_l[i])
         samples2_l[i] = samples2[i];
@@ -351,7 +351,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
     }
 
     /* Keep sampling */
-    HAL_ADC_Start_DMA(&hadc2, (uint32_t*)samples2, NUM_SAMPLES2);
+    HAL_ADC_Start_DMA(&hadc2, (uint32_t*)samples2, NUM_CHANNELS2);
   }
 }
 
@@ -365,13 +365,13 @@ HAL_StatusTypeDef MX_ADC1_Get_Sample(uint8_t channel, uint16_t *val)
 {
   uint32_t timeout;
 
-  if (channel >= NUM_SAMPLES)
+  if (channel >= NUM_CHANNELS)
     return HAL_ERROR;
 
   if (HAL_GetTick() > (last_sample + MAX_SAMPLE_AGE))
   {
     HAL_StatusTypeDef ret;
-    ret = HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_SAMPLES);
+    ret = HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_CHANNELS);
     if(ret != HAL_OK)
     {
       /* Start Conversion Error */
@@ -405,20 +405,16 @@ HAL_StatusTypeDef MX_ADC1_Get_Sample_Avg(uint8_t channel, uint16_t *val)
 {
   uint8_t i;
 
-  if (channel >= NUM_SAMPLES)
+  if (channel >= NUM_CHANNELS)
     return HAL_ERROR;
 
-  if (HAL_GetTick() > (last_sample + MAX_SAMPLE_AGE))
-  {
-    num_samples = 0;
+  num_samples = 0;
+  for (i=0; i<NUM_CHANNELS; ++i)
+    samples_avg[i] = 0;
 
-    for (i=0; i<NUM_SAMPLES; ++i)
-      samples_avg[i] = 0;
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_CHANNELS);
 
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_SAMPLES);
-
-    while (num_samples < OVERSAMPLE);
-  }
+  while (num_samples < OVERSAMPLE);
 
   *val = samples_avg[channel] / num_samples;
 
@@ -436,13 +432,13 @@ HAL_StatusTypeDef MX_ADC2_Get_Sample_Avgs(uint8_t channel, uint16_t *val_high, u
 {
   uint8_t i;
 
-  if (channel >= NUM_SAMPLES2)
+  if (channel >= NUM_CHANNELS2)
     return HAL_ERROR;
 
   *val_high = samples2_h[channel];
   *val_low = samples2_l[channel];
 
-  for (i=0; i<NUM_SAMPLES2; ++i)
+  for (i=0; i<NUM_CHANNELS2; ++i)
   {
     samples2_h[i] = 0;
     samples2_l[i] = 4096;

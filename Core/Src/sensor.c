@@ -11,6 +11,10 @@
  *  @author Richard Taylor <richard@artaylor.co.uk>
  */
 
+#include "FreeRTOS.h"
+#include "cmsis_os.h"
+#include "semphr.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -28,7 +32,22 @@
 #define INA219_HV_SHUNT         (0.1)       /* 100mR Shunt resistor */
 #define INA219_HV_CURRENT_LSB   (0.000050)  /* 50uA per LSB */
 
+#define SENSOR_TIMEOUT_MS       (10)        /* Timeout for sensor reads */
+
 static uint16_t ibatt_zero = 2048;
+static bool init = false;
+
+static struct _last_value
+{
+  int32_t val;
+  uint32_t time;
+} last_values[SENSOR_CP + 1] = {{0, 0}};
+
+static osSemaphoreId_t mutexHandle;
+static const osSemaphoreAttr_t mutexAttributes = {
+  .name = "sensorMutex"
+};
+
 
 /**
   * @brief  Perform initialisation of all sensors
@@ -68,6 +87,10 @@ bool sensor_init(void)
     ret = false;
   }
 
+  mutexHandle = osSemaphoreNew(1, 1, &mutexAttributes);
+
+  init = ret;
+
   return ret;
 }
 
@@ -78,6 +101,10 @@ bool sensor_init(void)
 HAL_StatusTypeDef sensor_zero_ibatt(void)
 {
   HAL_StatusTypeDef ret;
+
+  if (!init)
+    return HAL_ERROR;
+
   ret = MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &ibatt_zero);
 
   if (ret == HAL_OK)
@@ -100,6 +127,23 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
   HAL_StatusTypeDef ret = HAL_ERROR;
 
   assert_param(val);
+
+  if (!init)
+    return HAL_ERROR;
+
+  /* Return cached value if within timeout */
+  if (HAL_GetTick() - last_values[src].time < SENSOR_TIMEOUT_MS)
+  {
+    *val = last_values[src].val;
+    return HAL_OK;
+  }
+
+  if (pdFALSE == xSemaphoreTake(mutexHandle, 10))
+  {
+    /* Timeout obtaining mutex, return old value */
+    *val = last_values[src].val;
+    return HAL_OK;
+  }
 
   switch (src)
   {
@@ -148,14 +192,15 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
       uint16_t tmp;
       ret = MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &tmp);
       if (ret == HAL_OK)
-        *val = ((int32_t)tmp - ibatt_zero) * 1000 / 3250; //2095
+        *val = ((int32_t)tmp - ibatt_zero) * 1000 / 3423; //3250; //2095
+      //printf("\nBatt Curr ADC: %d (Zero: %d) %d mA\n", tmp, ibatt_zero, *val * 100);
     }
     break;
 
     case SENSOR_EVSE_PP: /* mV */
     {
       uint16_t tmp;
-      ret = MX_ADC1_Get_Sample(ADC_EVSE_PP, &tmp);
+      ret = MX_ADC1_Get_Sample_Avg(ADC_EVSE_PP, &tmp);
       if (ret == HAL_OK)
         *val = ((int32_t)tmp * 3300) / 4096;
     }
@@ -179,6 +224,11 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
 #endif
       break;
   }
+
+  last_values[src].val = *val;
+  last_values[src].time = HAL_GetTick();
+
+  xSemaphoreGive(mutexHandle);
 
   return ret;
 }

@@ -18,6 +18,7 @@
 
 #include "usbd_cdc_if.h"
 
+#include "main.h"
 #include "chademo.h"
 #include "solax.h"
 #include "evse.h"
@@ -38,6 +39,8 @@ static uint16_t cmd_buf_len = 0;            /* Length of stdin buffer */
 
 static uint8_t line_buf[APP_RX_DATA_SIZE];  /* Buffer for command line */
 static uint16_t line_buf_len;               /* Length of command buffer */
+
+static bool init = false;
 
 /**
   * @brief  Process Reset command
@@ -134,6 +137,9 @@ void stdio_parser(uint8_t *ptr, uint16_t len)
 {
   uint32_t i;
 
+  if (!init)
+    return;
+
   if (len < (APP_RX_DATA_SIZE - cmd_buf_len))
   {
     uint8_t *c = &cmd_buf[cmd_buf_len];
@@ -191,7 +197,9 @@ void cmdTask(void *argument)
         if (line_buf_len > 0)
         {
             /* Process the command */
+            comm_session(true);
             process_stdin_line(&line_buf[0], line_buf_len);
+            comm_session(false);
             line_buf_len = 0;
             memset(line_buf, 0, APP_RX_DATA_SIZE);
         }
@@ -203,5 +211,157 @@ bool cmd_init(void)
   taskHandle = osThreadNew(cmdTask, NULL, &taskAttributes);
   cmdMutexHandle = xSemaphoreCreateBinary();
 
-  return (taskHandle != NULL && cmdMutexHandle != NULL);
+  init = (taskHandle != NULL && cmdMutexHandle != NULL);
+
+  return init;
+}
+
+
+/* Command Handlers (Application Level) */
+
+/**
+  * @brief  Process Power Setting command
+  * @param  args Command arguments
+  * @param  argc Number of arguments
+  * @retval Status (0 = OK, -1 = Error / Unknown Command)
+  */
+int app_process_cmd_power(char **args, int argc)
+{
+  if (argc == 1)
+  {
+    power_offset = strtol(args[0], NULL, 10);
+    solax_set_output_power(power_offset);
+    return 0;
+  }
+  return -1;
+}
+
+int app_process_cmd_leds(char **args, int argc)
+{
+  int ret = 0;
+  if (argc >= 3 && 0 == strcmp(args[0], "debug"))
+  {
+    int16_t mask = strtol(args[1], NULL, 16);
+    int16_t val = strtol(args[2], NULL, 16);
+
+    /* Only modify bits covered by mask */
+    debug_leds &= ~mask;
+    debug_leds |= (val & mask);
+    /* Optional 4th arg: "flash" -> add any bits set to 1 (mask & val) to flash list. */
+    if (argc >= 4 && 0 == strcmp(args[3], "flash"))
+    {
+      /* Add bits where mask says and val is 1 */
+      flash_debug_leds |= (mask & val);
+      /* Remove any bits from flash list where mask requested clearing (mask & ~val) */
+      flash_debug_leds &= ~(mask & ~val);
+    }
+    else
+    {
+      /* No explicit "flash" arg -> clear flashing for the bits covered by mask */
+      flash_debug_leds &= ~((uint16_t)mask);
+    }
+  }
+  else if (argc >= 3 && 0 == strcmp(args[0], "user"))
+  {
+    int16_t mask = strtol(args[1], NULL, 16);
+    int16_t val = strtol(args[2], NULL, 16);
+
+    /* Update base user LED values */
+    user_led_base &= ~mask;
+    user_led_base |= (val & mask);
+
+    /* Optional flash parameter: add/remove flashing for the bits being set */
+    if (argc >= 4 && 0 == strcmp(args[3], "flash"))
+    {
+      /* Add bits where mask says and val is 1 */
+      flash_user_mask |= (mask & val);
+      /* Remove any bits from flash list where mask requested clearing (mask & ~val) */
+      flash_user_mask &= ~(mask & ~val);
+    }
+    else
+    {
+      /* No explicit "flash" arg -> clear flashing for the bits covered by mask */
+      flash_user_mask &= ~mask;
+    }
+
+    /* Immediately apply the current visible state for user LEDs (honour flash_state)
+       If a user LED is flashing, show flash_state, otherwise show base value */
+    if (flash_user_mask & 0x01)
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
+    else
+      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (user_led_base & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    if (flash_user_mask & 0x02)
+      HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
+    else
+      HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (user_led_base & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  }
+  else
+  {
+    ret = -1;
+  }
+
+  return ret;
+}
+
+
+/**
+  * @brief  Process HV Test commands
+  * @param  args Command arguments
+  * @param  argc Number of arguments
+  * @retval Status (0 = OK, -1 = Error / Unknown Command)
+  */
+int app_process_cmd_hv(char **args, int argc)
+{
+  int ret = -1;
+  if (argc >= 2 && 0 == strcmp(args[0], "iso"))
+  {
+    int32_t tgt = strtol(args[1], NULL, 10);
+    if (tgt < 0) tgt = 0;
+
+    if (tgt == 0)
+    {
+      /* Disable ISO Test */
+      HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
+      debug_leds &= ~(1 << DBG_LED_ISO_TEST);
+      hv_target = 0;
+
+      /* Disable HV Test Source */
+      HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
+      HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
+      debug_leds &= ~(1 << DBG_LED_HV_TEST);
+
+      ret = 0;
+    }
+    else if (tgt >= HV_GEN_MIN_VOLTAGE && tgt <= HV_GEN_MAX_VOLTAGE)
+    {
+      /* Enable HV Test Source */
+      HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
+      HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+      debug_leds |= (1 << DBG_LED_HV_TEST);
+      hv_time = HAL_GetTick();
+
+      /* Enable ISO Test */
+      HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
+      debug_leds |= (1 << DBG_LED_ISO_TEST);
+
+      hv_target = tgt;
+      ret = 0;
+    }
+    else
+    {
+      /* Out of range */
+      printf("{\"controller\":[{\"status\":-1,\"message\":\"HV target out of range (%d-%dV)\"}]}\n",
+             HV_GEN_MIN_VOLTAGE, HV_GEN_MAX_VOLTAGE);
+    }
+    trigger_json_update();
+  }
+  else if (argc >= 1 && 0 == strcmp(args[0], "get"))
+  {
+    trigger_json_update();
+    ret = 0;
+  }
+  return ret;
 }

@@ -30,6 +30,7 @@
 #include "modbus.h"
 
 //#define DEBUG_SOLAX
+//#define MANUAL_CONTACTOR_CONTROL    /* DANGER! Know what you're doing! */
 
 /* Battery size in Wh (Maximum value for most inverters is 60000 [60kWh],
  * you can use larger batteries but do not set value over 60000!
@@ -266,7 +267,6 @@ static int16_t inv_temp = 0;                        /* Inverter Temperature */
 #ifdef DEBUG_SOLAX
 static uint16_t inv_fault[8] = {0};                 /* Inverter Fault registers */
 #endif
-static int16_t power_offset = 0;                    /* Offset from actual power (i.e. charge / discharge) */
 
 static char last_error[ERROR_LEN+1] = {0};          /* Last error string */
 
@@ -291,8 +291,12 @@ void solaxModbusTask(void *argument);
 
 static void solax_open_contactors(void)
 {
+#ifdef MANUAL_CONTACTOR_CONTROL
+  #warning "Manual contactor control enabled, contactors will not be opened by Solax!"
+#else
   HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_RESET);
+#endif
   solax_data.bms.msg_1875.contactor = 0;
 }
 
@@ -994,7 +998,7 @@ int solax_process_cmd(char **args, int argc)
       solax_disable();
     }
   }
-/*
+#ifdef MANUAL_CONTACTOR_CONTROL
   else if (argc >= 2 && 0 == strcmp(args[0], "contactor"))
   {
     int val = strtol(args[1], NULL, 10);
@@ -1008,7 +1012,7 @@ int solax_process_cmd(char **args, int argc)
     else
       HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_RESET);
   }
-*/
+#endif
   else
   {
     ret = -1;
@@ -1040,7 +1044,7 @@ void solax_json_update(void)
   printf(", \"inv_state\":%d", inv_state);
   printf(", \"inv_temp\":%d", inv_temp);
   printf(", \"grid_power\":%d", grid_power);
-  printf(", \"power_offset\":%d", power_offset);
+  printf(", \"power_offset\":%ld", power_offset);
 
 #ifdef DEBUG_SOLAX
   printf(",\"last_update\":%ld", HAL_GetTick() - last_update);

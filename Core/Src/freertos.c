@@ -57,49 +57,46 @@
 
 #define DEBUG_CONTROLLER
 
-#define JSON_UPDATE_TIME         (5000)
+#define JSON_UPDATE_TIME         (1000)
 
 #define HIGH_VOLTAGE_THRESHOLD   (500) /* 50V */
-#define HIGH_VOLTAGE_TIMEOUT     (10000) /* Allow the HV source to be left on for this duration (max) */
+#define HIGH_VOLTAGE_TIMEOUT     (60000) /* Allow the HV source to be left on for this duration (max) */
 
 #define BUTTON_DEBOUNCE_TIME     (150)
 /* How often to toggle flashing LEDs (ms) */
 #define FLASH_TOGGLE_TIME        (500)
+
+#define HV_PWM_MIN               (200)
+#define HV_PWM_MAX               (1000)
+#define HV_PWM_DEFAULT           (200)
+#define HV_HYST_VOLT             (5)  /* Hysteresis for HV voltage control (V) */
+
+#define HV_DCDC_C                (9800) /* Minimum current draw from HV DCDC in uA */
+#define HV_DCDC_M                (110) /* DC-DC Efficiency */
+#define HV_DCDC_N                (11) /* Voltage dependent loss */
+#define HV_DCDC_O                (-300) /* R Offset */
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+int32_t power_offset = 0;      /* Offset from actual power (i.e. charge / discharge) */
 
-/* Upper / Red (bits 8-15) and Lower / Green (bits 0-7) Debug Leds */
-enum debug_leds
-{
-  DBG_LED_HV_TEST = 0,
-  DBG_LED_ISO_TEST,
-  DBG_LED_CT_PRE,
-  DBG_LED_CT_MAIN,
-  DBG_LED_STAT_RED_INV,
-  DBG_LED_STAT_RED_EV,
-  DBG_LED_HV_INV,
-  DBG_LED_HV_BATT,
+uint32_t hv_time = 0;          /* When the HV source was enabled */
+uint32_t hv_target = 0;        /* Target HV voltage in V */
 
-  DBG_LED_PP_INSERTED = 8,
-  DBG_LED_CP_READY,
-  DBG_LED_CP_CHARGE,
-};
+uint16_t debug_leds = 0;       /* Combined state of debug leds */
+uint16_t flash_debug_leds = 0; /* Bits for debug LEDs that should flash */
+uint8_t flash_user_mask = 0;   /* Bits (0x01,0x02) for user GPIOs that should flash */
+uint8_t user_led_base = 0;     /* Base values for user LEDs (bit0 -> GPIO1, bit1 -> GPIO2) */
+bool flash_state = false;      /* Current on/off state for flashed LEDs */
+
+
+static uint32_t last_flash_toggle = 0;/* Last tick when flash_state toggled */
 
 static bool error = false;            /* Whether we are in the error state */
-static int32_t power_offset = 0;      /* Offset from actual power (i.e. charge / discharge) */
-static uint16_t debug_leds = 0;       /* Combined state of debug leds */
 
-static uint8_t comm_count = 0;        /* Number of active comm sessions (I2C / SPI / UART) */
-static uint32_t hv_time = 0;          /* When the HV source was enabled */
-
-/* Flashing LED state: which debug LEDs should flash and which user GPIOs */
-static uint16_t flash_debug_leds = 0; /* Bits for debug LEDs that should flash */
-static uint8_t flash_user_mask = 0;   /* Bits (0x01,0x02) for user GPIOs that should flash */
-static uint8_t user_led_base = 0;     /* Base values for user LEDs (bit0 -> GPIO1, bit1 -> GPIO2) */
-static bool flash_state = false;      /* Current on/off state for flashed LEDs */
-static uint32_t last_flash_toggle = 0;/* Last tick when flash_state toggled */
+static uint32_t hv_pwm = HV_PWM_DEFAULT;  /* Current value for HV PWM */
 
 /* USER CODE END Variables */
 /* Definitions for mainTask */
@@ -121,6 +118,13 @@ osSemaphoreId_t jsonMutexHandle;
 const osSemaphoreAttr_t jsonMutex_attributes = {
   .name = "jsonMutex"
 };
+/* Definitions for jsonTask */
+osThreadId_t hvGenTaskHandle;
+const osThreadAttr_t hvGenTask_attributes = {
+  .name = "hvGenTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -132,6 +136,7 @@ static void cp_changed_cb(EVSE_CP cp);
 
 void mainTaskEntry(void *argument);
 void jsonTaskEntry(void *argument);
+void hvGenTaskEntry(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -142,10 +147,7 @@ void vApplicationIdleHook(void);
 /* USER CODE BEGIN 2 */
 void vApplicationIdleHook( void )
 {
-    /* Re-purpose the EVSE LED to show when we're busy */
-    HAL_GPIO_WritePin(LED_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
     __WFI();
-    HAL_GPIO_WritePin(LED_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 }
 /* USER CODE END 2 */
 
@@ -197,6 +199,8 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of jsonTask */
   jsonTaskHandle = osThreadNew(jsonTaskEntry, NULL, &jsonTask_attributes);
+
+  hvGenTaskHandle = osThreadNew(hvGenTaskEntry, NULL, &hvGenTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -254,12 +258,6 @@ void mainTaskEntry(void *argument)
   /* Give USB and ESP a chance to start up */
   osDelay(3000);
 
-  if (!cmd_init())
-  {
-    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise command parser.\"}]\n");
-    error = true;
-  }
-
   /* Initialise Sensors and Peripherals */
 
   if (!sensor_init())
@@ -310,6 +308,12 @@ void mainTaskEntry(void *argument)
   /* Set Maximum DC power. Import / Export will be controlled separately. */
   chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
 #endif
+
+  if (!cmd_init())
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise command parser.\"}]\n");
+    error = true;
+  }
 
   MX_IWDG_Init();
 
@@ -421,13 +425,6 @@ void mainTaskEntry(void *argument)
       }
     }
 
-    /* Check HV Source */
-    if (hv_time != 0 && HAL_GetTick() - hv_time > HIGH_VOLTAGE_TIMEOUT)
-    {
-      app_process_cmd_hv((char*[]){"iso", "0"}, 2);
-      app_process_cmd_hv((char*[]){"src", "0"}, 2);
-    }
-
     /* Update the inverter power */
     solax_set_output_power(power_offset);
 
@@ -460,6 +457,7 @@ void jsonTaskEntry(void *argument)
     int32_t batt_current = -1;
     int32_t batt_voltage = -1;
     int32_t inv_voltage = -1;
+    uint32_t iso_resistance = -1;
 
 #ifdef ENABLE_INA219
     sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
@@ -472,16 +470,21 @@ void jsonTaskEntry(void *argument)
 
     sensor_get_value(SENSOR_BATT_CURRENT, &batt_current);
 
-    /* Display Batt and Inverter Voltages on LEDs (300-500v) */
+    /* Display Batt and Inverter Voltages on LEDs (200-500v) */
     {
       int32_t b;
       int32_t i;
-      b = (batt_voltage - 3000) * 8 / 2000;
-      if (b < 0) b = 0;
-      b = ((1 >> b) - 1) & 0xff;
-      i = (inv_voltage - 3000) * 8 / 2000;
-      if (i < 0) i = 0;
-      i = ((1 >> i) - 1) & 0xff;
+      b = (batt_voltage - 2000) * 8 / 3000;
+      if (b <= 0) b = 0;
+      if (b > 7) b = 7;
+      if (b > 0)
+        b = ((1 << b) - 1) & 0xff;
+
+      i = (inv_voltage - 2000) * 8 / 3000;
+      if (i <= 0) i = 0;
+      if (i > 7) i = 7;
+      if (i > 0)
+        i = ((1 << i) - 1) & 0xff;
       ioexp_set_direction(IOEXP_BOT_LEDS, ~(b << 8 | i));
     }
 
@@ -512,6 +515,15 @@ void jsonTaskEntry(void *argument)
 
     printf(",\"acc_current\":%ld", acc_current);
     printf(",\"hv_current\":%ld", hv_current);
+    if (hv_current <= HV_DCDC_C || batt_voltage < 1000)  iso_resistance = -1;
+    else
+    {
+      uint32_t p1 = 5 * (hv_current - HV_DCDC_C);
+      uint32_t p2 = HV_DCDC_M * p1 / 100 - HV_DCDC_N * p1 / 100000 * batt_voltage;
+      iso_resistance = batt_voltage * batt_voltage * 10 / p2 - HV_DCDC_O;
+    }
+
+    printf(",\"iso_resistance\":%ld", iso_resistance);
     printf(",\"batt_voltage\":%ld", batt_voltage / 10);
     printf(",\"batt_current\":%ld", batt_current / 10);
     printf(",\"inv_voltage\":%ld", inv_voltage / 10);
@@ -532,66 +544,60 @@ void jsonTaskEntry(void *argument)
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 
-/**
-  * @brief  Forcibly shut everything down
-  * @retval None
-  */
-void emergency_stop(void)
+void hvGenTaskEntry(void *argument)
 {
-  volatile uint32_t i;
-
-  /* Stop Everything in the system */
-  __disable_irq();
-
-  /* Turn Off EVSE */
-  HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_RESET);
-
-  /* Force DC contactors off */
-  HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
-
-  /* Force Leak Test Off */
-  HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
-
-  while(1)
+  /* Infinite loop */
+  for(;;)
   {
-    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
-    for (i=0; i<1000000; ++i);
+    /* Check HV Source Timeout */
+    if (hv_time != 0 && HAL_GetTick() - hv_time > HIGH_VOLTAGE_TIMEOUT)
+    {
+      app_process_cmd_hv((char*[]){"iso", "0"}, 2);
+      hv_time = 0;
+      printf("{\"controller\":[{\"hv_timeout\":1}]}\n");
+    }
 
-    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
-    for (i=0; i<1000000; ++i);
+    /* HV Generator PWM - We only have feedback in ISO test mode */
+    if (hv_target != 0 && hv_time != 0)
+    {
+      int32_t batt_voltage = -1;
+      int32_t hv_current = -1;
+      int32_t step;
+
+      sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
+      sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
+      batt_voltage /= 10;
+      step = abs(batt_voltage - hv_target) / 2;
+      if (step < HV_HYST_VOLT * 2)
+          step = 1;
+
+      if (batt_voltage > hv_target + HV_HYST_VOLT)
+      {
+        // Increase PWM
+        if ((int32_t)hv_pwm + step > HV_PWM_MAX)
+          hv_pwm = HV_PWM_MAX;
+        else
+          hv_pwm += batt_voltage;
+      }
+      else if (batt_voltage < hv_target - HV_HYST_VOLT)
+      {
+        // Decrease PWM
+        if ((int32_t)hv_pwm - step < HV_PWM_MIN)
+        {
+          hv_pwm = HV_PWM_MIN;
+        }
+        else
+          hv_pwm -= step;
+      }
+
+      uint32_t ccr = hv_pwm * (htim1.Init.Period + 1) / 1000;
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, ccr);
+    }
+
+    osDelay(100);
   }
 }
 
-/**
-  * @brief  Indicate the state of a comms session.
-  * @param start_stop: Whether we are starting or stopping a session
-  * @retval None
-  */
-void comm_session(bool start_stop)
-{
-  if (start_stop)
-  {
-    if (comm_count == 0)
-      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-    comm_count++;
-  }
-  else
-  {
-    if (comm_count > 0)
-      comm_count--;
-
-    if (comm_count == 0)
-      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
-  }
-}
 
 /**
   * @brief  Trigger an update of the JSON output.
@@ -679,163 +685,18 @@ static void cp_changed_cb(EVSE_CP cp)
       debug_leds |= (1 << DBG_LED_CP_READY);
       debug_leds |= (1 << DBG_LED_CP_CHARGE);
     break;
+
+    case EVSE_CP_ERROR:
+      solax_set_output_power(0);
+      solax_disable();
+      debug_leds |= (1 << DBG_LED_CP_READY);
+      debug_leds |= (1 << DBG_LED_CP_CHARGE);
+      flash_debug_leds |= (1 << DBG_LED_CP_READY);
+      flash_debug_leds |= (1 << DBG_LED_CP_CHARGE);
+    break;
   }
 
   trigger_json_update();
 }
 
-/* Command Handlers (Application Level) */
-
-/**
-  * @brief  Process Power Setting command
-  * @param  args Command arguments
-  * @param  argc Number of arguments
-  * @retval Status (0 = OK, -1 = Error / Unknown Command)
-  */
-int app_process_cmd_power(char **args, int argc)
-{
-  if (argc == 1)
-  {
-    power_offset = strtol(args[0], NULL, 10);
-    solax_set_output_power(power_offset);
-    return 0;
-  }
-  return -1;
-}
-
-int app_process_cmd_leds(char **args, int argc)
-{
-  int ret = 0;
-  if (argc >= 3 && 0 == strcmp(args[0], "debug"))
-  {
-    int16_t mask = strtol(args[1], NULL, 16);
-    int16_t val = strtol(args[2], NULL, 16);
-
-    /* Only modify bits covered by mask */
-    debug_leds &= ~mask;
-    debug_leds |= (val & mask);
-    /* Optional 4th arg: "flash" -> add any bits set to 1 (mask & val) to flash list. */
-    if (argc >= 4 && 0 == strcmp(args[3], "flash"))
-    {
-      /* Add bits where mask says and val is 1 */
-      flash_debug_leds |= (mask & val);
-      /* Remove any bits from flash list where mask requested clearing (mask & ~val) */
-      flash_debug_leds &= ~(mask & ~val);
-    }
-    else
-    {
-      /* No explicit "flash" arg -> clear flashing for the bits covered by mask */
-      flash_debug_leds &= ~((uint16_t)mask);
-    }
-  }
-  else if (argc >= 3 && 0 == strcmp(args[0], "user"))
-  {
-    int16_t mask = strtol(args[1], NULL, 16);
-    int16_t val = strtol(args[2], NULL, 16);
-
-    /* Update base user LED values */
-    user_led_base &= ~mask;
-    user_led_base |= (val & mask);
-
-    /* Optional flash parameter: add/remove flashing for the bits being set */
-    if (argc >= 4 && 0 == strcmp(args[3], "flash"))
-    {
-      /* Add bits where mask says and val is 1 */
-      flash_user_mask |= (mask & val);
-      /* Remove any bits from flash list where mask requested clearing (mask & ~val) */
-      flash_user_mask &= ~(mask & ~val);
-    }
-    else
-    {
-      /* No explicit "flash" arg -> clear flashing for the bits covered by mask */
-      flash_user_mask &= ~mask;
-    }
-
-    /* Immediately apply the current visible state for user LEDs (honour flash_state)
-       If a user LED is flashing, show flash_state, otherwise show base value */
-    if (flash_user_mask & 0x01)
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
-    else
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (user_led_base & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-
-    if (flash_user_mask & 0x02)
-      HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
-    else
-      HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (user_led_base & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  }
-  else
-  {
-    ret = -1;
-  }
-
-  return ret;
-}
-
-
-/**
-  * @brief  Process HV Test commands
-  * @param  args Command arguments
-  * @param  argc Number of arguments
-  * @retval Status (0 = OK, -1 = Error / Unknown Command)
-  */
-int app_process_cmd_hv(char **args, int argc)
-{
-  int ret = -1;
-  if (argc >= 2 && 0 == strcmp(args[0], "src"))
-  {
-    switch (strtol(args[1], NULL, 10))
-    {
-      case 0:
-        /* Disable HV Test Source */
-        HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_RESET);
-        debug_leds &= ~(1 << DBG_LED_HV_TEST);
-        hv_time = 0;
-        ret = 0;
-      break;
-
-      case 1:
-        /* Enable HV Test Source */
-        HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
-        debug_leds |= (1 << DBG_LED_HV_TEST);
-        hv_time = HAL_GetTick();
-        ret = 0;
-      break;
-
-      default:
-      break;
-    }
-  }
-  else if (argc >= 2 && 0 == strcmp(args[0], "iso"))
-  {
-    switch (strtol(args[1], NULL, 10))
-    {
-      case 0:
-        /* Disable ISO Test */
-        HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_RESET);
-        debug_leds &= ~(1 << DBG_LED_ISO_TEST);
-        ret = 0;
-      break;
-
-      case 1:
-        /* Enable ISO Test */
-        HAL_GPIO_WritePin(ISO_TEST_EN_GPIO_Port, ISO_TEST_EN_Pin, GPIO_PIN_SET);
-        debug_leds |= (1 << DBG_LED_ISO_TEST);
-        ret = 0;
-      break;
-
-      default:
-      break;
-    }
-  }
-  else if (argc >= 1 && 0 == strcmp(args[0], "get"))
-  {
-    trigger_json_update();
-    ret = 0;
-  }
-  return ret;
-}
-
 /* USER CODE END Application */
-
