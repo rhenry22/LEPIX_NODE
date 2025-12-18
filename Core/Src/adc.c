@@ -36,9 +36,11 @@ static volatile uint16_t samples[NUM_CHANNELS] = {0};
 static volatile uint32_t samples_avg[NUM_CHANNELS] = {0};
 
 /* ADC2 Values (CCS2_CP Input) */
+static volatile uint32_t num_samples2h = 0;
+static volatile uint32_t num_samples2l = 0;
 static volatile uint16_t samples2[NUM_CHANNELS2] = {0};
-static volatile uint16_t samples2_h[NUM_CHANNELS2] = {0};
-static volatile uint16_t samples2_l[NUM_CHANNELS2] = {0};
+static volatile uint32_t samples2_h[NUM_CHANNELS2] = {0};
+static volatile uint32_t samples2_l[NUM_CHANNELS2] = {0};
 
 /* USER CODE END 0 */
 
@@ -343,11 +345,17 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
   {
     for (i=0; i<NUM_CHANNELS2; ++i)
     {
-      if (samples2[i] < samples2_l[i])
-        samples2_l[i] = samples2[i];
+      if (samples2[i] <= 1613)
+      {
+        samples2_l[i] += samples2[i];
+        num_samples2l++;
+      }
+      else
+      {
+        samples2_h[i] += samples2[i];
+        num_samples2h++;
+      }
 
-      if (samples2[i] > samples2_h[i])
-        samples2_h[i] = samples2[i];
     }
 
     /* Keep sampling */
@@ -431,20 +439,32 @@ HAL_StatusTypeDef MX_ADC1_Get_Sample_Avg(uint8_t channel, uint16_t *val)
 HAL_StatusTypeDef MX_ADC2_Get_Sample_Avgs(uint8_t channel, uint16_t *val_high, uint16_t *val_low)
 {
   uint8_t i;
+  HAL_StatusTypeDef ret = HAL_OK;
 
   if (channel >= NUM_CHANNELS2)
     return HAL_ERROR;
 
-  *val_high = samples2_h[channel];
-  *val_low = samples2_l[channel];
+  if (num_samples2h > 0)
+    *val_high = samples2_h[channel] / num_samples2h;
+  if (num_samples2l > 0)
+    *val_low = samples2_l[channel] / num_samples2l;
+
+  if (num_samples2l == 0)
+    *val_low = *val_high;
+  else if (num_samples2h == 0)
+    *val_high = *val_low;
+  else if (num_samples2h == 0 && num_samples2l == 0)
+    ret = HAL_ERROR;
 
   for (i=0; i<NUM_CHANNELS2; ++i)
   {
     samples2_h[i] = 0;
-    samples2_l[i] = 4096;
+    samples2_l[i] = 0;
   }
+  num_samples2h = 0;
+  num_samples2l = 0;
 
-  return HAL_OK;
+  return ret;
 }
 
 /* USER CODE END 1 */

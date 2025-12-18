@@ -217,8 +217,8 @@ EVSE_CP evse_get_cp(void)
     adcl = val & 0xffff;
     adch = (val >> 16) & 0xffff;
 
-    int32_t cp_h = ((int32_t)adch - 1663) * 120 / 1613; // 11.9, 9.1, 5.9
-    int32_t cp_l = ((int32_t)adcl - 1563) * 120 / 1613;
+    int32_t cp_h = ((int32_t)adch - 1613) * 130 / 1613; // 11.9, 9.1, 5.9
+    int32_t cp_l = ((int32_t)adcl - 1613) * 130 / 1613;
 
     //printf("CP CPH=%ld, CPL=%ld, ADCH=%ld, ADCL=%ld\n", cp_h, cp_l, adch, adcl);
 
@@ -328,7 +328,6 @@ void evse_process(void)
   {
     evse_cp_cb(cp);
   }
-
 }
 
 /**
