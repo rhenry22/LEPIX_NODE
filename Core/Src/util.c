@@ -96,17 +96,21 @@ void hv_iso_test_enable(bool enable, uint32_t voltage)
       HAL_GPIO_WritePin(TEST_HV_EN_GPIO_Port, TEST_HV_EN_Pin, GPIO_PIN_SET);
       HAL_GPIO_WritePin(HV_EN_GPIO_Port, HV_EN_Pin, GPIO_PIN_SET);
 
-      /* Maximum PWM (0V output) */
-      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, htim1.Init.Period + 1);
-      HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-      debug_leds |= (1 << DBG_LED_HV_TEST);
-      hv_time = HAL_GetTick();
+      if (hv_target == 0)
+      {
+        /* Set an initial PWM value to help the PID loop */
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, htim1.Init.Period + 1);
+        HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+        debug_leds |= (1 << DBG_LED_HV_TEST);
+      }
 
+      hv_time = HAL_GetTick();
       hv_target = voltage;
   }
   else
   {
       hv_target = 0;
+      hv_time = 0;
 
       /* Disable HV Test Source */
       HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);

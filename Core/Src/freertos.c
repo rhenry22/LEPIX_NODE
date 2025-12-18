@@ -57,7 +57,7 @@
 
 #define DEBUG_CONTROLLER
 
-#define JSON_UPDATE_TIME         (1000)
+#define JSON_UPDATE_TIME         (60000)
 
 #define HIGH_VOLTAGE_THRESHOLD   (500) /* 50V */
 #define HIGH_VOLTAGE_TIMEOUT     (60000) /* Allow the HV source to be left on for this duration (max) */
@@ -68,13 +68,23 @@
 
 #define HV_PWM_MIN               (200)
 #define HV_PWM_MAX               (1000)
-#define HV_PWM_DEFAULT           (200)
+#define HV_PWM_DEFAULT           (1000)
 #define HV_HYST_VOLT             (5)  /* Hysteresis for HV voltage control (V) */
 
 #define HV_DCDC_C                (9800) /* Minimum current draw from HV DCDC in uA */
 #define HV_DCDC_M                (110) /* DC-DC Efficiency */
 #define HV_DCDC_N                (11) /* Voltage dependent loss */
 #define HV_DCDC_O                (-300) /* R Offset */
+
+/* PID tuning for HV generator (integer fixed-point) */
+#define HV_PID_SCALE            (1000)
+#define HV_PID_SAMPLE_MS        (50)
+
+#define HV_PID_KP_SCALED        (-800) /* -2.0 * SCALE */
+#define HV_PID_KI_SCALED        (-5)     /* -0.05 * (SAMPLE_MS/1000) * SCALE */
+#define HV_PID_KD_SCALED        (0)    /* -0.5 / (SAMPLE_MS/1000) * SCALE */
+
+#define HV_PID_MAX_DELTA        (300)   /* Max change per sample period */
 
 /* USER CODE END PM */
 
@@ -98,6 +108,10 @@ static uint32_t last_flash_toggle = 0;/* Last tick when flash_state toggled */
 static bool error = false;            /* Whether we are in the error state */
 
 static uint32_t hv_pwm = HV_PWM_DEFAULT;  /* Current value for HV PWM */
+/* PID controller state for HV generator */
+static int32_t hv_pid_integral = 0; /* accumulated error (samples * volts) */
+static int32_t hv_pid_prev_error = 0; /* previous error (volts) */
+static uint32_t hv_pid_last_time = 0;
 
 /* USER CODE END Variables */
 /* Definitions for mainTask */
@@ -554,37 +568,11 @@ void hvGenTaskEntry(void *argument)
     {
       int32_t batt_voltage = -1;
       int32_t hv_current = -1;
-      int32_t step;
 
       sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
       sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
-      batt_voltage /= 10;
-      step = abs(batt_voltage - hv_target) / 2;
-      if (step < HV_HYST_VOLT * 2)
-          step = 1;
 
-      if (batt_voltage > hv_target + HV_HYST_VOLT)
-      {
-        // Increase PWM
-        if ((int32_t)hv_pwm + step > HV_PWM_MAX)
-          hv_pwm = HV_PWM_MAX;
-        else
-          hv_pwm += batt_voltage;
-      }
-      else if (batt_voltage < hv_target - HV_HYST_VOLT)
-      {
-        // Decrease PWM
-        if ((int32_t)hv_pwm - step < HV_PWM_MIN)
-        {
-          hv_pwm = HV_PWM_MIN;
-        }
-        else
-          hv_pwm -= step;
-      }
-
-      uint32_t ccr = hv_pwm * (htim1.Init.Period + 1) / 1000;
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, ccr);
-
+      /* Calcuations based on dV, not V */
       if (hv_current <= HV_DCDC_C || batt_voltage < 1000)
         hv_iso_resistance = -1;
       else
@@ -593,11 +581,71 @@ void hvGenTaskEntry(void *argument)
         uint32_t p2 = HV_DCDC_M * p1 / 100 - HV_DCDC_N * p1 / 100000 * batt_voltage;
         hv_iso_resistance = batt_voltage * batt_voltage * 10 / p2 - HV_DCDC_O;
       }
+
+      /* Convert sensor value to volts (same as previous code) */
+      batt_voltage = batt_voltage / 10;
+
+
+      /* PID controller (integer fixed-point)
+         We assume a nominal sample time of HV_PID_SAMPLE_MS (100 ms). The scaled gains
+         are defined above as HV_PID_K*_SCALED. Calculation uses 64-bit intermediates.
+      */
+      uint32_t now = HAL_GetTick();
+      int32_t dt_ms = (hv_pid_last_time == 0) ? HV_PID_SAMPLE_MS : (int32_t)(now - hv_pid_last_time);
+      if (dt_ms < 1) dt_ms = 1;
+      if (dt_ms > HV_PID_SAMPLE_MS * 2) dt_ms = HV_PID_SAMPLE_MS; /* clamp unreasonable dt */
+
+      /* Error = target - measured (volts) */
+      int32_t error = (int32_t)hv_target - (int32_t)batt_voltage;
+
+      /* Integrate (accumulate error scaled by dt) and clamp to avoid windup */
+      hv_pid_integral += (error * dt_ms) / HV_PID_SAMPLE_MS;
+
+      /* Adjust Ki and Kd for actual dt (integer math) */
+      int32_t ki_adj = (int32_t)(((int64_t)HV_PID_KI_SCALED * dt_ms) / HV_PID_SAMPLE_MS);
+      int32_t kd_adj = (int32_t)(((int64_t)HV_PID_KD_SCALED * HV_PID_SAMPLE_MS) / dt_ms);
+
+      /* Compute P, I, D terms using 64-bit intermediates then scale down */
+      int64_t p_term = (int64_t)HV_PID_KP_SCALED * (int64_t)error;
+      int64_t i_term = (int64_t)ki_adj * (int64_t)hv_pid_integral;
+      int64_t d_term = (int64_t)kd_adj * (int64_t)(error - hv_pid_prev_error);
+
+      int64_t pid_sum = p_term + i_term + d_term;
+      int32_t pid_out = (int32_t)(pid_sum / HV_PID_SCALE);
+
+      /* Limit change size */
+      if (pid_out > HV_PID_MAX_DELTA) pid_out = HV_PID_MAX_DELTA;
+      if (pid_out < -HV_PID_MAX_DELTA) pid_out = -HV_PID_MAX_DELTA;
+
+      /* Apply to hv_pwm and clamp */
+      int32_t new_pwm = (int32_t)((int32_t)hv_pwm + pid_out);
+      if (new_pwm > HV_PWM_MAX) new_pwm = HV_PWM_MAX;
+      if (new_pwm < HV_PWM_MIN) new_pwm = HV_PWM_MIN;
+      hv_pwm = (uint32_t)new_pwm;
+
+      /* Save state */
+      hv_pid_prev_error = error;
+      hv_pid_last_time = now;
+
+      /* Update timer compare (timer uses 0..1000 scale) */
+      uint32_t ccr = hv_pwm * (htim1.Init.Period + 1) / 1000;
+      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, ccr);
+
+      /* Telemetry: print PID state */
+      //printf("{\"hv_pid\":{\"error\":%ld,\"pid_out\":%ld,\"hv_pwm\":%lu,\"batt_voltage\":%ld,\"hv_target\":%lu}}\n",
+      //        (long)error, (long)pid_out, (unsigned long)hv_pwm, (long)batt_voltage, (unsigned long)hv_target);
     }
     else
+    {
       hv_iso_resistance = -1;
+      hv_pwm = HV_PWM_DEFAULT;
+      /* Clear PID state when generator is not active so integrator doesn't accumulate */
+      hv_pid_integral = 0;
+      hv_pid_prev_error = 0;
+      hv_pid_last_time = 0;
+    }
 
-    osDelay(100);
+    osDelay(HV_PID_SAMPLE_MS);
   }
 }
 

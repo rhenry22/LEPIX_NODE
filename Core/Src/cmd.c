@@ -335,7 +335,6 @@ int app_process_cmd_hv(char **args, int argc)
       printf("{\"controller\":[{\"status\":-1,\"message\":\"HV target out of range (%d-%dV)\"}]}\n",
              HV_GEN_MIN_VOLTAGE, HV_GEN_MAX_VOLTAGE);
     }
-    trigger_json_update();
   }
   else if (argc >= 1 && 0 == strcmp(args[0], "get"))
   {
