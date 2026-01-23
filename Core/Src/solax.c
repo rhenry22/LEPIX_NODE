@@ -264,9 +264,7 @@ static bool enabled = false;                        /* Have we been told to star
 static int16_t grid_power = 0;                      /* Reported Grid import / export */
 static int16_t inv_state = 0;                       /* Inverter State */
 static int16_t inv_temp = 0;                        /* Inverter Temperature */
-#ifdef DEBUG_SOLAX
 static uint16_t inv_fault[8] = {0};                 /* Inverter Fault registers */
-#endif
 
 static char last_error[ERROR_LEN+1] = {0};          /* Last error string */
 
@@ -697,6 +695,7 @@ void solaxTask(void *argument)
       }
     }
 
+#ifndef DEBUG_SOLAX
     /* Check to see if our commander has vanished */
     if (solax_last_cmd > 0 && HAL_GetTick() - solax_last_cmd > SOLAX_TIMEOUT)
     {
@@ -707,6 +706,8 @@ void solaxTask(void *argument)
       solax_disable();
       solax_last_cmd = 0;
     }
+#endif
+
   }
 }
 
@@ -728,7 +729,7 @@ void solaxModbusTask(void *argument)
 
     if (ret != HAL_OK)
     {
-      inv_state = -1;
+      inv_state = -ret;
       init_done = false;
     }
 
@@ -736,7 +737,6 @@ void solaxModbusTask(void *argument)
     if (ret == HAL_OK)
       ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_TEMP_INV, (uint16_t*)&inv_temp);
 
-#ifdef DEBUG_SOLAX
     if (ret == HAL_OK && inv_state >= 4)
     {
       int i;
@@ -745,9 +745,8 @@ void solaxModbusTask(void *argument)
         ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_FAULT_1 + i, (uint16_t*)&inv_fault[i]);
       }
     }
-#endif
 
-    if (!init_done)
+    if (!init_done && ret == HAL_OK)
     {
       /* Check and set the remote power enable */
       ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_EN, &rem);
@@ -781,10 +780,9 @@ void solaxModbusTask(void *argument)
     if (ret == HAL_OK)
       ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &en);
 
-    if (en)
+    if (en && ret == HAL_OK)
     {
       /* Read the Inverter State when Enabled */
-      if (ret == HAL_OK)
         ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_INV_STATE, (uint16_t*)&inv_state);
     }
 
@@ -1030,9 +1028,8 @@ int solax_process_cmd(char **args, int argc)
   */
 void solax_json_update(void)
 {
-#ifdef DEBUG_SOLAX
   int i;
-#endif
+
   printf("\"solax\":{");
 
   printf("\"state\":%d", state);
@@ -1046,8 +1043,6 @@ void solax_json_update(void)
   printf(", \"grid_power\":%d", grid_power);
   printf(", \"power_offset\":%ld", power_offset);
 
-#ifdef DEBUG_SOLAX
-  printf(",\"last_update\":%ld", HAL_GetTick() - last_update);
   printf(", \"inv_fault\":[");
   for (i=0; i<8; ++i)
   {
@@ -1056,6 +1051,9 @@ void solax_json_update(void)
       printf(",");
   }
   printf("]");
+
+#ifdef DEBUG_SOLAX
+  printf(",\"last_update\":%ld", HAL_GetTick() - last_update);
   printf(",\"contactor_req\":%d", contactor_close);
   printf(", \"max_chg_current\":%d, \"max_dis_current\":%d",
          solax_data.bms.msg_1872.charge_max,

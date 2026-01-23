@@ -57,7 +57,7 @@
 
 #define DEBUG_CONTROLLER
 
-#define JSON_UPDATE_TIME         (60000)
+#define JSON_UPDATE_TIME         (5000)
 
 #define HIGH_VOLTAGE_THRESHOLD   (500) /* 50V */
 #define HIGH_VOLTAGE_TIMEOUT     (60000) /* Allow the HV source to be left on for this duration (max) */
@@ -67,8 +67,8 @@
 #define FLASH_TOGGLE_TIME        (500)
 
 #define HV_PWM_MIN               (200)
-#define HV_PWM_MAX               (1000)
-#define HV_PWM_DEFAULT           (1000)
+#define HV_PWM_MAX               (5600)
+#define HV_PWM_DEFAULT           (HV_PWM_MAX)
 #define HV_HYST_VOLT             (5)  /* Hysteresis for HV voltage control (V) */
 
 #define HV_DCDC_C                (9800) /* Minimum current draw from HV DCDC in uA */
@@ -78,13 +78,14 @@
 
 /* PID tuning for HV generator (integer fixed-point) */
 #define HV_PID_SCALE            (1000)
-#define HV_PID_SAMPLE_MS        (50)
+#define HV_PID_SAMPLE_MS        (100)
 
-#define HV_PID_KP_SCALED        (-800) /* -2.0 * SCALE */
-#define HV_PID_KI_SCALED        (-5)     /* -0.05 * (SAMPLE_MS/1000) * SCALE */
-#define HV_PID_KD_SCALED        (0)    /* -0.5 / (SAMPLE_MS/1000) * SCALE */
+#define HV_PID_KP_SCALED        (-6000)
+#define HV_PID_KI_SCALED        (-5)
+#define HV_PID_KD_SCALED        (-800)
 
-#define HV_PID_MAX_DELTA        (300)   /* Max change per sample period */
+#define HV_PID_INTEGRAL_MAX     (100)  /* Anti-windup clamp */
+#define HV_PID_MAX_DELTA        (1500)   /* Max change per sample period */
 
 /* USER CODE END PM */
 
@@ -432,11 +433,13 @@ void mainTaskEntry(void *argument)
         button_time = 0;
 
       /* Button Press */
-      if ((button_time == 0 || (HAL_GetTick() - button_time) > BUTTON_DEBOUNCE_TIME) &&
-          HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
+      if (HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_RESET)
       {
+        if ((button_time == 0 || (HAL_GetTick() - button_time) > BUTTON_DEBOUNCE_TIME))
+        {
+          printf("{\"controller\":[{\"button\":1}]}\n");
+        }
         button_time = HAL_GetTick();
-        printf("{\"controller\":[{\"button\":1}]}\n");
       }
     }
 
@@ -601,9 +604,13 @@ void hvGenTaskEntry(void *argument)
       /* Integrate (accumulate error scaled by dt) and clamp to avoid windup */
       hv_pid_integral += (error * dt_ms) / HV_PID_SAMPLE_MS;
 
+      /* Anti-windup: clamp integral to reasonable bounds */
+      if (hv_pid_integral > HV_PID_INTEGRAL_MAX) hv_pid_integral = HV_PID_INTEGRAL_MAX;
+      if (hv_pid_integral < -HV_PID_INTEGRAL_MAX) hv_pid_integral = -HV_PID_INTEGRAL_MAX;
+
       /* Adjust Ki and Kd for actual dt (integer math) */
       int32_t ki_adj = (int32_t)(((int64_t)HV_PID_KI_SCALED * dt_ms) / HV_PID_SAMPLE_MS);
-      int32_t kd_adj = (int32_t)(((int64_t)HV_PID_KD_SCALED * HV_PID_SAMPLE_MS) / dt_ms);
+      int32_t kd_adj = (int32_t)(((int64_t)-HV_PID_KD_SCALED * HV_PID_SAMPLE_MS) / dt_ms);
 
       /* Compute P, I, D terms using 64-bit intermediates then scale down */
       int64_t p_term = (int64_t)HV_PID_KP_SCALED * (int64_t)error;
@@ -627,13 +634,13 @@ void hvGenTaskEntry(void *argument)
       hv_pid_prev_error = error;
       hv_pid_last_time = now;
 
-      /* Update timer compare (timer uses 0..1000 scale) */
-      uint32_t ccr = hv_pwm * (htim1.Init.Period + 1) / 1000;
+      /* Update timer compare (timer uses 0..HV_PWM_MAX scale) */
+      uint32_t ccr = hv_pwm * (htim1.Init.Period + 1) / HV_PWM_MAX;
       __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, ccr);
 
       /* Telemetry: print PID state */
-      //printf("{\"hv_pid\":{\"error\":%ld,\"pid_out\":%ld,\"hv_pwm\":%lu,\"batt_voltage\":%ld,\"hv_target\":%lu}}\n",
-      //        (long)error, (long)pid_out, (unsigned long)hv_pwm, (long)batt_voltage, (unsigned long)hv_target);
+      //printf("{\"hv_pid\":{\"error\":%ld,\"p_term\":%ld,\"i_term\":%ld,\"d_term\":%ld,\"pid_out\":%ld,\"hv_pwm\":%lu,\"batt_voltage\":%ld,\"hv_target\":%lu}}\n",
+      //        (long)error, (long)p_term, (long)i_term, (long)d_term, (long)pid_out, (unsigned long)hv_pwm, (long)batt_voltage, (unsigned long)hv_target);
     }
     else
     {

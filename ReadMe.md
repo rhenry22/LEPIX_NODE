@@ -8,8 +8,7 @@ flash           : Put the Controller into DFU mode
 power           : Set the target power (+/- : Discharge / Charge)
 
 hv              : Control the HV test generator
-  src 0/1           : Turns the HV voltage source (450V) on / off
-  iso 0/1           : Enable the Isolation test (connect HV source to output)
+  iso <voltage>     : Set the isolation test voltage (0-500V)
   get               : Triggers a JSON update to measure the HV voltages and HV source current draw
 evse            : Control the EVSE (Sink) and CCS2 (Source) parameters
   chg-en 0/1        : Disable / Enable the EVSE CP Line
