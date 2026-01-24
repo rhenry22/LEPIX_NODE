@@ -338,10 +338,12 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 #ifndef ESP_FLASH_MODE
   stdio_parser(Buf, *Len);
 #else
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
   if (HAL_UART_Transmit(&huart1, Buf, *Len, 250) != HAL_OK)
   {
     ret = USBD_BUSY;
   }
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
 #endif
 
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);

@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2023 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -34,22 +34,16 @@ extern "C" {
 
 extern ADC_HandleTypeDef hadc1;
 
-extern ADC_HandleTypeDef hadc2;
-
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
 
 void MX_ADC1_Init(void);
-void MX_ADC2_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
 HAL_StatusTypeDef MX_ADC1_Get_Sample(uint8_t channel, uint16_t *val);
 HAL_StatusTypeDef MX_ADC1_Get_Sample_Avg(uint8_t channel, uint16_t *val);
-
-HAL_StatusTypeDef MX_ADC2_Get_Sample_Avgs(uint8_t channel, uint16_t *val_high, uint16_t *val_low);
-
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

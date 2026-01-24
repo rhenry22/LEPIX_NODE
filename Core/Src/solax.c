@@ -25,7 +25,6 @@
 #include <string.h>
 
 #include "can.h"
-#include "sensor.h"
 #include "solax.h"
 #include "modbus.h"
 
@@ -292,8 +291,9 @@ static void solax_open_contactors(void)
 #ifdef MANUAL_CONTACTOR_CONTROL
   #warning "Manual contactor control enabled, contactors will not be opened by Solax!"
 #else
-  HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_RESET);  // Negative
+  HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);  // Positive
+  HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_RESET);  // Precharge
 #endif
   solax_data.bms.msg_1875.contactor = 0;
 }
@@ -382,12 +382,7 @@ static HAL_StatusTypeDef solax_update_values(void)
   int32_t voltage = -1;  /* Battery Voltage (x10 V) */
   int32_t current = -1;  /* Battery Current (x10 A) */
 
-#ifdef ENABLE_MAX22530
-  /* Update Measured Values */
-  ret =  sensor_get_value(SENSOR_BATT_CURRENT, &current);
-  if (ret == HAL_OK)
-    ret = sensor_get_value(SENSOR_INV_VOLTAGE, &voltage);
-#endif
+  // ToDo: Get battery voltage and current from Leaf CAN
 
   /* BMS_PackData */
   solax_data.bms.msg_1873.voltage = voltage;
@@ -454,14 +449,7 @@ static HAL_StatusTypeDef solax_update_state(void)
   int32_t batt_voltage;  /* Battery Voltage (x10 V) */
   int32_t inv_voltage;   /* Inverter Voltage (x10 V) */
 
-#ifdef ENABLE_MAX22530
-  /* Update Measured Values */
-  ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
-  if (ret == HAL_OK)
-    ret = sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
-#endif
-
-
+  // ToDo: Get battery voltage and current from Leaf CAN
 
   if (ret == HAL_OK)
   {
@@ -485,7 +473,8 @@ static HAL_StatusTypeDef solax_update_state(void)
           if (enabled && (batt_voltage / 10 > ABSOLUTE_MIN_VOLTAGE))
           {
             /* Close Precharge contactor */
-            HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_SET);  // Negative
+            HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_SET);  // Precharge
 
             state = SOLAX_CONTACTOR_PRECHARGE;
           }
@@ -505,20 +494,11 @@ static HAL_StatusTypeDef solax_update_state(void)
           /* Tell the inverter we're on */
           solax_data.bms.msg_1875.contactor = 2;
 
-          /* Close Main contactor */
-          HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_SET);
+          /* Close Main contactor and open precharge contactor */
+          HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_SET);  // Positive
+          HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_RESET);  // Precharge
 
-          /* The contactors cause our current measurement to offset. */
-          ret = sensor_zero_ibatt();
-          if (ret != HAL_OK)
-          {
-            snprintf(last_error, ERROR_LEN, "Failed to zero HV current.");
-            state = SOLAX_FAULT;
-          }
-          else
-          {
-            state = SOLAX_CONTACTOR_CLOSED;
-          }
+          state = SOLAX_CONTACTOR_CLOSED;
         }
         else
         {
@@ -996,19 +976,25 @@ int solax_process_cmd(char **args, int argc)
       solax_disable();
     }
   }
+
 #ifdef MANUAL_CONTACTOR_CONTROL
   else if (argc >= 2 && 0 == strcmp(args[0], "contactor"))
   {
     int val = strtol(args[1], NULL, 10);
     if (val & 0x01)
-      HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_SET);  // Negative
     else
-      HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(OD1_EN_GPIO_Port, OD1_EN_Pin, GPIO_PIN_RESET);  // Negative
 
     if (val & 0x02)
-      HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_SET);  // Positive
     else
-      HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(OD2_EN_GPIO_Port, OD2_EN_Pin, GPIO_PIN_RESET);  // Positive
+
+    if (val & 0x04)
+      HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_SET);  // Precharge
+    else
+      HAL_GPIO_WritePin(OD3_EN_GPIO_Port, OD3_EN_Pin, GPIO_PIN_RESET);  // Precharge
   }
 #endif
   else

@@ -34,8 +34,6 @@
 
 static uint32_t last_pp_check = 0;
 static EVSE_PP pp = EVSE_PP_NONE;
-static EVSE_CP cp = EVSE_CP_ERROR;
-static uint8_t ccs2_pwm = 100;
 static uint16_t cp_loops = 0;
 static uint32_t cp_rise = 0;
 static uint32_t cp_fall = 0;
@@ -46,7 +44,6 @@ static uint32_t max_current = EVSE_DEFAULT_CURRENT; /* Maximum Current (A x1) */
 static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
 
 static evse_pp_changed_cb *evse_pp_cb = NULL;
-static evse_cp_changed_cb *evse_cp_cb = NULL;
 
 static osThreadId_t taskHandle;
 static const osThreadAttr_t taskAttributes = {
@@ -140,7 +137,7 @@ void evse_tim_CaptureCallback(TIM_HandleTypeDef *htim)
   * @param  None
   * @retval bool true: Success, false: Failure
   */
-bool evse_init(evse_pp_changed_cb *pp_cb, evse_cp_changed_cb *cp_cb)
+bool evse_init(evse_pp_changed_cb *pp_cb)
 {
   /* Start the CP PWM timer */
   HAL_TIM_Base_Start_IT(&htim2);
@@ -148,7 +145,6 @@ bool evse_init(evse_pp_changed_cb *pp_cb, evse_cp_changed_cb *cp_cb)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
 
   evse_pp_cb = pp_cb;
-  evse_cp_cb = cp_cb;
 
   taskHandle = osThreadNew(evseTask, NULL, &taskAttributes);
 
@@ -203,74 +199,6 @@ EVSE_PP evse_get_pp(void)
 }
 
 /**
-  * @brief  Get the CP (connector) signal state
-  * @param  None
-  * @retval EVSE_CP enum with the state
-  */
-EVSE_CP evse_get_cp(void)
-{
-  int32_t val;
-  uint16_t adch, adcl;
-
-  if (HAL_OK == sensor_get_value(SENSOR_CP, &val))
-  {
-    adcl = val & 0xffff;
-    adch = (val >> 16) & 0xffff;
-
-    int32_t cp_h = ((int32_t)adch - 1613) * 130 / 1613; // 11.9, 9.1, 5.9
-    int32_t cp_l = ((int32_t)adcl - 1613) * 130 / 1613;
-
-    //printf("CP CPH=%ld, CPL=%ld, ADCH=%ld, ADCL=%ld\n", cp_h, cp_l, adch, adcl);
-
-    cp_h /= 10;
-    cp_l /= 10;
-
-    if (ccs2_pwm < 100 && cp_l > -10)        /* Proper connection should not impact -'ve pulse */
-      cp = EVSE_CP_ERROR;
-    else if (cp_h >= 10)
-      cp = EVSE_CP_A;
-    else if (cp_h >= 8)
-      cp = EVSE_CP_B;
-    else if (cp_h >= 5)
-      cp = EVSE_CP_C;
-    else if (cp_h >= 2)
-      cp = EVSE_CP_D;
-    else
-      cp = EVSE_CP_A;
-  }
-  else
-  {
-    cp = EVSE_CP_ERROR;
-  }
-
-  return cp;
-}
-
-/**
-  * @brief  Set the CP (connector) PWM Width
-  * @param  pwm: 0-100% PWM value
-  * @retval None
-  */
-void evse_set_cp(uint8_t pwm)
-{
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  if (pwm > 100)
-    return;
-
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = pwm * 10;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  ccs2_pwm = pwm;
-}
-
-/**
   * @brief  Thread monitoring the EVSE state.
   * @param  argument: Not used
   * @retval None
@@ -291,7 +219,6 @@ static void evseTask(void *argument)
 void evse_process(void)
 {
   static EVSE_PP pp_prev = EVSE_PP_NONE;
-  static EVSE_CP cp_prev = EVSE_CP_ERROR;
   static uint8_t cur_prev = UINT8_MAX;
   bool update = false;
 
@@ -312,21 +239,6 @@ void evse_process(void)
   if (update && evse_pp_cb)
   {
     evse_pp_cb(pp, max_current);
-  }
-
-  /* Check the CP ADC Values */
-  update = false;
-  cp = evse_get_cp();
-  if (cp != cp_prev)
-  {
-    cp_prev = cp;
-    update = true;
-  }
-
-
-  if (update && evse_cp_cb)
-  {
-    evse_cp_cb(cp);
   }
 }
 
@@ -359,15 +271,6 @@ int evse_process_cmd(char **args, int argc)
       break;
     }
   }
-  else if (argc >= 2 && 0 == strcmp(args[0], "pwm"))
-  {
-    uint32_t pwm = strtol(args[1], NULL, 10);
-    if (pwm <= 100)
-    {
-      evse_set_cp(pwm);
-      ret = 0;
-    }
-  }
   else if (argc >= 1 && 0 == strcmp(args[0], "get"))
   {
     trigger_json_update();
@@ -382,8 +285,8 @@ int evse_process_cmd(char **args, int argc)
   */
 void evse_json_update(void)
 {
-  printf("\"evse\":{\"ac\":{\"max_current\":%ld,\"pp\":%d}, \"ccs2\":{\"cp\":%d, \"pwm\":%d}",
-         max_current, pp, cp, ccs2_pwm);
+  printf("\"evse\":{\"ac\":{\"max_current\":%ld,\"pp\":%d}",
+         max_current, pp);
 
   if (strnlen(last_error, ERROR_LEN))
   {

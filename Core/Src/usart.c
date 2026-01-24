@@ -111,7 +111,7 @@ void MX_USART2_UART_Init(void)
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
   huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_RTS;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
 
   HAL_UART_DeInit(&huart2);
@@ -205,11 +205,10 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
     __HAL_RCC_GPIOD_CLK_ENABLE();
     /**USART2 GPIO Configuration
-    PD4     ------> USART2_RTS
     PD5     ------> USART2_TX
     PD6     ------> USART2_RX
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6;
+    GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -298,11 +297,10 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     __HAL_RCC_USART2_CLK_DISABLE();
 
     /**USART2 GPIO Configuration
-    PD4     ------> USART2_RTS
     PD5     ------> USART2_TX
     PD6     ------> USART2_RX
     */
-    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6);
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_5|GPIO_PIN_6);
 
     /* USART2 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
@@ -367,6 +365,27 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 }
 
 /**
+  * @brief  Error Callback
+  * @param  huart UART handle
+  * @retval None
+  */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+  BaseType_t pxHigherPriorityTaskWoken;
+
+  if (huart == &huart1)
+  {
+    HAL_UART_Setup_UART1();
+  }
+  else
+  {
+    HAL_UART_Setup_UART2();
+  }
+
+  xSemaphoreGiveFromISR(dataMutex, &pxHigherPriorityTaskWoken);
+}
+
+/**
   * @brief UART Tx Complete callback (for IT / DMA sends)
   * @param  huart: UART handle
   * @retval None
@@ -392,15 +411,17 @@ void HAL_UART_Process(void)
   if (uart1_rx_bytes > 0)
   {
 #ifdef ESP_FLASH_MODE
+    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
     /* Echo serial to USB (for ESP8266 flashing) */
     if (CDC_Is_Connected())
     {
       CDC_Transmit_FS(&uart1_rxbuf[0], uart1_rx_bytes, 10);
     }
-#endif
-
+    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+#else
     /* Call stdio parser */
     stdio_parser(&uart1_rxbuf[0], uart1_rx_bytes);
+#endif
 
     uart1_rx_bytes = 0;
     HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_RX_DATA_SIZE);
