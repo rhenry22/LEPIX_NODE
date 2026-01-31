@@ -39,7 +39,7 @@ enum
   FOX_FAULT_6 = 11066,
   FOX_FAULT_7 = 11067,
   FOX_FAULT_8 = 11068,
-  
+
   FOX_REM_EN = 44000,
   FOX_REM_TIMER = 44001,
   FOX_REM_POWER = 44002,
@@ -49,12 +49,48 @@ enum
   FOX_CLEAR_EVTS = 45000
 };
 
+/* Fault bits */
+enum
+{
+  FAULT1_GRID_LOST = 0,
+  FAULT1_GRID_VOLT,
+  FAULT1_GRID_FREQ,
+  FAULT1_GRID_10M_VOLT,
+  FAULT1_EPS_VOLT,
+  FAULT1_SW_INV_CUR,
+  FAULT1_DCI,
+  FAULT1_TBD1,
+  FAULT1_HW_INV_CUR,
+  FAULT1_SW_BUS_VOLT,
+  FAULT1_BAT_VOLT,
+  FAULT1_SW_BAT_CUR,
+  FAULT1_ISO,
+  FAULT1_RES_CUR,
+  FAULT1_PV_VOLT,
+  FAULT1_SW_PV_CUR
+};
+
+enum
+{
+  FAULT2_TEMP = 0,
+  FAULT2_GROUND_CONN,
+  FAULT2_TBD1,
+  FAULT2_EPS_OVER_LOAD,
+  FAULT2_BATT_POWER_LOW,
+  FAULT2_HW_BUS_VOLT,
+  FAULT2_HW_PV_CUR,
+  FAULT2_HW_BAT_CUR,
+  FAULT2_SCI,
+  FAULT2_MASTER_SPI
+};
 
 bool solax_init(void);
 void solax_kick(void);
 
 void solax_enable(void);
 void solax_disable(void);
+
+bool solax_check_faults(uint32_t *faults);
 
 void solax_set_output_power(int16_t power);
 

@@ -311,7 +311,9 @@ static HAL_StatusTypeDef solax_send_message(uint32_t id, uint8_t *data, uint8_t 
   TxHeader.ExtId = id;
   TxHeader.RTR = CAN_RTR_DATA;
 
+  comm_session(true);
   ret = MX_CAN_Transmit(&hcan2, &TxHeader, data);
+  comm_session(false);
 
 #ifdef DEBUG_SOLAX
       //printf("< 0x%04lX (%d): ", id, len);
@@ -377,12 +379,16 @@ static HAL_StatusTypeDef solax_send_standard_response(void)
 
 static HAL_StatusTypeDef solax_update_values(void)
 {
-  HAL_StatusTypeDef ret = HAL_ERROR;
+  HAL_StatusTypeDef ret = HAL_OK;
 
-  int32_t voltage = -1;  /* Battery Voltage (x10 V) */
-  int32_t current = -1;  /* Battery Current (x10 A) */
+  int32_t voltage;  /* Battery Voltage (x10 V) */
+  int32_t current;  /* Battery Current (x10 A) */
 
-  // ToDo: Get battery voltage and current from Leaf CAN
+  if (app_get_batt_voltage(&voltage) != 0)
+    ret = HAL_ERROR;
+
+  if (app_get_batt_current(&current) != 0)
+    ret = HAL_ERROR;
 
   /* BMS_PackData */
   solax_data.bms.msg_1873.voltage = voltage;
@@ -401,7 +407,7 @@ static HAL_StatusTypeDef solax_update_values(void)
 
   /* Ensure we're within EVSE limits */
 
-  if (voltage > 0)
+  if (voltage > (ABSOLUTE_MIN_VOLTAGE * 10))
   {
     uint32_t req_current; /* A x10 */
     uint32_t req_power;   /* W x1 */
@@ -443,13 +449,23 @@ static HAL_StatusTypeDef solax_update_values(void)
 
 static HAL_StatusTypeDef solax_update_state(void)
 {
-  HAL_StatusTypeDef ret = HAL_ERROR;
+  HAL_StatusTypeDef ret = HAL_OK;
   SOLAX_STATE s = state;
 
   int32_t batt_voltage;  /* Battery Voltage (x10 V) */
-  int32_t inv_voltage;   /* Inverter Voltage (x10 V) */
+  uint16_t inv_voltage;  /* Inverter Voltage (x10 V) */
 
-  // ToDo: Get battery voltage and current from Leaf CAN
+  if (app_get_batt_voltage(&batt_voltage) != 0)
+    ret = HAL_ERROR;
+
+  /* Read the inverter battery voltage */
+  if (ret == HAL_OK)
+  {
+    do
+    {
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_BATT_V, &inv_voltage);
+    } while (ret != HAL_BUSY);
+  }
 
   if (ret == HAL_OK)
   {
@@ -504,7 +520,7 @@ static HAL_StatusTypeDef solax_update_state(void)
         {
           solax_open_contactors();
           contactor_close = false;
-          snprintf(last_error, ERROR_LEN, "Precharge failed to stabilise within 1s (%ld, %ld).", inv_voltage, batt_voltage);
+          snprintf(last_error, ERROR_LEN, "Precharge failed to stabilise within 1s (%d, %ld).", inv_voltage, batt_voltage);
           state = SOLAX_FAULT;
         }
       }
@@ -536,6 +552,12 @@ static HAL_StatusTypeDef solax_update_state(void)
         contactor_close = false;
       break;
     }
+  }
+  else
+  {
+    state = SOLAX_FAULT;
+    solax_open_contactors();
+    contactor_close = false;
   }
 
   if (s != state)
@@ -687,7 +709,6 @@ void solaxTask(void *argument)
       solax_last_cmd = 0;
     }
 #endif
-
   }
 }
 
@@ -701,16 +722,17 @@ void solaxModbusTask(void *argument)
   for (;;)
   {
     HAL_StatusTypeDef ret;
-    uint16_t rem;
-    uint16_t en;
+    uint16_t val;
 
     /* Read the current Grid (Inverter Output) power */
     ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_GRID_P1, (uint16_t*)&grid_power);
 
     if (ret != HAL_OK)
     {
+      /* Without ModBus, we can't set the inverter power or read faults */
       inv_state = -ret;
       init_done = false;
+      enabled = false;
     }
 
     /* Read the inverter temperature */
@@ -729,20 +751,20 @@ void solaxModbusTask(void *argument)
     if (!init_done && ret == HAL_OK)
     {
       /* Check and set the remote power enable */
-      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_EN, &rem);
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_EN, &val);
       if (ret == HAL_OK)
       {
-        if (rem != 1)
+        if (val != 1)
         {
           modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_EN, 1);
         }
       }
 
       /* Check and set the remote power timeout */
-      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_TIMER, &rem);
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_REM_TIMER, &val);
       if (ret == HAL_OK)
       {
-        if (rem != 30)
+        if (val != 30)
         {
           modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_REM_TIMER, 30);
         }
@@ -758,9 +780,9 @@ void solaxModbusTask(void *argument)
 
     /* Check to see if the inverter is enabled */
     if (ret == HAL_OK)
-      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &en);
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &val);
 
-    if (en && ret == HAL_OK)
+    if (val && ret == HAL_OK)
     {
       /* Read the Inverter State when Enabled */
         ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_INV_STATE, (uint16_t*)&inv_state);
@@ -771,12 +793,12 @@ void solaxModbusTask(void *argument)
       /* Enable / Disable Inverter Operation depending on power setting */
       if (power_offset == 0)
       {
-        if (en)
+        if (val)
           ret = modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_SYS_EN, 0);
       }
       else
       {
-        if (!en)
+        if (!val)
           ret = modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_SYS_EN, 1);
       }
     }
@@ -786,6 +808,10 @@ void solaxModbusTask(void *argument)
   }
 }
 
+/**
+  * @brief  Initialise the Solax threads.
+  * @retval True: Success
+  */
 bool solax_init(void)
 {
   taskHandle = osThreadNew(solaxTask, NULL, &taskAttributes);
@@ -796,6 +822,10 @@ bool solax_init(void)
   return (taskHandle != NULL && taskHandle2 != NULL && msgMutex != NULL && pwrMutex != NULL);
 }
 
+/**
+  * @brief  Kick the main thread by setting the mutex.
+  * @retval None
+  */
 void solax_kick(void)
 {
   if (xPortIsInsideInterrupt())
@@ -809,18 +839,31 @@ void solax_kick(void)
   }
 }
 
+/**
+  * @brief  Enable the Inverter
+  * @retval None
+  */
 void solax_enable(void)
 {
   enabled = true;
   solax_kick();
 }
 
+/**
+  * @brief  Disable the Inverter
+  * @retval None
+  */
 void solax_disable(void)
 {
   enabled = false;
   solax_kick();
 }
 
+/**
+  * @brief  Set the output power (+: discharge into grid, -: charge into battery)
+  * @param  power Power (W x1)
+  * @retval None
+  */
 void solax_set_output_power(int16_t power)
 {
   if (power_offset != power)
@@ -830,6 +873,34 @@ void solax_set_output_power(int16_t power)
   }
 }
 
+/**
+  * @brief  Read any faults from the inverter and make a call
+  *         on any dangerous ones
+  * @param  faults 32-bit storage of fault 1 and fault 2 registers
+  * @retval bool True: Dangerous Fault(s) detected
+  */
+bool solax_check_faults(uint32_t *faults)
+{
+  bool ret = false;
+  uint16_t fault1, fault2;
+
+  if (HAL_OK != modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_FAULT_1, &fault1) ||
+      HAL_OK != modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_FAULT_2, &fault2))
+  {
+    ret = true;
+  }
+  else
+  {
+    if (fault1 & ((1 << FAULT1_ISO) | (1 << FAULT1_RES_CUR)) ||
+        fault2 & ((1 << FAULT2_GROUND_CONN)))
+      ret = true;
+  }
+
+  if (faults)
+    *faults = (fault1 | fault2 << 16);
+
+  return ret;
+}
 
 /**
   * @brief  Set the maximum current to be drawn from the EVSE
@@ -843,7 +914,6 @@ void solax_set_max_ac_current(uint8_t current)
   if (current == 0)
     t_zero_set = HAL_GetTick();
 }
-
 
 /**
   * @brief  Set the maximum current to be put into the battery
