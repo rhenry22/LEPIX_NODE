@@ -90,6 +90,7 @@ const osSemaphoreAttr_t jsonMutex_attributes = {
 /* USER CODE BEGIN FunctionPrototypes */
 
 static void pp_changed_cb(EVSE_PP pp, uint8_t current);
+static void solax_changed_cb(struct solax_state);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -219,7 +220,7 @@ void mainTaskEntry(void *argument)
 #endif
 
 #ifdef ENABLE_SOLAX
-  if (!solax_init())
+  if (!solax_init(&solax_changed_cb))
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Solax interface.\"}]\n");
     error = true;
@@ -371,6 +372,11 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
 #endif
 
   trigger_json_update();
+}
+
+static void solax_changed_cb(struct solax_state)
+{
+
 }
 
 /* USER CODE END Application */

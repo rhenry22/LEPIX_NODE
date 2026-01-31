@@ -25,6 +25,7 @@ DEBUG = 1
 OPT = -Og
 
 CFLAGS += -DENABLE_EVSE -DENABLE_SOLAX
+CFLAGS += -DCONTACTOR_PWM
 
 #######################################
 # paths

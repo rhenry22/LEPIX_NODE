@@ -84,7 +84,21 @@ enum
   FAULT2_MASTER_SPI
 };
 
-bool solax_init(void);
+struct solax_state
+{
+  uint32_t last_can_update;     /* Last time we saw a CAN message */
+  uint32_t last_rs485_update;   /* Last time we saw an RS485 response */
+
+  bool contactor_close;         /* Has the inverter requested contactor close? */
+  int16_t grid_power;           /* Reported Grid import / export */
+  int16_t inv_state;            /* Inverter State */
+  int16_t inv_temp;             /* Inverter Temperature */
+  uint16_t inv_fault[8];        /* Inverter Fault registers */
+};
+
+typedef void (solax_cb)(struct solax_state);
+
+bool solax_init(solax_cb *cb);
 void solax_kick(void);
 
 void solax_enable(void);
