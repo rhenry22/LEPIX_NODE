@@ -106,7 +106,9 @@ int main(void)
   MX_CAN1_Init();
   MX_CAN2_Init();
   MX_ADC1_Init();
+  #ifdef TARGET_CCS2
   MX_ADC2_Init();
+  #endif
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_TIM1_Init();
@@ -207,17 +209,18 @@ void dump_packet(uint8_t *data, uint8_t len)
   */
 int _write(int file, char *ptr, int len)
 {
-#ifndef ESP_FLASH_MODE
-  /* If USB is connected, send to USB */
-  if (CDC_Is_Connected())
+  if (!esp_flash_mode)
   {
-    /* Send the data */
-    CDC_Transmit_FS((uint8_t*)ptr, len, 10);
-  }
+    /* If USB is connected, send to USB */
+    if (CDC_Is_Connected())
+    {
+      /* Send the data */
+      CDC_Transmit_FS((uint8_t*)ptr, len, 10);
+    }
 
-  /* Send Data to Serial */
-  HAL_UART_Write_UART1((uint8_t *)ptr, len, 100);
-#endif
+    /* Send Data to Serial */
+    HAL_UART_Write_UART1((uint8_t *)ptr, len, 100);
+  }
 
   return len;
 }
@@ -252,7 +255,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 /**
   * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM3 interrupt took place, inside
+  * @note   This function is called  when TIM4 interrupt took place, inside
   * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
   * a global variable "uwTick" used as application time base.
   * @param  htim : TIM handle
@@ -263,7 +266,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM3)
+  if (htim->Instance == TIM4)
   {
     HAL_IncTick();
   }

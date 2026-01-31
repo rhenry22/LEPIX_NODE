@@ -21,32 +21,33 @@
 #include "sensor.h"
 #include "evse.h"
 
-//# define DEBUG_EVSE
+//#define DEBUG_EVSE
 
 #define PP_UNPLUGGED_MIN      (2100) //2240
 #define PP_PRESSED_MIN        (1900) //2010
 #define PP_INSERTED_MIN       (1300) //1480
 #define PP_CHECK_INTERVAL     (100)
 
-#define EVSE_DEFAULT_CURRENT  (0)
+#define EVSE_DEFAULT_CURRENT  (6)
 
 #define TIMER_LOOPS_TIMEOUT   (500) /* 0.5s Timeout on loss of CP PWM signal */
 
 static uint32_t last_pp_check = 0;
 static EVSE_PP pp = EVSE_PP_NONE;
-static EVSE_CP cp = EVSE_CP_ERROR;
-static uint8_t ccs2_pwm = 100;
 static uint16_t cp_loops = 0;
 static uint32_t cp_rise = 0;
 static uint32_t cp_fall = 0;
-
 static uint32_t max_current = EVSE_DEFAULT_CURRENT; /* Maximum Current (A x1) */
-
 
 static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
 
 static evse_pp_changed_cb *evse_pp_cb = NULL;
+
+#ifdef TARGET_CCS2
+static EVSE_CP cp = EVSE_CP_ERROR;
+static uint8_t ccs2_pwm = 100;
 static evse_cp_changed_cb *evse_cp_cb = NULL;
+#endif
 
 static osThreadId_t taskHandle;
 static const osThreadAttr_t taskAttributes = {
@@ -65,7 +66,6 @@ static void evseTask(void *argument);
   */
 void evse_tim_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-
   if (htim == &htim2)
   {
     /* We're using the same timer as a 1kHz PWM channel 
@@ -140,7 +140,11 @@ void evse_tim_CaptureCallback(TIM_HandleTypeDef *htim)
   * @param  None
   * @retval bool true: Success, false: Failure
   */
+#ifdef TARGET_CCS2
 bool evse_init(evse_pp_changed_cb *pp_cb, evse_cp_changed_cb *cp_cb)
+#else
+bool evse_init(evse_pp_changed_cb *pp_cb)
+#endif
 {
   /* Start the CP PWM timer */
   HAL_TIM_Base_Start_IT(&htim2);
@@ -148,7 +152,9 @@ bool evse_init(evse_pp_changed_cb *pp_cb, evse_cp_changed_cb *cp_cb)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
 
   evse_pp_cb = pp_cb;
+#ifdef TARGET_CCS2
   evse_cp_cb = cp_cb;
+#endif
 
   taskHandle = osThreadNew(evseTask, NULL, &taskAttributes);
 
@@ -202,6 +208,7 @@ EVSE_PP evse_get_pp(void)
   return pp;
 }
 
+#ifdef TARGET_CCS2
 /**
   * @brief  Get the CP (connector) signal state
   * @param  None
@@ -269,6 +276,7 @@ void evse_set_cp(uint8_t pwm)
 
   ccs2_pwm = pwm;
 }
+#endif
 
 /**
   * @brief  Thread monitoring the EVSE state.
@@ -291,7 +299,6 @@ static void evseTask(void *argument)
 void evse_process(void)
 {
   static EVSE_PP pp_prev = EVSE_PP_NONE;
-  static EVSE_CP cp_prev = EVSE_CP_ERROR;
   static uint8_t cur_prev = UINT8_MAX;
   bool update = false;
 
@@ -314,6 +321,8 @@ void evse_process(void)
     evse_pp_cb(pp, max_current);
   }
 
+#ifdef TARGET_CCS2
+  static EVSE_CP cp_prev = EVSE_CP_ERROR;
   /* Check the CP ADC Values */
   update = false;
   cp = evse_get_cp();
@@ -323,11 +332,11 @@ void evse_process(void)
     update = true;
   }
 
-
   if (update && evse_cp_cb)
   {
     evse_cp_cb(cp);
   }
+#endif
 }
 
 /**
@@ -359,6 +368,7 @@ int evse_process_cmd(char **args, int argc)
       break;
     }
   }
+#ifdef TARGET_CCS2
   else if (argc >= 2 && 0 == strcmp(args[0], "pwm"))
   {
     uint32_t pwm = strtol(args[1], NULL, 10);
@@ -368,6 +378,7 @@ int evse_process_cmd(char **args, int argc)
       ret = 0;
     }
   }
+#endif
   else if (argc >= 1 && 0 == strcmp(args[0], "get"))
   {
     trigger_json_update();
@@ -382,8 +393,10 @@ int evse_process_cmd(char **args, int argc)
   */
 void evse_json_update(void)
 {
-  printf("\"evse\":{\"ac\":{\"max_current\":%ld,\"pp\":%d}, \"ccs2\":{\"cp\":%d, \"pwm\":%d}",
-         max_current, pp, cp, ccs2_pwm);
+  printf("\"evse\":{\"ac\":{\"max_current\":%ld,\"pp\":%d}", max_current, pp);
+#ifdef TARGET_CCS2
+  printf(", \"ccs2\":{\"cp\":%d, \"pwm\":%d}", cp, ccs2_pwm);
+#endif
 
   if (strnlen(last_error, ERROR_LEN))
   {

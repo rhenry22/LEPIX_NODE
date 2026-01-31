@@ -25,7 +25,12 @@
 #include "adc.h"
 
 #define INA219_ACC_ADDR         (0x41)
+#ifdef TARGET_CCS2
 #define INA219_ACC_SHUNT        (0.010)     /* 10mR Shunt resistor */
+#else
+#define INA219_ACC_SHUNT        (0.005)     /* 5mR Shunt resistor */
+#endif
+
 #define INA219_ACC_CURRENT_LSB  (0.001)     /* 1mA per LSB */
 
 #define INA219_HV_ADDR          (0x44)      /* Main board: 0x40, Daughter board: 0x44 */
@@ -41,7 +46,7 @@ static struct _last_value
 {
   int32_t val;
   uint32_t time;
-} last_values[SENSOR_CP + 1] = {{0, 0}};
+} last_values[SENSOR_MAX] = {{0, 0}};
 
 static osSemaphoreId_t mutexHandle;
 static const osSemaphoreAttr_t mutexAttributes = {
@@ -138,11 +143,10 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     return HAL_OK;
   }
 
-  if (pdFALSE == xSemaphoreTake(mutexHandle, 10))
+  if (pdFALSE == xSemaphoreTake(mutexHandle, 2*SENSOR_TIMEOUT_MS))
   {
-    /* Timeout obtaining mutex, return old value */
-    *val = last_values[src].val;
-    return HAL_OK;
+    /* Timeout obtaining mutex */
+    return HAL_TIMEOUT;
   }
 
   switch (src)
@@ -168,6 +172,15 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
 #endif
 
 #ifdef ENABLE_INA219
+    case SENSOR_ACC_VOLTAGE: /* mV */
+    {
+      int16_t reg;
+      ret = ina219_read_reg(INA219_ACC_ADDR, 0x02, &reg);
+      if (ret == HAL_OK)
+        *val = (int32_t)((reg & 0xFFF8) >> 1);
+    }
+    break;
+
     case SENSOR_ACC_CURRENT: /* uA */
     {
       int16_t reg;
@@ -187,7 +200,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     break;
 #endif
 
-    case SENSOR_BATT_CURRENT: /* A x10 */
+    case SENSOR_INV_CURRENT: /* A x10 */
     {
       uint16_t tmp;
       ret = MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &tmp);
@@ -208,6 +221,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
 
     case SENSOR_CP: /* RAWh << 16 | RAWl */
     {
+#ifdef TARGET_CCS2
       uint16_t tmph, tmpl;
       ret = MX_ADC2_Get_Sample_Avgs(ADC2_CCS2_CP, &tmph, &tmpl);
       //printf("MX_ADC2_Get_Sample_Avgs(%d): %ld, %ld\n", ret, tmph, tmpl);
@@ -215,18 +229,22 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
       {
         *val = tmph << 16 | tmpl;
       }
+#endif
     }
     break;
 
-    default:
+    case SENSOR_MAX:
 #ifdef  USE_FULL_ASSERT
       assert_failed((uint8_t*)__FILE__, __LINE__);
 #endif
-      break;
+    break;
   }
 
-  last_values[src].val = *val;
-  last_values[src].time = HAL_GetTick();
+  if (ret == HAL_OK)
+  {
+    last_values[src].val = *val;
+    last_values[src].time = HAL_GetTick();
+  }
 
   xSemaphoreGive(mutexHandle);
 

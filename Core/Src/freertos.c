@@ -114,6 +114,10 @@ static int32_t hv_pid_integral = 0; /* accumulated error (samples * volts) */
 static int32_t hv_pid_prev_error = 0; /* previous error (volts) */
 static uint32_t hv_pid_last_time = 0;
 
+/* Key used to enter ESP special bridge mode on reboot (disable WDT) */
+uint32_t esp_prog_key __attribute__((section(".noinit")));
+bool esp_flash_mode = false;
+
 /* USER CODE END Variables */
 /* Definitions for mainTask */
 osThreadId_t mainTaskHandle;
@@ -146,13 +150,16 @@ const osThreadAttr_t hvGenTask_attributes = {
 /* USER CODE BEGIN FunctionPrototypes */
 
 static void pp_changed_cb(EVSE_PP pp, uint8_t current);
+#ifdef TARGET_CCS2
 static void cp_changed_cb(EVSE_CP cp);
+#endif
 
 /* USER CODE END FunctionPrototypes */
 
 void mainTaskEntry(void *argument);
 void jsonTaskEntry(void *argument);
 void hvGenTaskEntry(void *argument);
+void bridgeTaskEntry(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -210,6 +217,21 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
+
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST))
+  {
+    if (esp_prog_key == ESP_MODE_KEY)
+    {
+      esp_prog_key = 0;
+      esp_flash_mode = true;
+
+      /* Create ESP Serial Bridge Tasks */
+      mainTaskHandle = osThreadNew(bridgeTaskEntry, NULL, &mainTask_attributes);
+
+      return;
+    }
+  }
+
   /* creation of mainTask */
   mainTaskHandle = osThreadNew(mainTaskEntry, NULL, &mainTask_attributes);
 
@@ -229,6 +251,36 @@ void MX_FREERTOS_Init(void) {
 }
 
 /* USER CODE BEGIN Header_mainTaskEntry */
+/**
+  * @brief  Function implementing the bridgeTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_mainTaskEntry */
+void bridgeTaskEntry(void *argument)
+{
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
+  /* USER CODE BEGIN mainTaskEntry */
+
+  osDelay(3000);
+
+  /* Power Up ESP8266 */
+  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+
+  /* Initialise Top IO expander and clear LEDs */
+  if (ioexp_init(IOEXP_TOP_LEDS))
+  {
+    ioexp_set_direction(IOEXP_TOP_LEDS, 0xAAAA);
+    ioexp_set_output(IOEXP_TOP_LEDS, 0x0000);
+  }
+
+  while (1)
+  {
+    osDelay(100);
+  }
+}
+
 /**
   * @brief  Function implementing the mainTask thread.
   * @param  argument: Not used
@@ -283,18 +335,24 @@ void mainTaskEntry(void *argument)
   }
 
 #ifdef ENABLE_EVSE
+#ifdef TARGET_CCS2
   if (!evse_init(&pp_changed_cb, &cp_changed_cb))
+#else
+  if (!evse_init(&pp_changed_cb))
+#endif
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise EVSE interface.\"}]\n");
     error = true;
   }
+#ifdef TARGET_CCS2
   else
   {
     evse_set_cp(100);
   }
 #endif
+#endif
 
-#ifdef ENABLE_CHADEMO
+#ifdef TARGET_CHADEMO
   if (!chademo_init())
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise ChaDeMo interface.\"}]\n");
@@ -317,18 +375,24 @@ void mainTaskEntry(void *argument)
   }
   HAL_UART_Setup_UART1();
 
-  if (!error)
-    printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
-
-#ifdef ENABLE_CHADEMO
-  /* Set Maximum DC power. Import / Export will be controlled separately. */
-  chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
-#endif
-
   if (!cmd_init())
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise command parser.\"}]\n");
     error = true;
+  }
+
+  if (!error)
+  {
+    printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
+#ifdef TARGET_CHADEMO
+  /* Set Maximum DC power. Import / Export will be controlled separately. */
+  chademo_set_max_power(SOLAX_MINIMUM_SUPPORTED_VOLTAGE * SOLAX_MAXIMUM_SUPPORTED_CURRENT);
+#endif
+  }
+  else
+  {
+    printf("{\"controller\":[{\"info\":\"Entering FLASH mode\"}]}\n");
+    JumpToBootloader();
   }
 
   MX_IWDG_Init();
@@ -392,7 +456,7 @@ void mainTaskEntry(void *argument)
       }
     }
 
-#ifdef ENABLE_CHADEMO
+#ifdef TARGET_CHADEMO
     /* Check shutdown */
     if (power_offset == 0 &&
         chademo_get_state() == CHADEMO_STATE_ON)
@@ -440,6 +504,10 @@ void mainTaskEntry(void *argument)
           printf("{\"controller\":[{\"button\":1}]}\n");
         }
         button_time = HAL_GetTick();
+
+#ifdef TARGET_CHADEMO
+        chademo_stop();
+#endif
       }
     }
 
@@ -449,7 +517,7 @@ void mainTaskEntry(void *argument)
     /* Kick the Watchdog */
     HAL_IWDG_Refresh(&hiwdg);
 
-	  osDelay(100);
+    osDelay(100);
   }
   /* USER CODE END mainTaskEntry */
 }
@@ -470,22 +538,29 @@ void jsonTaskEntry(void *argument)
     /* Send regular JSON messages */
     xSemaphoreTake(jsonMutexHandle, JSON_UPDATE_TIME);
 
-    int32_t acc_current = -1;
-    int32_t hv_current = -1;
-    int32_t batt_current = -1;
-    int32_t batt_voltage = -1;
-    int32_t inv_voltage = -1;
+    int32_t acc_current;
+    int32_t acc_voltage;
+    int32_t hv_current;
+    int32_t batt_voltage;
+    int32_t inv_voltage;
+    int32_t inv_current;
+    uint32_t err = 0;
 
-#ifdef ENABLE_INA219
-    sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
-    sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
-#endif
-#ifdef ENABLE_MAX22530
-    sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
-    sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
-#endif
+    if (HAL_OK != sensor_get_value(SENSOR_ACC_CURRENT, &acc_current))
+      err |= 1 << SENSOR_ACC_CURRENT;
 
-    sensor_get_value(SENSOR_BATT_CURRENT, &batt_current);
+    if (HAL_OK != sensor_get_value(SENSOR_ACC_VOLTAGE, &acc_voltage))
+      err |= 1 << SENSOR_ACC_VOLTAGE;
+
+    if (HAL_OK != sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current))
+      err |= 1 << SENSOR_HV_TEST_CURRENT;
+
+    if (HAL_OK != sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage))
+      err |= 1 << SENSOR_BATT_VOLTAGE;
+    if (HAL_OK != sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage))
+      err |= 1 << SENSOR_INV_VOLTAGE;
+    if (HAL_OK != sensor_get_value(SENSOR_INV_CURRENT, &inv_current))
+      err |= 1 << SENSOR_INV_CURRENT;
 
     /* Display Batt and Inverter Voltages on LEDs (200-500v) */
     {
@@ -530,22 +605,24 @@ void jsonTaskEntry(void *argument)
     printf("\"power_offset\":%ld", power_offset);
     printf(",\"timestamp\":%ld", HAL_GetTick());
 
-    printf(",\"acc_current\":%ld", acc_current);
-    printf(",\"hv_current\":%ld", hv_current);
-    printf(",\"iso_resistance\":%ld", hv_iso_resistance);
-    printf(",\"batt_voltage\":%ld", batt_voltage / 10);
-    printf(",\"batt_current\":%ld", batt_current / 10);
-    printf(",\"inv_voltage\":%ld", inv_voltage / 10);
+    printf(",\"sensors\":{");
+    printf("\"status\":%ld", err);
+    printf(",\"acc\":{\"v\":%ld, \"i\":%ld}", acc_voltage, acc_current);
+    printf(",\"hv_iso\":{\"i\":%ld, \"r\":%ld}", hv_current, hv_iso_resistance);
+    printf(",\"battery\":{\"v\":%ld}", batt_voltage / 10);
+    printf(",\"inverter\":{\"v\":%ld, \"i\":%ld}", inv_voltage / 10, inv_current / 10);
 
-    printf(",");
+    printf("}\n{");
     evse_json_update();
-    printf(",");
+
+    printf("}\n{");
     solax_json_update();
-#ifdef ENABLE_CHADEMO
-    printf(",");
+#ifdef TARGET_CHADEMO
+
+    printf("}\n{");
     chademo_json_update();
 #endif
-    printf("}}\n");
+    printf("}\n");
   }
   /* USER CODE END jsonTaskEntry */
 }
@@ -702,7 +779,7 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
       /* Update the inverter max */
       power_offset = 0;
       solax_set_output_power(0);
-#ifdef ENABLE_CHADEMO
+#ifdef TARGET_CHADEMO
       chademo_stop(); /* Ensure ChaDeMo is stopped */
 #endif
       debug_leds &= ~(1 << DBG_LED_PP_INSERTED);
@@ -717,6 +794,7 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
   trigger_json_update();
 }
 
+#ifdef TARGET_CCS2
 /**
   * @brief  EVSE CP callback.
   * @param  cp Current vehicle state
@@ -756,5 +834,7 @@ static void cp_changed_cb(EVSE_CP cp)
 
   trigger_json_update();
 }
+#endif
 
 /* USER CODE END Application */
+

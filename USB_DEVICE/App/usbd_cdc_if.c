@@ -246,9 +246,8 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
         /* Need to kick off DMA transfer again */
         HAL_UART_Setup_UART1();
       }
-#ifdef ESP_FLASH_MODE
-      is_connected = true;
-#endif
+      if (esp_flash_mode)
+        is_connected = true;
     break;
 
     case CDC_GET_LINE_CODING:
@@ -265,40 +264,40 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     {
       USBD_SetupReqTypedef * req = (USBD_SetupReqTypedef *)pbuf;
 
-      /* DTR */
-      if ((req->wValue & 0x01) != 0)
+      if (esp_flash_mode)
       {
-#ifndef ESP_FLASH_MODE
-        is_connected = true;
-#else
-        /* Put ESP8266 into Flash Mode (GPIO0 Low) */
-        HAL_GPIO_WritePin(ESP_FLASH__GPIO_Port, ESP_FLASH__Pin, GPIO_PIN_RESET);
-#endif
+        /* DTR */
+        if ((req->wValue & 0x01) != 0)
+        {
+          /* Put ESP8266 into Flash Mode (GPIO0 Low) */
+          HAL_GPIO_WritePin(ESP_FLASH__GPIO_Port, ESP_FLASH__Pin, GPIO_PIN_RESET);
+        }
+        else
+        {
+          /* Take ESP8266 out of Flash Mode (GPIO0 HighZ) */
+          HAL_GPIO_WritePin(ESP_FLASH__GPIO_Port, ESP_FLASH__Pin, GPIO_PIN_SET);
+        }
+
+        /* RTS */
+        if ((req->wValue & 0x02) != 0)
+        {
+          /* Power Down (Reset) ESP8266 */
+          HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_RESET);
+        }
+        else
+        {
+          /* Power Up ESP8266 */
+          HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+        }
       }
       else
       {
-#ifndef ESP_FLASH_MODE
-        is_connected = false;
-#else
-        /* Take ESP8266 out of Flash Mode (GPIO0 HighZ) */
-        HAL_GPIO_WritePin(ESP_FLASH__GPIO_Port, ESP_FLASH__Pin, GPIO_PIN_SET);
-#endif
+        /* DTR */
+        if ((req->wValue & 0x01) != 0)
+          is_connected = true;
+        else
+          is_connected = false;
       }
-
-
-#ifdef ESP_FLASH_MODE
-      /* RTS */
-      if ((req->wValue & 0x02) != 0)
-      {
-        /* Power Down (Reset) ESP8266 */
-        HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_RESET);
-      }
-      else
-      {
-        /* Power Up ESP8266 */
-        HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
-      }
-#endif
     }
     break;
 
@@ -335,14 +334,17 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   /* USER CODE BEGIN 6 */
   int8_t ret = USBD_OK;
 
-#ifndef ESP_FLASH_MODE
-  stdio_parser(Buf, *Len);
-#else
-  if (HAL_UART_Transmit(&huart1, Buf, *Len, 250) != HAL_OK)
+  if (!esp_flash_mode)
+    stdio_parser(Buf, *Len);
+  else
   {
-    ret = USBD_BUSY;
+    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+    if (HAL_UART_Transmit(&huart1, Buf, *Len, 250) != HAL_OK)
+    {
+      ret = USBD_BUSY;
+    }
+    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
   }
-#endif
 
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);

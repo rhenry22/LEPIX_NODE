@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2023 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -34,14 +34,18 @@ extern "C" {
 
 extern ADC_HandleTypeDef hadc1;
 
+#ifdef TARGET_CCS2
 extern ADC_HandleTypeDef hadc2;
+#endif
 
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
 
 void MX_ADC1_Init(void);
+#ifdef TARGET_CCS2
 void MX_ADC2_Init(void);
+#endif
 
 /* USER CODE BEGIN Prototypes */
 

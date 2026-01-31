@@ -74,16 +74,18 @@ extern uint32_t hv_iso_resistance;
 
 extern int32_t power_offset;
 
+extern uint32_t esp_prog_key;
+extern bool esp_flash_mode;
 
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
-/* #define ESP_FLASH_MODE */
-
 #define HV_GEN_MAX_VOLTAGE    (500) /* Max HV voltage in V */
 #define HV_GEN_MIN_VOLTAGE    (0)   /* Min HV voltage in V */
+
+#define ESP_MODE_KEY          0xDEADDEAD
 
 /* USER CODE END EM */
 
@@ -112,8 +114,10 @@ int app_process_cmd_leds(char **args, int argc);
 #define EVSE_PP_GPIO_Port GPIOA
 #define EVSE_CP_Pin GPIO_PIN_1
 #define EVSE_CP_GPIO_Port GPIOA
+#ifdef TARGET_CCS2
 #define CCS2_CP_Pin GPIO_PIN_2
 #define CCS2_CP_GPIO_Port GPIOA
+#endif
 #define ADC1_VAC_Pin GPIO_PIN_4
 #define ADC1_VAC_GPIO_Port GPIOA
 #define SPI1_BATT_CS__Pin GPIO_PIN_4
@@ -142,8 +146,13 @@ int app_process_cmd_leds(char **args, int argc);
 #define LED3_GPIO_Port GPIOE
 #define GPIO_INT__Pin GPIO_PIN_14
 #define GPIO_INT__GPIO_Port GPIOE
+#ifdef TARGET_CCS2
 #define CCS2_PWM_Pin GPIO_PIN_10
 #define CCS2_PWM_GPIO_Port GPIOB
+#else
+#define OD1_EN_Pin GPIO_PIN_10
+#define OD1_EN_GPIO_Port GPIOB
+#endif
 #define CTPRE_EN_Pin GPIO_PIN_11
 #define CTPRE_EN_GPIO_Port GPIOB
 #define CTMAIN_EN_Pin GPIO_PIN_12
@@ -170,7 +179,9 @@ int app_process_cmd_leds(char **args, int argc);
 #define ADC_EVSE_PP     (0)
 #define ADC_BATT_CURR   (1)
 
+#ifdef TARGET_CCS2
 #define ADC2_CCS2_CP    (0)
+#endif
 
 #define ERROR_LEN       (128)
 

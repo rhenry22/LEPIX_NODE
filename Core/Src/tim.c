@@ -108,7 +108,9 @@ void MX_TIM2_Init(void)
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_IC_InitTypeDef sConfigIC = {0};
+#ifdef TARGET_CCS2
   TIM_OC_InitTypeDef sConfigOC = {0};
+#endif
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -132,10 +134,12 @@ void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+#ifdef TARGET_CCS2
   if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
   }
+#endif
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
@@ -150,6 +154,7 @@ void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+#ifdef TARGET_CCS2
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
@@ -158,11 +163,13 @@ void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+#endif
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+#ifdef TARGET_CCS2
   HAL_TIM_MspPostInit(&htim2);
-
+#endif
 }
 
 void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
@@ -231,6 +238,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
 
   /* USER CODE END TIM1_MspPostInit 1 */
   }
+#ifdef TARGET_CCS2
   else if(timHandle->Instance==TIM2)
   {
   /* USER CODE BEGIN TIM2_MspPostInit 0 */
@@ -252,7 +260,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
 
   /* USER CODE END TIM2_MspPostInit 1 */
   }
-
+#endif
 }
 
 void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
@@ -282,9 +290,9 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
     PB10     ------> TIM2_CH3
     */
     HAL_GPIO_DeInit(EVSE_CP_GPIO_Port, EVSE_CP_Pin);
-
+#ifdef TARGET_CCS2
     HAL_GPIO_DeInit(CCS2_PWM_GPIO_Port, CCS2_PWM_Pin);
-
+#endif
     /* TIM2 interrupt Deinit */
     HAL_NVIC_DisableIRQ(TIM2_IRQn);
   /* USER CODE BEGIN TIM2_MspDeInit 1 */

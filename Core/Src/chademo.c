@@ -362,9 +362,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     {
       int32_t acc_current;  /* 12V ACC Current in uA */
 
-#ifdef ENABLE_INA219
       ret = sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
-#endif
 
       /* Check that HV Test current is below threshold */
       if (ret != HAL_OK || hv_iso_resistance < ISOLATION_MIN_RES)
@@ -587,15 +585,15 @@ HAL_StatusTypeDef chademo_send_messages(void)
 
   last_send = HAL_GetTick();
 
-#ifdef ENABLE_MAX22530
   /* Update our Voltage, Current and Power measurements */
   ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &measured_voltage);
-#endif
   if (ret != HAL_OK)
     return ret;
-  ret = sensor_get_value(SENSOR_BATT_CURRENT, &measured_current);
+
+  ret = sensor_get_value(SENSOR_INV_CURRENT, &measured_current);
   if (ret != HAL_OK)
     return ret;
+
   measured_power = measured_voltage * measured_current / 100;
 
   /* Check for Faults */

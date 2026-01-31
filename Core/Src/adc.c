@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2023 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -45,9 +45,11 @@ static volatile uint32_t samples2_l[NUM_CHANNELS2] = {0};
 /* USER CODE END 0 */
 
 ADC_HandleTypeDef hadc1;
-ADC_HandleTypeDef hadc2;
 DMA_HandleTypeDef hdma_adc1;
+#ifdef TARGET_CCS2
+ADC_HandleTypeDef hadc2;
 DMA_HandleTypeDef hdma_adc2;
+#endif
 
 /* ADC1 init function */
 void MX_ADC1_Init(void)
@@ -107,6 +109,8 @@ void MX_ADC1_Init(void)
   /* USER CODE END ADC1_Init 2 */
 
 }
+
+#ifdef TARGET_CCS2
 /* ADC2 init function */
 void MX_ADC2_Init(void)
 {
@@ -154,6 +158,7 @@ void MX_ADC2_Init(void)
   /* USER CODE END ADC2_Init 2 */
 
 }
+#endif
 
 void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
 {
@@ -203,6 +208,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
 
   /* USER CODE END ADC1_MspInit 1 */
   }
+#ifdef TARGET_CCS2
   else if(adcHandle->Instance==ADC2)
   {
   /* USER CODE BEGIN ADC2_MspInit 0 */
@@ -248,6 +254,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
 
   /* USER CODE END ADC2_MspInit 1 */
   }
+#endif
 }
 
 void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
@@ -283,6 +290,7 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
 
   /* USER CODE END ADC1_MspDeInit 1 */
   }
+#ifdef TARGET_CCS2
   else if(adcHandle->Instance==ADC2)
   {
   /* USER CODE BEGIN ADC2_MspDeInit 0 */
@@ -312,6 +320,7 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
 
   /* USER CODE END ADC2_MspDeInit 1 */
   }
+#endif
 }
 
 /* USER CODE BEGIN 1 */
@@ -341,6 +350,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
       HAL_ADC_Start_DMA(&hadc1, (uint32_t*)samples, NUM_CHANNELS);
     }
   }
+#ifdef TARGET_CCS2
   else if (adcHandle == &hadc2)
   {
     for (i=0; i<NUM_CHANNELS2; ++i)
@@ -361,6 +371,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* adcHandle)
     /* Keep sampling */
     HAL_ADC_Start_DMA(&hadc2, (uint32_t*)samples2, NUM_CHANNELS2);
   }
+#endif
 }
 
 /**

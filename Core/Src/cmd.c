@@ -66,6 +66,19 @@ static int process_cmd_flash(char **args, int argc)
   return 0;
 }
 
+/**
+  * @brief  Process ESP Programming (USB Serial Bridge)
+  * @param  args Command arguments
+  * @param  argc Number of arguments
+  * @retval Does not return.
+  */
+static int process_cmd_esp(char **args, int argc)
+{
+  esp_prog_key = ESP_MODE_KEY;
+  HAL_NVIC_SystemReset();
+  return 0;
+}
+
 
 /* List of commands and handlers */
 
@@ -79,9 +92,10 @@ typedef struct {
 static const cmd_entry_t cmd_table[] = {
     { "reset", process_cmd_reset },
     { "flash", process_cmd_flash },
+    { "espbridge", process_cmd_esp },
     { "power", app_process_cmd_power },
     { "evse", evse_process_cmd },
-#ifdef ENABLE_CHADEMO
+#ifdef TARGET_CHADEMO
     { "chademo", chademo_process_cmd },
 #endif
 #ifdef ENABLE_SOLAX
