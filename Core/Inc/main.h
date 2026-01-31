@@ -67,8 +67,10 @@ void stdio_parser(uint8_t *ptr, uint16_t len);
 void trigger_json_update(void);
 void dump_packet(uint8_t *data, uint8_t len);
 
-int app_process_cmd_power(char **args, int argc);
-int app_process_cmd_ign(char **args, int argc);
+int app_get_batt_voltage(int32_t *val);
+int app_get_batt_current(int32_t *val);
+
+int app_process_cmd_ctrl(char **args, int argc);
 
 
 /* USER CODE END EFP */

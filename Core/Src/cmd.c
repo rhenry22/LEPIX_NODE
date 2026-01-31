@@ -78,9 +78,9 @@ typedef struct {
 static const cmd_entry_t cmd_table[] = {
     { "reset", process_cmd_reset },
     { "flash", process_cmd_flash },
-    { "power", app_process_cmd_power },
+    { "ctrl", app_process_cmd_ctrl },
     { "evse", evse_process_cmd },
-    { "ign", app_process_cmd_ign },
+    //{ "batt", batt_process_cmd },
 #ifdef ENABLE_SOLAX
     { "solax", solax_process_cmd },
 #endif
@@ -215,42 +215,44 @@ bool cmd_init(void)
 /* Command Handlers (Application Level) */
 
 /**
-  * @brief  Process Power Setting command
+  * @brief  Process Controller command
   * @param  args Command arguments
   * @param  argc Number of arguments
   * @retval Status (0 = OK, -1 = Error / Unknown Command)
   */
-int app_process_cmd_power(char **args, int argc)
+int app_process_cmd_ctrl(char **args, int argc)
 {
-  if (argc == 1)
-  {
-    power_offset = strtol(args[0], NULL, 10);
-    solax_set_output_power(power_offset);
-    return 0;
-  }
-  return -1;
-}
+  int ret = -1;
 
-/**
-  * @brief  Process Ignition command
-  * @param  args Command arguments
-  * @param  argc Number of arguments
-  * @retval Status (0 = OK, -1 = Error / Unknown Command)
-  */
-int app_process_cmd_ign(char **args, int argc)
-{
-  if (argc == 1)
+  if (argc >= 1)
   {
-    if (strcmp(args[0], "on") == 0)
+    if (strcmp(args[0], "power") == 0 && (argc >= 2))
     {
-      HAL_GPIO_WritePin(IGN_EN_GPIO_Port, IGN_EN_Pin, GPIO_PIN_SET);
-      return 0;
+      power_offset = strtol(args[1], NULL, 10);
+      solax_set_output_power(power_offset);
+      ret = 0;
     }
-    else if (strcmp(args[0], "off") == 0)
+    else if (strcmp(args[0], "ign") == 0 && (argc >= 2))
     {
-      HAL_GPIO_WritePin(IGN_EN_GPIO_Port, IGN_EN_Pin, GPIO_PIN_RESET);
-      return 0;
+      if (strcmp(args[1], "on") == 0)
+      {
+        HAL_GPIO_WritePin(IGN_EN_GPIO_Port, IGN_EN_Pin, GPIO_PIN_SET);
+        ret = 0;
+      }
+      else if (strcmp(args[1], "off") == 0)
+      {
+        HAL_GPIO_WritePin(IGN_EN_GPIO_Port, IGN_EN_Pin, GPIO_PIN_RESET);
+        ret = 0;
+      }
+    }
+    else if (strcmp(args[0], "cont") == 0 && (argc >= 3))
+    {
+      uint32_t chan = strtol(args[1], NULL, 10);
+      uint32_t pwm = strtol(args[2], NULL, 10);
+      HAL_TIM_Set_PWM(&htim3, chan, pwm);
+      ret = 0;
     }
   }
-  return -1;
+
+  return ret;
 }

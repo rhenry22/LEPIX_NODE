@@ -50,7 +50,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN Prototypes */
 
-void TIM1_EStop_HiZ(void);
+HAL_StatusTypeDef HAL_TIM_Set_PWM(TIM_HandleTypeDef* htim, uint32_t chan, uint32_t pwm);
 
 /* USER CODE END Prototypes */
 

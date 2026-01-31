@@ -5,15 +5,16 @@ reset           : Reset the Controller
 
 flash           : Put the Controller into DFU mode
 
-power           : Set the target power (+/- : Discharge / Charge)
 
-ign             : Control the ignition (12V relay)
-  on            : Turn on the relay
-  off           : Turn off the relay
+ctrl            : Controller Commands
+  power           : Set the target power (+/- : Discharge / Charge)
+    <value>
+  ign             : Control the ignition (12V relay)
+    on              : Turn on the relay
+    off             : Turn off the relay
 
 evse            : Control the EVSE (Sink) and CCS2 (Source) parameters
   chg-en 0/1        : Disable / Enable the EVSE CP Line
-  pwm 0-100         : Set the CCS2 CP PWM Value
   get               : Trigger a JSON update
 
 solax           : Solax / FoxESS Inverter Settings

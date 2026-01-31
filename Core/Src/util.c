@@ -28,7 +28,7 @@ void comm_session(bool start_stop)
   if (start_stop)
   {
     if (comm_count == 0)
-      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(LED2_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
     comm_count++;
   }
   else
@@ -37,7 +37,7 @@ void comm_session(bool start_stop)
       comm_count--;
 
     if (comm_count == 0)
-      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(LED2_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
   }
 }
 
@@ -62,12 +62,10 @@ void emergency_stop(void)
 
   while(1)
   {
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
     for (i=0; i<1000000; ++i);
 
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
     for (i=0; i<1000000; ++i);
   }
 }

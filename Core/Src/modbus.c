@@ -187,7 +187,7 @@ void modbus_process(uint8_t *data, uint16_t len)
 
 HAL_StatusTypeDef modbus_read(uint8_t addr, uint8_t fn, uint16_t reg, uint16_t *data)
 {
-  HAL_StatusTypeDef ret = HAL_ERROR;
+  HAL_StatusTypeDef ret = HAL_BUSY;
 
   if (read_ptr == NULL)
   {

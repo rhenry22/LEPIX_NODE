@@ -55,7 +55,7 @@
 
 #define DEBUG_CONTROLLER
 
-#define JSON_UPDATE_TIME         (5000)
+#define JSON_UPDATE_TIME         (60000)
 
 /* USER CODE END PM */
 
@@ -105,7 +105,9 @@ void vApplicationIdleHook(void);
 /* USER CODE BEGIN 2 */
 void vApplicationIdleHook( void )
 {
-    __WFI();
+  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+  __WFI();
+  HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
 }
 /* USER CODE END 2 */
 
@@ -292,6 +294,29 @@ void jsonTaskEntry(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+
+/**
+  * @brief  Used by modules to get the battery current (x10 V)
+  * @param val Pointer to int32_t to receive the value
+  * @retval 0: Success, otherwise Error value
+  */
+int app_get_batt_voltage(int32_t *val)
+{
+  // ToDo: Hook this up to either a sensor (CCS2) or the Leaf Battery module
+  return -1;
+}
+
+/**
+  * @brief  Used by modules to get the battery current (x10 A)
+  * @param val Pointer to int32_t to receive the value
+  * @retval 0: Success, otherwise Error value
+  */
+int app_get_batt_current(int32_t *val)
+{
+  // ToDo: Hook this up to either a sensor (CCS2) or the Leaf Battery module
+  return -1;
+}
+
 
 /**
   * @brief  Trigger an update of the JSON output.
