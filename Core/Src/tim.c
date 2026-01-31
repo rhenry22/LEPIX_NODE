@@ -170,6 +170,10 @@ void MX_TIM3_Init(void)
   }
   /* USER CODE BEGIN TIM3_Init 2 */
 
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+
   /* USER CODE END TIM3_Init 2 */
   HAL_TIM_MspPostInit(&htim3);
 
@@ -323,5 +327,25 @@ void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef* tim_pwmHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+HAL_StatusTypeDef HAL_TIM_Set_PWM(TIM_HandleTypeDef* htim, uint32_t chan, uint32_t pwm)
+{
+  HAL_StatusTypeDef ret = HAL_ERROR;
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  if (htim != &htim3 || chan > TIM_CHANNEL_3 || pwm > 100)
+  {
+    return ret;
+  }
+
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = pwm * htim->Init.Period / 100;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+
+  ret = HAL_TIM_PWM_ConfigChannel(htim, &sConfigOC, chan);
+
+  return ret;
+}
 
 /* USER CODE END 1 */
