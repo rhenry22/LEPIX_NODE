@@ -31,8 +31,11 @@
 
 //#define DEBUG_SOLAX
 
-/* Battery size in Wh (Maximum value for most inverters is 60000 [60kWh],
+/*
+ * Battery size in Wh (Maximum value for most inverters is 60000 [60kWh],
  * you can use larger batteries but do not set value over 60000!
+ *
+ * ToDo: Change these vaules to suit your car / battery pack
  */
 #define BATTERY_WH_MAX    (24000)
 #define CELL_MAX_VOLTAGE  (4135)
@@ -43,7 +46,8 @@
 #define ABSOLUTE_MIN_VOLTAGE (NUM_CELLS * CELL_MIN_VOLTAGE / 1000)
 
 #define SOLAX_TIMEOUT             (5000)
-#define SOLAX_PRECHARGE_TIMEOUT   (5000) /* Time to wait for precharge to stabilise */
+#define SOLAX_MIN_PRECHARGE_TIME  (1000) /* Min time to wait for precharge to stabilise */
+#define SOLAX_PRECHARGE_TIMEOUT   (5000) /* Max time to wait for precharge to stabilise */
 #define SOLAX_UPDATE_RATE         (1000)
 #define SOLAX_N_PACKS             (7)
 #define SOLAX_PRECHARGE_DELTA_MAX (100)  /* Allow 10V delta after 5s precharge */
@@ -266,6 +270,7 @@ static int16_t inv_state = 0;                       /* Inverter State */
 static int16_t inv_temp = 0;                        /* Inverter Temperature */
 static uint16_t inv_fault[8] = {0};                 /* Inverter Fault registers */
 static uint32_t precharge_start = 0;                /* Time precharge started */
+static uint32_t precharge_delta = 0;                /* Delta between battery and inverter voltages at 0A */
 
 static char last_error[ERROR_LEN+1] = {0};          /* Last error string */
 
@@ -492,7 +497,7 @@ static HAL_StatusTypeDef solax_update_state(void)
 
       case SOLAX_CONTACTOR_PRECHARGE:
       {
-        int32_t precharge_delta = labs(batt_voltage - inv_voltage);
+        precharge_delta = labs(batt_voltage - inv_voltage);
         /* Check that we're outputting a sensible voltage */
         if (precharge_delta < SOLAX_PRECHARGE_DELTA_MAX)
         {
@@ -502,16 +507,20 @@ static HAL_StatusTypeDef solax_update_state(void)
           /* Close Main contactor */
           HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_SET);
 
-          /* The contactors cause our current measurement to offset. */
-          ret = sensor_zero_ibatt();
-          if (ret != HAL_OK)
+          if (HAL_GetTick() - precharge_start > SOLAX_MIN_PRECHARGE_TIME)
           {
-            snprintf(last_error, ERROR_LEN, "Failed to zero HV current.");
-            bms_state = SOLAX_FAULT;
-          }
-          else
-          {
-            bms_state = SOLAX_CONTACTOR_CLOSED;
+            /* The contactors cause our current measurement to offset. */
+            ret = sensor_zero_ibatt();
+
+            if (ret != HAL_OK)
+            {
+              snprintf(last_error, ERROR_LEN, "Failed to zero HV current.");
+              bms_state = SOLAX_FAULT;
+            }
+            else
+            {
+              bms_state = SOLAX_CONTACTOR_CLOSED;
+            }
           }
         }
         else if (HAL_GetTick() - precharge_start > SOLAX_PRECHARGE_TIMEOUT)
@@ -546,6 +555,16 @@ static HAL_StatusTypeDef solax_update_state(void)
           /* Message from the inverter to open contactor */
           snprintf(last_error, ERROR_LEN, "Inverter Requests Open Contactor");
           bms_state = SOLAX_BATTERY_ANNOUNCE;
+        }
+
+        /* Check that we're outputting a sensible voltage */
+        if (labs(batt_voltage - inv_voltage) > precharge_delta)
+        {
+          snprintf(last_error, ERROR_LEN,
+              "Fire risk: Check HV fuses and connections. (%ldv, %ldv, %ldv)",
+              batt_voltage, inv_voltage, precharge_delta);
+          max_discharge_current = 0;
+          max_charge_current = 0;
         }
       }
       break;

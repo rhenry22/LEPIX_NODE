@@ -31,6 +31,11 @@ CFLAGS += -DTARGET_$(TARGET) -DENABLE_EVSE -DENABLE_SOLAX
 # Enable Onboard Sensors
 CFLAGS += -DENABLE_INA219 -DENABLE_MAX22530
 
+ifeq ($(TARGET), CHADEMO)
+# The ChaDeMo Mini cabinet has 16A fuses in it
+CFLAGS += -DSOLAX_MAXIMUM_SUPPORTED_CURRENT=14
+endif
+
 #######################################
 # paths
 #######################################
