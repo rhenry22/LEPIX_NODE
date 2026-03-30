@@ -509,7 +509,20 @@ void mainTaskEntry(void *argument)
       }
     }
 
-    /* Update the inverter power */
+    // ToDo:
+#if 0
+        /* Check that we're outputting a sensible voltage */
+        if (labs(batt_voltage - inv_voltage) > precharge_delta)
+        {
+          snprintf(last_error, ERROR_LEN,
+              "Fire risk: Check HV fuses and connections. (%ldv, %ldv, %ldv)",
+              batt_voltage, inv_voltage, precharge_delta);
+          max_discharge_current = 0;
+          max_charge_current = 0;
+        }
+#endif
+
+/* Update the inverter power */
     solax_set_output_power(power_offset);
 
     /* Kick the Watchdog */
@@ -608,7 +621,7 @@ void jsonTaskEntry(void *argument)
     printf(",\"acc\":{\"v\":%ld, \"i\":%ld}", acc_voltage, acc_current);
     printf(",\"hv_iso\":{\"i\":%ld, \"r\":%ld}", hv_current, hv_iso_resistance);
     printf(",\"battery\":{\"v\":%ld}", batt_voltage / 10);
-    printf(",\"inverter\":{\"v\":%ld, \"i\":%ld}", inv_voltage / 10, inv_current / 10);
+    printf(",\"inverter\":{\"v\":%ld, \"i\":%ld, \"dv\":%ld}", inv_voltage / 10, inv_current / 10, labs(batt_voltage - inv_voltage));
 
     printf("}\n{");
     evse_json_update();

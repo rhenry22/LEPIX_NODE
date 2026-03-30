@@ -38,18 +38,18 @@
  * ToDo: Change these vaules to suit your car / battery pack
  */
 #define BATTERY_WH_MAX    (24000)
-#define CELL_MAX_VOLTAGE  (4135)
-#define CELL_MIN_VOLTAGE  (3135)
-#define NUM_CELLS         (96)
+#define CELL_MAX_VOLTAGE  (3600)
+#define CELL_MIN_VOLTAGE  (2800)
+#define NUM_CELLS         (32)
 
 #define ABSOLUTE_MAX_VOLTAGE (NUM_CELLS * CELL_MAX_VOLTAGE / 1000)
 #define ABSOLUTE_MIN_VOLTAGE (NUM_CELLS * CELL_MIN_VOLTAGE / 1000)
 
-#define SOLAX_TIMEOUT             (5000)
+#define SOLAX_TIMEOUT             (10000)
 #define SOLAX_MIN_PRECHARGE_TIME  (1000) /* Min time to wait for precharge to stabilise */
 #define SOLAX_PRECHARGE_TIMEOUT   (5000) /* Max time to wait for precharge to stabilise */
 #define SOLAX_UPDATE_RATE         (1000)
-#define SOLAX_N_PACKS             (7)
+#define SOLAX_N_PACKS             (2)
 #define SOLAX_PRECHARGE_DELTA_MAX (100)  /* Allow 10V delta after 5s precharge */
 
 #define MSG_1871_STATUS           (1)
@@ -57,6 +57,7 @@
 
 typedef enum
 {
+  SOLAX_NONE,
   SOLAX_BATTERY_ANNOUNCE,
   SOLAX_REQUEST_CONTACTOR_CLOSE,
   SOLAX_CONTACTOR_PRECHARGE,
@@ -204,7 +205,7 @@ struct _solax_data solax_data = {
     /* BMS_Status */
     .msg_1875 = {
       .pack_temp = 180,
-      .num_batts = 0, //SOLAX_N_PACKS,
+      .num_batts = SOLAX_N_PACKS,
       .contactor = 0
     },
 
@@ -248,19 +249,21 @@ struct _solax_data solax_data = {
     /* BMS_PackTemps (Cell voltages) */
     .msg_1876 = {
       .cell_mv_max = 3700,
-      .cell_mv_min = 3700
+      .cell_mv_min = 3700,
+      .reserved = 0,
+      .reserved2 = 0
     }
   }
 };
 
-static BMS_STATE bms_state = SOLAX_BATTERY_ANNOUNCE;/* BMS state machine */
+static BMS_STATE bms_state = SOLAX_NONE;            /* BMS state machine */
 static uint16_t max_ac_power = 0;                   /* Maximum current limit advertised by EVSE (W x1) */
 static uint32_t t_zero_set = 0;                     /* Time at which current request set to zero (debug / check inverter response) */
 static uint32_t last_update = 0;                    /* Last time we saw a CAN message */
 static uint32_t solax_last_cmd = 0;                 /* Last time we received a command */
 static uint32_t bms_update = 0;                     /* Last time we sent our CAN messages */
-static uint16_t max_charge_current = 0;             /* Max DC charge current (A x10) */
-static uint16_t max_discharge_current = 0;          /* Max DC discharge current (A x10) */
+static uint16_t max_charge_current = 10;            /* Max DC charge current (A x10) */
+static uint16_t max_discharge_current = 10;         /* Max DC discharge current (A x10) */
 static bool contactor_close = false;                /* Has the inverter requested contactor close? */
 
 static bool init_done = false;                      /* One time init */
@@ -271,6 +274,7 @@ static int16_t inv_temp = 0;                        /* Inverter Temperature */
 static uint16_t inv_fault[8] = {0};                 /* Inverter Fault registers */
 static uint32_t precharge_start = 0;                /* Time precharge started */
 static uint32_t precharge_delta = 0;                /* Delta between battery and inverter voltages at 0A */
+static bool bstart = false;                         /* Have we been told to do a black start? */
 
 static char last_error[ERROR_LEN+1] = {0};          /* Last error string */
 
@@ -469,7 +473,7 @@ static HAL_StatusTypeDef solax_update_state(void)
         solax_send_message(0x100A001, (uint8_t*)&solax_data.bms.msg_100A001, 0);
         solax_open_contactors();
 
-        if (contactor_close)
+        if (contactor_close || bstart)
         {
           /* Message from the inverter to proceed to contactor closing */
           bms_state = SOLAX_REQUEST_CONTACTOR_CLOSE;
@@ -477,7 +481,7 @@ static HAL_StatusTypeDef solax_update_state(void)
       break;
 
       case SOLAX_REQUEST_CONTACTOR_CLOSE:
-        if (contactor_close)
+        if (contactor_close || bstart)
         {
           /* Stay in this state until we're enabled externally */
           if (enabled && (batt_voltage / 10 > ABSOLUTE_MIN_VOLTAGE))
@@ -485,6 +489,12 @@ static HAL_StatusTypeDef solax_update_state(void)
             /* Close Precharge contactor */
             HAL_GPIO_WritePin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin, GPIO_PIN_SET);
             precharge_start = HAL_GetTick();
+
+            if (!contactor_close)
+            {
+              contactor_close = true;
+              snprintf(last_error, ERROR_LEN, "Black Start: Precharge Started");
+            }
 
             bms_state = SOLAX_CONTACTOR_PRECHARGE;
           }
@@ -509,6 +519,7 @@ static HAL_StatusTypeDef solax_update_state(void)
 
           if (HAL_GetTick() - precharge_start > SOLAX_MIN_PRECHARGE_TIME)
           {
+#ifndef DEBUG_SOLAX
             /* The contactors cause our current measurement to offset. */
             ret = sensor_zero_ibatt();
 
@@ -518,6 +529,7 @@ static HAL_StatusTypeDef solax_update_state(void)
               bms_state = SOLAX_FAULT;
             }
             else
+#endif
             {
               bms_state = SOLAX_CONTACTOR_CLOSED;
             }
@@ -556,19 +568,10 @@ static HAL_StatusTypeDef solax_update_state(void)
           snprintf(last_error, ERROR_LEN, "Inverter Requests Open Contactor");
           bms_state = SOLAX_BATTERY_ANNOUNCE;
         }
-
-        /* Check that we're outputting a sensible voltage */
-        if (labs(batt_voltage - inv_voltage) > precharge_delta)
-        {
-          snprintf(last_error, ERROR_LEN,
-              "Fire risk: Check HV fuses and connections. (%ldv, %ldv, %ldv)",
-              batt_voltage, inv_voltage, precharge_delta);
-          max_discharge_current = 0;
-          max_charge_current = 0;
-        }
       }
       break;
 
+      case SOLAX_NONE:
       case SOLAX_FAULT:
       case SOLAX_UPDATING_FW:
         solax_open_contactors();
@@ -591,6 +594,9 @@ static void solax_process_frame(void)
     case 0x01: /* Request Status */
       /* These are the frames that count */
       last_update = HAL_GetTick();
+
+      /* Inverter can speack for itself now, cancel black start */
+      bstart = false;
 
       /* Send CAN messages */
       solax_send_standard_response();
@@ -690,14 +696,19 @@ void solaxTask(void *argument)
     }
 
     /* Only update if we've seen any messages */
-    if (last_update > 0)
+    if (last_update > 0 || bstart)
     {
+      /* If this is the first time we've seen, set the state. */
+      if (bms_state == SOLAX_NONE)
+        bms_state = SOLAX_BATTERY_ANNOUNCE;
+
       /* Update voltage / current values */
       solax_update_values();
 
       /* Update our data and send BMS messages. */
-      if (HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE &&
-          HAL_GetTick() < last_update + SOLAX_TIMEOUT)
+      if ((HAL_GetTick() > bms_update + SOLAX_UPDATE_RATE &&
+           HAL_GetTick() < last_update + SOLAX_TIMEOUT)
+          || bstart)
       {
         bms_update = HAL_GetTick();
 
@@ -705,22 +716,31 @@ void solaxTask(void *argument)
         solax_update_state();
       }
 
-      /* Shut down if we timeout receiving messages */
+      /* Shut down if we timeout waiting for messages */
       if (HAL_GetTick() > last_update + SOLAX_TIMEOUT)
       {
         snprintf(last_error, ERROR_LEN,
                   "No CAN messages received in %lds", (HAL_GetTick() - last_update) / 1000);
-        bms_state = SOLAX_BATTERY_ANNOUNCE;
+
+        bms_state = SOLAX_NONE;
+        solax_open_contactors();
+        contactor_close = false;
+
+        /* Cancel the Black Start */
+        bstart = false;
       }
     }
 
 #ifndef DEBUG_SOLAX
-    /* Check to see if our commander has vanished */
+    /*
+     * Check to see if our commander has vanished
+     * This is primarily used with pyPLC to if the host crashes
+     * we don't leave the inverter running
+     */
     if (solax_last_cmd > 0 && HAL_GetTick() - solax_last_cmd > SOLAX_TIMEOUT)
     {
       snprintf(last_error, ERROR_LEN,
                 "No commands received from host in %lds", (HAL_GetTick() - solax_last_cmd) / 1000);
-      bms_state = SOLAX_BATTERY_ANNOUNCE;
       solax_set_output_power(0);
       solax_disable();
       solax_last_cmd = 0;
@@ -742,23 +762,24 @@ void solaxModbusTask(void *argument)
     uint16_t en;
     uint16_t val;
 
-    /* Read the current Grid (Inverter Output) power */
-    ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_GRID_P1, (uint16_t*)&grid_power);
+    /* Update periodically or on an external change */
+    xSemaphoreTake(pwrMutex, 1000);
+
+    /* Disable ModBus use (e.g. for external ModBus bridge) */
+    continue;
+
+    /* Read the inverter temperature */
+    ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_TEMP_INV, (uint16_t*)&inv_temp);
 
     if (ret != HAL_OK)
     {
       /* Without ModBus, we can't set the inverter power or read faults */
       inv_state = -ret;
       init_done = false;
-      enabled = false;
       continue;
     }
 
-    /* Read the inverter temperature */
-    if (ret == HAL_OK)
-      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_TEMP_INV, (uint16_t*)&inv_temp);
-
-    if (ret == HAL_OK && inv_state >= 4)
+    if (ret == HAL_OK && bms_state == 4)
     {
       int i;
       for (i=0; i<8; ++i)
@@ -793,6 +814,12 @@ void solaxModbusTask(void *argument)
         init_done = true;
     }
 
+    if (ret == HAL_OK)
+    {
+      /* Read the current Grid (Inverter Output) power */
+      ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_GRID_P1, (uint16_t*)&grid_power);
+    }
+
     /* Check to see if the inverter is enabled */
     if (ret == HAL_OK)
       ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_SYS_EN, &en);
@@ -822,9 +849,6 @@ void solaxModbusTask(void *argument)
           ret = modbus_write(MB_SLAVE_INVERTER, MB_WRITE_HOLDING, FOX_SYS_EN, 1);
       }
     }
-
-    /* Update periodically or on an external change */
-    xSemaphoreTake(pwrMutex, 1000);
   }
 }
 
@@ -1057,6 +1081,20 @@ int solax_process_cmd(char **args, int argc)
       solax_disable();
     }
   }
+  else if (argc >= 2 && 0 == strcmp(args[0], "bstart"))
+  {
+    if (strtol(args[1], NULL, 10))
+    {
+        bstart = true;
+        last_update = HAL_GetTick();
+    }
+    else
+    {
+        bstart = false;
+        last_update = 0;
+    }
+
+  }
   else
   {
     ret = -1;
@@ -1100,6 +1138,7 @@ void solax_json_update(void)
 #ifdef DEBUG_SOLAX
   printf(",\"last_update\":%ld", HAL_GetTick() - last_update);
   printf(",\"contactor_req\":%d", contactor_close);
+  printf(",\"bstart\":%d", bstart);
   printf(", \"max_chg_current\":%d, \"max_dis_current\":%d",
          solax_data.bms.msg_1872.charge_max,
          solax_data.bms.msg_1872.discharge_max);
