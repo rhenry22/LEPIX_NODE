@@ -360,13 +360,11 @@ void mainTaskEntry(void *argument)
   }
 #endif
 
-#ifdef ENABLE_SOLAX
   if (!solax_init())
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Solax interface.\"}]\n");
     error = true;
   }
-#endif
 
   if (!modbus_init())
   {
@@ -786,10 +784,8 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
     break;
   }
 
-#ifdef ENABLE_SOLAX
   /* Update the inverter max (BMS / DC handled by ChaDeMo). */
   solax_set_max_ac_current(current);
-#endif
 
   trigger_json_update();
 }

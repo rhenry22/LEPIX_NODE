@@ -98,9 +98,7 @@ static const cmd_entry_t cmd_table[] = {
 #ifdef TARGET_CHADEMO
     { "chademo", chademo_process_cmd },
 #endif
-#ifdef ENABLE_SOLAX
     { "solax", solax_process_cmd },
-#endif
     { "hv", app_process_cmd_hv },
     { "leds", app_process_cmd_leds },
 };
