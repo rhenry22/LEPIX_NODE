@@ -500,32 +500,21 @@ void mainTaskEntry(void *argument)
         if ((button_time == 0 || (HAL_GetTick() - button_time) > BUTTON_DEBOUNCE_TIME))
         {
           printf("{\"controller\":[{\"button\":1}]}\n");
-        }
-        button_time = HAL_GetTick();
 
 #ifdef TARGET_CHADEMO
         chademo_stop();
 #endif
+        }
+        button_time = HAL_GetTick();
       }
     }
 
-    // ToDo:
-#if 0
-        /* Check that we're outputting a sensible voltage */
-        if (labs(batt_voltage - inv_voltage) > precharge_delta)
-        {
-          snprintf(last_error, ERROR_LEN,
-              "Fire risk: Check HV fuses and connections. (%ldv, %ldv, %ldv)",
-              batt_voltage, inv_voltage, precharge_delta);
-          max_discharge_current = 0;
-          max_charge_current = 0;
-        }
-#endif
-
-/* Update the inverter power */
+    /* Update the inverter power */
     solax_set_output_power(power_offset);
 
     /* Kick the Watchdog */
+    // ToDo: Update Watchdog logic to receive regular updates from
+    //       critical tasks, not just main loop.
     HAL_IWDG_Refresh(&hiwdg);
 
     osDelay(100);
@@ -572,6 +561,20 @@ void jsonTaskEntry(void *argument)
       err |= 1 << SENSOR_INV_VOLTAGE;
     if (HAL_OK != sensor_get_value(SENSOR_INV_CURRENT, &inv_current))
       err |= 1 << SENSOR_INV_CURRENT;
+
+
+    // ToDo: Gather metrics and set thresholds from a working system
+#if 0
+    /* Check that we're outputting a sensible voltage */
+    if (labs(batt_voltage - inv_voltage) > precharge_delta)
+    {
+      snprintf(last_error, ERROR_LEN,
+          "Fire risk: Check HV fuses and connections. (%ldv, %ldv, %ldv)",
+          batt_voltage, inv_voltage, precharge_delta);
+      max_discharge_current = 0;
+      max_charge_current = 0;
+    }
+#endif
 
     /* Display Batt and Inverter Voltages on LEDs (200-500v) */
     {

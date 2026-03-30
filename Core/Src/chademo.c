@@ -896,10 +896,7 @@ void chademo_process(void)
         max_dc_dis_current = 0;
       }
 
-      // ToDo: Consider decrementing the minute counter!
-      //can_data.charger.msgid_109.time_remaining_10s = 0xff;
-      //can_data.charger.msgid_109.time_remaining_1min = 0xff;
-
+      /* Check if the Vehicle has reached max charging time */
       if (can_data.charger.msgid_109.time_remaining_10s == 0 ||
           can_data.charger.msgid_109.time_remaining_1min == 0)
       {
