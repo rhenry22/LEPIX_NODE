@@ -30,6 +30,7 @@
 #include "modbus.h"
 
 //#define DEBUG_SOLAX
+//#define SOLAX_DISABLE_MODBUS
 
 /*
  * Battery size in Wh (Maximum value for most inverters is 60000 [60kWh],
@@ -765,8 +766,10 @@ void solaxModbusTask(void *argument)
     /* Update periodically or on an external change */
     xSemaphoreTake(pwrMutex, 1000);
 
+#ifdef SOLAX_DISABLE_MODBUS
     /* Disable ModBus use (e.g. for external ModBus bridge) */
     continue;
+#endif
 
     /* Read the inverter temperature */
     ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_TEMP_INV, (uint16_t*)&inv_temp);
@@ -833,6 +836,10 @@ void solaxModbusTask(void *argument)
       /* Read the Inverter State when enabled */
       if (ret == HAL_OK)
         ret = modbus_read(MB_SLAVE_INVERTER, MB_READ_INPUT, FOX_INV_STATE, (uint16_t*)&inv_state);
+    }
+    else
+    {
+      inv_state = 0;
     }
 
     if (ret == HAL_OK)
