@@ -136,8 +136,12 @@ TX GPIO1 as SerBr TX
 RX GPIO3 as SerBr RX
 
 ### Console
+Automatically set the serial port up and boot, and use \n as the delimiter.
+```
 Rule1 ON System#Boot DO Backlog Baudrate 115200; SerialLog 0 ENDON
 Rule1 1
+SerialDelimiter 10
+```
 
 ### MQTT
 After setting up the MQTT server, you should see the module output coming in via SSerialReceived JSON messages.
