@@ -273,7 +273,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
   state_time = HAL_GetTick();
 
   /* Make sure we notify watchers ASAP */
-  trigger_json_update();
+  app_trigger_json_update();
 
   switch (new_state)
   {

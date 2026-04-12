@@ -71,11 +71,19 @@ bool leds_init(void)
 void leds_set(uint16_t leds)
 {
   debug_leds |= leds;
+  flash_debug_leds &= ~leds;
+}
+
+void leds_flash(uint16_t leds)
+{
+  debug_leds |= leds;
+  flash_debug_leds |= leds;
 }
 
 void leds_clear(uint16_t leds)
 {
   debug_leds &= ~leds;
+  flash_debug_leds &= ~leds;
 }
 
 /**

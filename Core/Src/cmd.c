@@ -96,13 +96,13 @@ static const cmd_entry_t cmd_table[] = {
     { "flash", process_cmd_flash },
     { "espbridge", process_cmd_esp },
     { "evse", evse_process_cmd },
+    { "solax", solax_process_cmd },
     { "power", app_process_cmd_power },
+    { "hv", hvgen_process_cmd },
+    { "leds", leds_process_cmd },
 #ifdef TARGET_CHADEMO
     { "chademo", chademo_process_cmd },
 #endif
-    { "solax", solax_process_cmd },
-    { "hv", hvgen_process_cmd },
-    { "leds", leds_process_cmd },
 };
 
 /**
