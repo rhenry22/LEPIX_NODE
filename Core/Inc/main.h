@@ -46,13 +46,15 @@ extern "C" {
 
 extern int32_t power_offset;
 
+extern uint32_t esp_prog_key;
+extern bool esp_flash_mode;
 
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
-/* #define ESP_FLASH_MODE */
+#define ESP_MODE_KEY          0xDEADDEAD
 
 /* USER CODE END EM */
 
@@ -67,11 +69,11 @@ void stdio_parser(uint8_t *ptr, uint16_t len);
 void trigger_json_update(void);
 void dump_packet(uint8_t *data, uint8_t len);
 
-int app_get_batt_voltage(int32_t *val);
-int app_get_batt_current(int32_t *val);
-
 int app_process_cmd_ctrl(char **args, int argc);
 
+int app_get_batt_voltage(int32_t *val);
+int app_get_batt_current(int32_t *val);
+int app_get_precharge_delta(uint32_t *val);
 
 /* USER CODE END EFP */
 

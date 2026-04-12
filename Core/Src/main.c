@@ -203,17 +203,18 @@ void dump_packet(uint8_t *data, uint8_t len)
   */
 int _write(int file, char *ptr, int len)
 {
-#ifndef ESP_FLASH_MODE
-  /* If USB is connected, send to USB */
-  if (CDC_Is_Connected())
+  if (!esp_flash_mode)
   {
-    /* Send the data */
-    CDC_Transmit_FS((uint8_t*)ptr, len, 10);
-  }
+    /* If USB is connected, send to USB */
+    if (CDC_Is_Connected())
+    {
+      /* Send the data */
+      CDC_Transmit_FS((uint8_t*)ptr, len, 10);
+    }
 
-  /* Send Data to Serial */
-  HAL_UART_Write_UART1((uint8_t *)ptr, len, 100);
-#endif
+    /* Send Data to Serial */
+    HAL_UART_Write_UART1((uint8_t *)ptr, len, 100);
+  }
 
   return len;
 }

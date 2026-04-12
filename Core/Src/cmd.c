@@ -65,6 +65,19 @@ static int process_cmd_flash(char **args, int argc)
   return 0;
 }
 
+/**
+  * @brief  Process ESP Programming (USB Serial Bridge)
+  * @param  args Command arguments
+  * @param  argc Number of arguments
+  * @retval Does not return.
+  */
+static int process_cmd_esp(char **args, int argc)
+{
+  esp_prog_key = ESP_MODE_KEY;
+  HAL_NVIC_SystemReset();
+  return 0;
+}
+
 
 /* List of commands and handlers */
 
@@ -78,12 +91,11 @@ typedef struct {
 static const cmd_entry_t cmd_table[] = {
     { "reset", process_cmd_reset },
     { "flash", process_cmd_flash },
-    { "ctrl", app_process_cmd_ctrl },
+    { "espbridge", process_cmd_esp },
     { "evse", evse_process_cmd },
+    { "ctrl", app_process_cmd_ctrl },
     //{ "batt", batt_process_cmd },
-#ifdef ENABLE_SOLAX
     { "solax", solax_process_cmd },
-#endif
 };
 
 /**
@@ -118,7 +130,7 @@ static void process_stdin_line(uint8_t *ptr, uint16_t len)
   }
 
   /* Unknown command */
-  //printf("{\"controller\":[{\"status\":-1,\"message\":\"Unknown command: %s\"}]}\n", args[0]);
+  printf("{\"controller\":[{\"status\":-1,\"message\":\"Unknown command: %s\"}]}\n", args[0]);
 
 }
 

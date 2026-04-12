@@ -45,18 +45,21 @@ void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
-  __HAL_RCC_GPIOH_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, IGN_EN_Pin|EVSE_CHARGE_EN_Pin|ESP_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, ESP_FLASH__Pin|LED1_Pin|LED2_Pin|LED3_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin, GPIO_PIN_RESET);
@@ -82,11 +85,18 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : GPIO1_Pin GPIO2_Pin */
-  GPIO_InitStruct.Pin = GPIO1_Pin|GPIO2_Pin;
+  /*Configure GPIO pin : GPIO1_Pin */
+  GPIO_InitStruct.Pin = GPIO1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIO1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : GPIO2_Pin */
+  GPIO_InitStruct.Pin = GPIO2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIO2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : RS485_TX_RX__Pin */
   GPIO_InitStruct.Pin = RS485_TX_RX__Pin;

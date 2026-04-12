@@ -1,10 +1,12 @@
-# STM32F407VET6 CCS2 and FoxESS Inverter Controller
+# STM32F407VET6 Leaf Battery and FoxESS Inverter Controller
 
-## Commands
+## Serial Commands
+```
 reset           : Reset the Controller
 
 flash           : Put the Controller into DFU mode
-
+espbridge       : Put the Controller into esptool compatible bridge mode for flashing esp8266
+                  (requires power cycle to exit)
 
 ctrl            : Controller Commands
   power           : Set the target power (+/- : Discharge / Charge)
@@ -24,15 +26,18 @@ solax           : Solax / FoxESS Inverter Settings
   dc_tgt_v <voltage>  : Set the target battery voltage in V x10
   soc <SoC>           : Set the battery SoC in %
   enable <enable>     : Enable / Disable the Solax BMS emulation
-
+```
 ## JSON
+```
 typedef enum {
   PP_NONE,     /* Plug not inserted */
   PP_PRESSED,  /* Plug inserted, button pressed */
   PP_INSERTED, /* Plug inserted, not pressed */
   PP_ERROR     /* Invalid reading */
 } EVSE_PP;
+```
 
+```
 typedef enum _solax_state {
   SOLAX_BATTERY_ANNOUNCE,
   SOLAX_REQUEST_CONTACTOR_CLOSE,
@@ -41,21 +46,79 @@ typedef enum _solax_state {
   SOLAX_FAULT,
   SOLAX_UPDATING_FW
 } SOLAX_STATE;
+```
 
+```
+typedef enum _chademo_state
 {
-  controller:{"power_offset":<power in W>, "timestamp":<tick ms>},
-  evse:{"max_current":<A x10>, "pp":<EVSE_PP>, "cp":<CCS2_CP>},
-  solax:{"state":<SOLAX_STATE>, "last_error":<string>, "inv_state":<raw state>, "inv_temp":<Cx10>, "grid_power":<W>, "power_offset":<W>}
-}
+  CHADEMO_STATE_OFF,
+  CHADEMO_STATE_START,
+  CHADEMO_STATE_PARAM_CHK,
+  CHADEMO_STATE_PERM_OK,
+  CHADEMO_STATE_INS_TEST_BASE,
+  CHADEMO_STATE_INS_TEST,
+  CHADEMO_STATE_BATT_CHECK,
+  CHADEMO_STATE_ON,
+  CHADEMO_STATE_STOP,
+  CHADEMO_STATE_WELD_CHECK,
+  CHADEMO_STATE_WAIT_K_OFF,
+  CHADEMO_STATE_WAIT_VEHICLE_OFF,
+  CHADEMO_STATE_ERROR
+} CHADEMO_STATE;
+```
 
+## Controller JSON Output
+```
+{"controller":{"power_offset":<power in W>,"timestamp":<tick ms>,
+    "sensors":{"acc":{"v":<mV>, "i":<uA>>},"hv_iso":{"i":<uA>>, "r":<kOhm>},"battery":{"v":<V x10>, "i":<A x10>},"inverter":{"v":<V x10>, "i":<A x10>}}
+{"evse":{"ac":{"max_current":<A>>,"pp":<EVSE_PP>, "ccs2":{"cp":<CCS2_CP>, "pwm":<ccs2_pwm>}}}}
+{"solax":{"state":<SOLAX_STATE>, "last_error":<string>, "inv_state":<raw state>, "inv_temp":<Cx10>, "grid_power":<W>, "inv_fault":[<faut array>]}}
+{"chademo":{"state":<CHADEMO_STATE>, "cp_ready":<car ready>, "voltage":<V>, "current":<A>, "power":<W>, "last_error":<string>}}
+{"controller":[{"cmd":"<cmd executed>","status":"<return code>"}]}
+```
 ## Building
 Install the arm-none-eabi tools.
-> apt install gcc-arm-none-eabi <br/>
-> make
-
+```
+apt install gcc-arm-none-eabi <br/>
+make
+```
 ## Flashing
 The STM32F407 has built in DFU functionality.<br/>
-Move the BOOT0 jumper from '0' to '1', and connect the mini USB connection to a PC. 
-> make flash
-
+Move the BOOT0 jumper from '0' to '1', and connect the mini USB connection to a PC.
+```
+make flash
+```
 Now move the BOOT0 jumper back to '0' and hit reset / power cycle the board.
+
+# ESP8266
+
+## Tasmota Flashing
+Put the board into esp bridge mode - this will expose the ESP8266 over USB to enable esptool / tasmotizer to be used.
+
+Connect to the USB port
+Send "espbridge" with a <CR>
+
+The board will reset and enter bridge mode - you must power cycle to exit.
+
+## Tasmota Setup
+After flashing Tasmota, the ESP8266 and STM32 will battle each other by failing to understand what each other are saying!
+Ignore this, and configure Tasmota from the Web UI:
+
+### Configuration -> Logging
+Serial Log Level: 0 (None)
+
+### Configuration -> Module
+Generic (0)
+TX GPIO1 as SerBr TX
+RX GPIO3 as SerBr RX
+
+### Console
+Automatically set the serial port up and boot, and use \n as the delimiter.
+```
+Rule1 ON System#Boot DO Backlog Baudrate 115200; SerialLog 0 ENDON
+Rule1 1
+SerialDelimiter 10
+```
+
+### MQTT
+After setting up the MQTT server, you should see the module output coming in via SSerialReceived JSON messages.

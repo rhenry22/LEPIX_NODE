@@ -7,8 +7,8 @@
 
 typedef enum
 {
-  /* On Chip ADC */
   SENSOR_EVSE_PP,           /* EVSE PP Voltage (mV) */
+  SENSOR_MAX
 } SENSOR_SOURCE;
 
 bool sensor_init(void);

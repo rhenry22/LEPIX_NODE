@@ -21,14 +21,14 @@
 #include "sensor.h"
 #include "evse.h"
 
-//# define DEBUG_EVSE
+//#define DEBUG_EVSE
 
 #define PP_UNPLUGGED_MIN      (2100) //2240
 #define PP_PRESSED_MIN        (1900) //2010
 #define PP_INSERTED_MIN       (1300) //1480
 #define PP_CHECK_INTERVAL     (100)
 
-#define EVSE_DEFAULT_CURRENT  (0)
+#define EVSE_DEFAULT_CURRENT  (6)
 
 #define TIMER_LOOPS_TIMEOUT   (500) /* 0.5s Timeout on loss of CP PWM signal */
 
@@ -37,9 +37,7 @@ static EVSE_PP pp = EVSE_PP_NONE;
 static uint16_t cp_loops = 0;
 static uint32_t cp_rise = 0;
 static uint32_t cp_fall = 0;
-
 static uint32_t max_current = EVSE_DEFAULT_CURRENT; /* Maximum Current (A x1) */
-
 
 static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
 
@@ -62,7 +60,6 @@ static void evseTask(void *argument);
   */
 void evse_tim_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-
   if (htim == &htim2)
   {
     /* We're using the same timer as a 1kHz PWM channel 
@@ -285,8 +282,7 @@ int evse_process_cmd(char **args, int argc)
   */
 void evse_json_update(void)
 {
-  printf("\"evse\":{\"ac\":{\"max_current\":%ld,\"pp\":%d}",
-         max_current, pp);
+  printf("\"evse\":{\"ac\":{\"max_current\":%ld,\"pp\":%d}", max_current, pp);
 
   if (strnlen(last_error, ERROR_LEN))
   {

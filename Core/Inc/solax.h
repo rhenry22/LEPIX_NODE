@@ -5,8 +5,10 @@
 #include <stdint.h>
 
 #define SOLAX_MAXIMUM_SUPPORTED_VOLTAGE (450)
-#define SOLAX_MINIMUM_SUPPORTED_VOLTAGE (288)
+#define SOLAX_MINIMUM_SUPPORTED_VOLTAGE (85)
+#ifndef SOLAX_MAXIMUM_SUPPORTED_CURRENT
 #define SOLAX_MAXIMUM_SUPPORTED_CURRENT (40)
+#endif
 
 #define SOLAX_MAXIMUM_SOC               (100)
 #define SOLAX_MINIMUM_SOC               (15)
@@ -15,10 +17,6 @@
 
 enum
 {
-  FOX_BATT_V = 11006,     /* (V x10) */
-  FOX_BATT_I = 11007,     /* (A x10) */
-  FOX_BATT_P = 11008,     /* (W) */
-
   FOX_GRID_V = 11009,     /* Grid Voltage (V x10) */
   FOX_GRID_I = 11010,     /* Grid Current (A x10) */
   FOX_GRID_P1 = 11011,    /* Grid Phase R Power (W) */
@@ -28,8 +26,8 @@ enum
   FOX_TEMP_INV = 11024,    /* Inverter Temp. (degC x10) */
   FOX_TEMP_ENV = 11025,    /* Environment Temp. (degC x10) */
 
-  FOX_INV_STATE = 11056,  /* Inverter Status */
-  FOX_BATT_STATE = 11057, /* Battery Status */
+  FOX_INV_STATE = 11056,   /* Inverter Status */
+  FOX_BATT_STATE = 11057,  /* Battery Status */
 
   FOX_FAULT_1 = 11061,
   FOX_FAULT_2 = 11062,
@@ -83,28 +81,13 @@ enum
   FAULT2_SCI,
   FAULT2_MASTER_SPI
 };
-
-struct solax_state
-{
-  uint32_t last_can_update;     /* Last time we saw a CAN message */
-  uint32_t last_rs485_update;   /* Last time we saw an RS485 response */
-
-  bool contactor_close;         /* Has the inverter requested contactor close? */
-  int16_t grid_power;           /* Reported Grid import / export */
-  int16_t inv_state;            /* Inverter State */
-  int16_t inv_temp;             /* Inverter Temperature */
-  uint16_t inv_fault[8];        /* Inverter Fault registers */
-};
-
-typedef void (solax_cb)(struct solax_state);
-
-bool solax_init(solax_cb *cb);
+bool solax_init(void);
 void solax_kick(void);
 
 void solax_enable(void);
 void solax_disable(void);
 
-bool solax_check_faults(uint32_t *faults);
+bool solax_check_faults(uint16_t *faults);
 
 void solax_set_output_power(int16_t power);
 

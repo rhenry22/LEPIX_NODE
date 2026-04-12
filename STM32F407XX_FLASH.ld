@@ -185,7 +185,7 @@ SECTIONS
   } >CCMRAM AT> FLASH
 
 
-  /* Uninitialized data section */
+  /* Zeroed data section */
   . = ALIGN(4);
   .bss :
   {
@@ -199,6 +199,16 @@ SECTIONS
     . = ALIGN(4);
     _ebss = .;         /* define a global symbol at bss end */
     __bss_end__ = _ebss;
+  } >RAM
+
+  /* Uninitialized data section */
+  . = ALIGN(4);
+  .noinit :
+  {
+    /* This is used by the startup in order to initialize the .bss secion */
+    *(.noinit)
+    *(.noinit*)
+    . = ALIGN(4);
   } >RAM
 
   /* User_heap_stack section, used to check that there is enough RAM left */

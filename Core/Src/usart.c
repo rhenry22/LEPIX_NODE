@@ -410,21 +410,26 @@ void HAL_UART_Process(void)
 {
   if (uart1_rx_bytes > 0)
   {
-#ifdef ESP_FLASH_MODE
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
-    /* Echo serial to USB (for ESP8266 flashing) */
-    if (CDC_Is_Connected())
+    if (esp_flash_mode)
     {
-      CDC_Transmit_FS(&uart1_rxbuf[0], uart1_rx_bytes, 10);
+      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+      /* Echo serial to USB (for ESP8266 flashing) */
+      if (CDC_Is_Connected())
+      {
+        CDC_Transmit_FS(&uart1_rxbuf[0], uart1_rx_bytes, 100);
+      }
+      HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+
+      HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], 1);
     }
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
-#else
-    /* Call stdio parser */
-    stdio_parser(&uart1_rxbuf[0], uart1_rx_bytes);
-#endif
+    else
+    {
+      /* Call stdio parser */
+      stdio_parser(&uart1_rxbuf[0], uart1_rx_bytes);
+      HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_RX_DATA_SIZE);
+    }
 
     uart1_rx_bytes = 0;
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart1, &uart1_rxbuf[0], APP_RX_DATA_SIZE);
   }
 
   if (uart2_rx_bytes > 0)
@@ -448,12 +453,12 @@ HAL_StatusTypeDef HAL_UART_Write_UART1(uint8_t *ptr, uint16_t len, uint32_t time
   HAL_StatusTypeDef ret;
   uint32_t t = HAL_GetTick() + timeout;
 
+  ret = HAL_UART_Transmit_DMA(&huart1, ptr, len);
+  uart1_busy = true;
+
   while (uart1_busy && HAL_GetTick() < t);
   if (HAL_GetTick() >= t)
     return HAL_TIMEOUT;
-
-  ret = HAL_UART_Transmit_DMA(&huart1, ptr, len);
-  uart1_busy = true;
 
   return ret;
 }

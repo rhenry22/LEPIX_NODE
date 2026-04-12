@@ -30,7 +30,7 @@ static struct _last_value
 {
   int32_t val;
   uint32_t time;
-} last_values[SENSOR_EVSE_PP + 1] = {{0, 0}};
+} last_values[SENSOR_MAX] = {{0, 0}};
 
 static osSemaphoreId_t mutexHandle;
 static const osSemaphoreAttr_t mutexAttributes = {
@@ -82,11 +82,10 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     return HAL_OK;
   }
 
-  if (pdFALSE == xSemaphoreTake(mutexHandle, 10))
+  if (pdFALSE == xSemaphoreTake(mutexHandle, 2*SENSOR_TIMEOUT_MS))
   {
-    /* Timeout obtaining mutex, return old value */
-    *val = last_values[src].val;
-    return HAL_OK;
+    /* Timeout obtaining mutex */
+    return HAL_TIMEOUT;
   }
 
   switch (src)
@@ -100,15 +99,18 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     }
     break;
 
-    default:
+    case SENSOR_MAX:
 #ifdef  USE_FULL_ASSERT
       assert_failed((uint8_t*)__FILE__, __LINE__);
 #endif
-      break;
+    break;
   }
 
-  last_values[src].val = *val;
-  last_values[src].time = HAL_GetTick();
+  if (ret == HAL_OK)
+  {
+    last_values[src].val = *val;
+    last_values[src].time = HAL_GetTick();
+  }
 
   xSemaphoreGive(mutexHandle);
 

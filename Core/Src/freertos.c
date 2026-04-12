@@ -55,7 +55,9 @@
 
 #define DEBUG_CONTROLLER
 
-#define JSON_UPDATE_TIME         (60000)
+#define JSON_UPDATE_TIME         (5000)
+
+#define BUTTON_DEBOUNCE_TIME     (150)
 
 /* USER CODE END PM */
 
@@ -64,6 +66,10 @@
 int32_t power_offset = 0;      /* Offset from actual power (i.e. charge / discharge) */
 
 static bool error = false;            /* Whether we are in the error state */
+
+/* Key used to enter ESP special bridge mode on reboot (disable WDT) */
+uint32_t esp_prog_key __attribute__((section(".noinit")));
+bool esp_flash_mode = false;
 
 /* USER CODE END Variables */
 /* Definitions for mainTask */
@@ -90,7 +96,8 @@ const osSemaphoreAttr_t jsonMutex_attributes = {
 /* USER CODE BEGIN FunctionPrototypes */
 
 static void pp_changed_cb(EVSE_PP pp, uint8_t current);
-static void solax_changed_cb(struct solax_state);
+
+void bridgeTaskEntry(void *argument);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -151,7 +158,19 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST))
+  {
+    if (esp_prog_key == ESP_MODE_KEY)
+    {
+      esp_prog_key = 0;
+      esp_flash_mode = true;
+
+      /* Create ESP Serial Bridge Tasks */
+      mainTaskHandle = osThreadNew(bridgeTaskEntry, NULL, &mainTask_attributes);
+
+      return;
+    }
+  }
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -184,21 +203,11 @@ void mainTaskEntry(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN mainTaskEntry */
 
-#ifndef ESP_FLASH_MODE
   /* Request supply from the EVSE */
   HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
 
   /* Power Up ESP8266 */
   HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
-#else
-  osDelay(2000);
-
-  HAL_GPIO_WritePin(ESP_FLASH__GPIO_Port, ESP_FLASH__Pin, GPIO_PIN_SET); // Not in Flash mode
-  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET); // Power up chip
-
-  while(1)
-    osDelay(100);
-#endif
 
   /* Give USB and ESP a chance to start up */
   osDelay(3000);
@@ -219,27 +228,33 @@ void mainTaskEntry(void *argument)
   }
 #endif
 
-#ifdef ENABLE_SOLAX
-  if (!solax_init(&solax_changed_cb))
+  if (!solax_init())
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Solax interface.\"}]\n");
     error = true;
   }
-#endif
 
   if (!modbus_init())
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Modbus interface.\"}]\n");
     error = true;
   }
-
-  if (!error)
-    printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
+  HAL_UART_Setup_UART1();
 
   if (!cmd_init())
   {
     printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise command parser.\"}]\n");
     error = true;
+  }
+
+  if (!error)
+  {
+    printf("{\"controller\":[{\"status\":0,\"message\":\"Initialized OK\"}]}\n");
+  }
+  else
+  {
+    printf("{\"controller\":[{\"info\":\"Entering FLASH mode\"}]}\n");
+    JumpToBootloader();
   }
 
   MX_IWDG_Init();
@@ -253,13 +268,33 @@ void mainTaskEntry(void *argument)
       emergency_stop();
     }
 
+    /* User Buttons and LEDs */
+    {
+      static uint32_t button_time = 0;            /* Timer for button LED(s) */
+
+      if (HAL_GPIO_ReadPin(GPIO1_GPIO_Port, GPIO1_Pin) == GPIO_PIN_SET)
+        button_time = 0;
+
+      /* Button Press */
+      if (HAL_GPIO_ReadPin(GPIO1_GPIO_Port, GPIO1_Pin) == GPIO_PIN_RESET)
+      {
+        if ((button_time == 0 || (HAL_GetTick() - button_time) > BUTTON_DEBOUNCE_TIME))
+        {
+          printf("{\"controller\":[{\"button\":1}]}\n");
+        }
+        button_time = HAL_GetTick();
+      }
+    }
+
     /* Update the inverter power */
     solax_set_output_power(power_offset);
 
     /* Kick the Watchdog */
+    // ToDo: Update Watchdog logic to receive regular updates from
+    //       critical tasks, not just main loop.
     HAL_IWDG_Refresh(&hiwdg);
 
-	  osDelay(100);
+    osDelay(100);
   }
   /* USER CODE END mainTaskEntry */
 }
@@ -280,15 +315,28 @@ void jsonTaskEntry(void *argument)
     /* Send regular JSON messages */
     xSemaphoreTake(jsonMutexHandle, JSON_UPDATE_TIME);
 
+    int32_t batt_voltage = 0;
+    int32_t batt_current = 0;
+    uint32_t err = 0;
+
+    if (0 != app_get_batt_voltage(&batt_voltage))
+      err |= 1 << 0;
+    if (0 != app_get_batt_current(&batt_current))
+      err |= 1 << 1;
     printf("{\"controller\":{");
     printf("\"power_offset\":%ld", power_offset);
     printf(",\"timestamp\":%ld", HAL_GetTick());
 
-    printf(",");
+    printf(",\"sensors\":{");
+    printf("\"status\":%ld", err);
+    printf(",\"battery\":{\"v\":%ld, \"i\":%ld}", batt_voltage / 10, batt_current / 10);
+
+    printf("}\n{");
     evse_json_update();
-    printf(",");
+
+    printf("}\n{");
     solax_json_update();
-    printf("}}\n");
+    printf("}\n");
   }
   /* USER CODE END jsonTaskEntry */
 }
@@ -297,13 +345,34 @@ void jsonTaskEntry(void *argument)
 /* USER CODE BEGIN Application */
 
 /**
+  * @brief  Function implementing the bridgeTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+void bridgeTaskEntry(void *argument)
+{
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
+
+  osDelay(3000);
+
+  /* Power Up ESP8266 */
+  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+
+  while (1)
+  {
+    osDelay(100);
+  }
+}
+
+/**
   * @brief  Used by modules to get the battery current (x10 V)
   * @param val Pointer to int32_t to receive the value
   * @retval 0: Success, otherwise Error value
   */
 int app_get_batt_voltage(int32_t *val)
 {
-  // ToDo: Hook this up to either a sensor (CCS2) or the Leaf Battery module
+  // ToDo: Hook this up to the Leaf Battery module
   return -1;
 }
 
@@ -314,8 +383,29 @@ int app_get_batt_voltage(int32_t *val)
   */
 int app_get_batt_current(int32_t *val)
 {
-  // ToDo: Hook this up to either a sensor (CCS2) or the Leaf Battery module
+  // ToDo: Hook this up to the Leaf Battery module
   return -1;
+}
+
+/**
+  * @brief  Used by modules to get the delta between battery and inverter voltages (x10 V)
+  * @param val Pointer to int32_t to receive the value
+  * @retval 0: Success, otherwise Error value
+  */
+int app_get_precharge_delta(uint32_t *val)
+{
+  int ret = 0;
+  int32_t batt_current;
+
+  /* We don't have access to the inverter voltage
+     so calculate delta based on current. */
+  ret = app_get_batt_current(&batt_current);
+  if (ret == 0)
+  {
+    *val = batt_current * 33;
+  }
+
+  return ret;
 }
 
 
@@ -366,18 +456,12 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
     break;
   }
 
-#ifdef ENABLE_SOLAX
   /* Update the inverter max (BMS / DC handled by ChaDeMo). */
   solax_set_max_ac_current(current);
-#endif
 
   trigger_json_update();
 }
 
-static void solax_changed_cb(struct solax_state)
-{
-
-}
 
 /* USER CODE END Application */
 
