@@ -19,9 +19,11 @@
 #include "usbd_cdc_if.h"
 
 #include "main.h"
-#include "chademo.h"
 #include "solax.h"
 #include "evse.h"
+#include "hvgen.h"
+#include "leds.h"
+#include "chademo.h"
 
 #define MAX_CMD_ARGS        (8)             /* Maximum number of command arguments */
 
@@ -93,14 +95,14 @@ static const cmd_entry_t cmd_table[] = {
     { "reset", process_cmd_reset },
     { "flash", process_cmd_flash },
     { "espbridge", process_cmd_esp },
-    { "power", app_process_cmd_power },
     { "evse", evse_process_cmd },
+    { "power", app_process_cmd_power },
 #ifdef TARGET_CHADEMO
     { "chademo", chademo_process_cmd },
 #endif
     { "solax", solax_process_cmd },
-    { "hv", app_process_cmd_hv },
-    { "leds", app_process_cmd_leds },
+    { "hv", hvgen_process_cmd },
+    { "leds", leds_process_cmd },
 };
 
 /**
@@ -246,112 +248,4 @@ int app_process_cmd_power(char **args, int argc)
     return 0;
   }
   return -1;
-}
-
-int app_process_cmd_leds(char **args, int argc)
-{
-  int ret = 0;
-  if (argc >= 3 && 0 == strcmp(args[0], "debug"))
-  {
-    int16_t mask = strtol(args[1], NULL, 16);
-    int16_t val = strtol(args[2], NULL, 16);
-
-    /* Only modify bits covered by mask */
-    debug_leds &= ~mask;
-    debug_leds |= (val & mask);
-    /* Optional 4th arg: "flash" -> add any bits set to 1 (mask & val) to flash list. */
-    if (argc >= 4 && 0 == strcmp(args[3], "flash"))
-    {
-      /* Add bits where mask says and val is 1 */
-      flash_debug_leds |= (mask & val);
-      /* Remove any bits from flash list where mask requested clearing (mask & ~val) */
-      flash_debug_leds &= ~(mask & ~val);
-    }
-    else
-    {
-      /* No explicit "flash" arg -> clear flashing for the bits covered by mask */
-      flash_debug_leds &= ~((uint16_t)mask);
-    }
-  }
-  else if (argc >= 3 && 0 == strcmp(args[0], "user"))
-  {
-    int16_t mask = strtol(args[1], NULL, 16);
-    int16_t val = strtol(args[2], NULL, 16);
-
-    /* Update base user LED values */
-    user_led_base &= ~mask;
-    user_led_base |= (val & mask);
-
-    /* Optional flash parameter: add/remove flashing for the bits being set */
-    if (argc >= 4 && 0 == strcmp(args[3], "flash"))
-    {
-      /* Add bits where mask says and val is 1 */
-      flash_user_mask |= (mask & val);
-      /* Remove any bits from flash list where mask requested clearing (mask & ~val) */
-      flash_user_mask &= ~(mask & ~val);
-    }
-    else
-    {
-      /* No explicit "flash" arg -> clear flashing for the bits covered by mask */
-      flash_user_mask &= ~mask;
-    }
-
-    /* Immediately apply the current visible state for user LEDs (honour flash_state)
-       If a user LED is flashing, show flash_state, otherwise show base value */
-    if (flash_user_mask & 0x01)
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
-    else
-      HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (user_led_base & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-
-    if (flash_user_mask & 0x02)
-      HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
-    else
-      HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (user_led_base & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-  }
-  else
-  {
-    ret = -1;
-  }
-
-  return ret;
-}
-
-
-/**
-  * @brief  Process HV Test commands
-  * @param  args Command arguments
-  * @param  argc Number of arguments
-  * @retval Status (0 = OK, -1 = Error / Unknown Command)
-  */
-int app_process_cmd_hv(char **args, int argc)
-{
-  int ret = -1;
-  if (argc >= 2 && 0 == strcmp(args[0], "iso"))
-  {
-    int32_t tgt = strtol(args[1], NULL, 10);
-    if (tgt < 0) tgt = 0;
-
-    if (tgt == 0)
-    {
-      hv_iso_test_enable(false, 0);
-      ret = 0;
-    }
-    else if (tgt >= HV_GEN_MIN_VOLTAGE && tgt <= HV_GEN_MAX_VOLTAGE)
-    {
-      hv_iso_test_enable(true, tgt);
-      ret = 0;
-    }
-    else
-    {
-      /* Out of range */
-      printf("{\"controller\":[{\"status\":-1,\"message\":\"HV target out of range (%d-%dV)\"}]}\n",
-             HV_GEN_MIN_VOLTAGE, HV_GEN_MAX_VOLTAGE);
-    }
-  }
-  else if (argc >= 1 && 0 == strcmp(args[0], "get"))
-  {
-    trigger_json_update();
-    ret = 0;
-  }
-  return ret;
 }

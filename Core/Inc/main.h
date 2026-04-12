@@ -38,41 +38,10 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-/* Upper / Red (bits 8-15) and Lower / Green (bits 0-7) Debug Leds */
-enum debug_leds
-{
-  DBG_LED_HV_TEST = 0,
-  DBG_LED_ISO_TEST,
-  DBG_LED_CT_PRE,
-  DBG_LED_CT_MAIN,
-  DBG_LED_STAT_RED_INV,
-  DBG_LED_STAT_RED_EV,
-  DBG_LED_HV_INV,
-  DBG_LED_HV_BATT,
-
-  DBG_LED_PP_INSERTED = 8,
-  DBG_LED_CP_READY,
-  DBG_LED_CP_CHARGE,
-  DBG_LED_STAT_GREEN_INV = 12,
-  DBG_LED_STAT_GREEN_EV,
-};
-
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-
-/* Debug LED variables */
-extern uint16_t debug_leds;
-extern uint16_t flash_debug_leds;
-extern uint8_t flash_user_mask;
-extern uint8_t user_led_base;
-extern bool flash_state;
-
-/* HV Generator variables */
-extern uint32_t hv_time;
-extern uint32_t hv_target;
-extern uint32_t hv_iso_resistance;
 
 extern int32_t power_offset;
 
@@ -83,9 +52,6 @@ extern bool esp_flash_mode;
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
-#define HV_GEN_MAX_VOLTAGE    (500) /* Max HV voltage in V */
-#define HV_GEN_MIN_VOLTAGE    (0)   /* Min HV voltage in V */
 
 #define ESP_MODE_KEY          0xDEADDEAD
 
@@ -103,8 +69,6 @@ void trigger_json_update(void);
 void dump_packet(uint8_t *data, uint8_t len);
 
 int app_process_cmd_power(char **args, int argc);
-int app_process_cmd_hv(char **args, int argc);
-int app_process_cmd_leds(char **args, int argc);
 
 int app_get_batt_voltage(int32_t *val);
 int app_get_batt_current(int32_t *val);

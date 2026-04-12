@@ -54,10 +54,12 @@ Core/Src/dma.c \
 Core/Src/evse.c \
 Core/Src/freertos.c \
 Core/Src/gpio.c \
+Core/Src/hvgen.c \
 Core/Src/i2c.c \
 Core/Src/ina219.c \
 Core/Src/ioexp.c \
 Core/Src/iwdg.c \
+Core/Src/leds.c \
 Core/Src/main.c \
 Core/Src/max22530.c \
 Core/Src/modbus.c \

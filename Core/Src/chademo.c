@@ -31,7 +31,9 @@
 
 #include "usbd_cdc_if.h"  /* for MIN */
 #include "can.h"
+#include "hvgen.h"
 #include "ioexp.h"
+#include "leds.h"
 #include "chademo.h"
 #include "solax.h"
 #include "sensor.h"
@@ -277,7 +279,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
   {
     case CHADEMO_STATE_OFF:
       /* These should already be off, but can be used as an emergency stop */
-      hv_iso_test_enable(false, 0);
+      hvgen_iso_test_enable(false, 0);
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
@@ -286,7 +288,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_RESET);
 
       /* Turn off the EV LED */
-      debug_leds &= ~(1 << DBG_LED_STAT_GREEN_EV);
+      leds_clear(1 << DBG_LED_STAT_GREEN_EV);
 
       /* Let the vehicle know we're unlocked */
       can_data.charger.msgid_109.fault_status &= ~MSG109_CONN_LOCK;
@@ -337,12 +339,12 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);
 
         /* Turn on the EV LED */
-        debug_leds |= (1 << DBG_LED_STAT_GREEN_EV);
+        leds_set(1 << DBG_LED_STAT_GREEN_EV);
 
         can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
 
         /* Enable HV DCDC Test source(s) */
-        hv_iso_test_enable(true, HV_GEN_MAX_VOLTAGE);
+        hvgen_iso_test_enable(true, HV_GEN_MAX_VOLTAGE);
       }
     }
     break;
@@ -353,19 +355,19 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
         /* Start Earth Leakage Test */
         HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
 
-        // ToDo: Work out how to do this
+        // Isolation testing implemented. Rely on Inverter for leakage detection
 #endif
-        snprintf(last_error, ERROR_LEN,
-                "Failed to get baseline HV current.");
-        new_state = CHADEMO_STATE_ERROR;
     }
     break;
 
     case CHADEMO_STATE_INS_TEST:
     {
       int32_t acc_current;  /* 12V ACC Current in uA */
+      uint32_t hv_iso_resistance;
 
       ret = sensor_get_value(SENSOR_ACC_CURRENT, &acc_current);
+      if (ret == HAL_OK && !hvgen_get_isolation_r(&hv_iso_resistance))
+        ret = HAL_ERROR;
 
       /* Check that HV Test current is below threshold */
       if (ret != HAL_OK || hv_iso_resistance < ISOLATION_MIN_RES)
@@ -404,7 +406,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
       /* Disable HV Test */
       HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
-      hv_iso_test_enable(false, 0);
+      hvgen_iso_test_enable(false, 0);
     }
     break;
 
@@ -1031,8 +1033,8 @@ void chademo_process(void)
   if (errored)
   {
     /* Green EV LED Off, Red LED On */
-    debug_leds &= ~(1 << DBG_LED_STAT_GREEN_EV);
-    debug_leds |= (1 << DBG_LED_STAT_RED_EV);
+    leds_clear(1 << DBG_LED_STAT_GREEN_EV);
+    leds_set(1 << DBG_LED_STAT_RED_EV);
   }
 
   /* Check that we are receiving regular CAN messages from ChaDeMo */

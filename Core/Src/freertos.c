@@ -35,7 +35,9 @@
 
 #include "chademo.h"
 #include "evse.h"
+#include "hvgen.h"
 #include "ioexp.h"
+#include "leds.h"
 #include "modbus.h"
 #include "sensor.h"
 #include "solax.h"
@@ -58,34 +60,8 @@
 #define DEBUG_CONTROLLER
 
 #define JSON_UPDATE_TIME         (5000)
-
 #define HIGH_VOLTAGE_THRESHOLD   (500) /* 50V */
-#define HIGH_VOLTAGE_TIMEOUT     (60000) /* Allow the HV source to be left on for this duration (max) */
-
 #define BUTTON_DEBOUNCE_TIME     (150)
-/* How often to toggle flashing LEDs (ms) */
-#define FLASH_TOGGLE_TIME        (500)
-
-#define HV_PWM_MIN               (200)
-#define HV_PWM_MAX               (5600)
-#define HV_PWM_DEFAULT           (HV_PWM_MAX)
-#define HV_HYST_VOLT             (5)  /* Hysteresis for HV voltage control (V) */
-
-#define HV_DCDC_C                (9800) /* Minimum current draw from HV DCDC in uA */
-#define HV_DCDC_M                (110) /* DC-DC Efficiency */
-#define HV_DCDC_N                (11) /* Voltage dependent loss */
-#define HV_DCDC_O                (-300) /* R Offset */
-
-/* PID tuning for HV generator (integer fixed-point) */
-#define HV_PID_SCALE            (1000)
-#define HV_PID_SAMPLE_MS        (100)
-
-#define HV_PID_KP_SCALED        (-6000)
-#define HV_PID_KI_SCALED        (-5)
-#define HV_PID_KD_SCALED        (-800)
-
-#define HV_PID_INTEGRAL_MAX     (100)  /* Anti-windup clamp */
-#define HV_PID_MAX_DELTA        (1500)   /* Max change per sample period */
 
 /* USER CODE END PM */
 
@@ -93,26 +69,7 @@
 /* USER CODE BEGIN Variables */
 int32_t power_offset = 0;      /* Offset from actual power (i.e. charge / discharge) */
 
-uint32_t hv_time = 0;          /* When the HV source was enabled */
-uint32_t hv_target = 0;        /* Target HV voltage in V */
-uint32_t hv_iso_resistance = -1; /* Measured HV isolation resistance in kOhms */
-
-uint16_t debug_leds = 0;       /* Combined state of debug leds */
-uint16_t flash_debug_leds = 0; /* Bits for debug LEDs that should flash */
-uint8_t flash_user_mask = 0;   /* Bits (0x01,0x02) for user GPIOs that should flash */
-uint8_t user_led_base = 0;     /* Base values for user LEDs (bit0 -> GPIO1, bit1 -> GPIO2) */
-bool flash_state = false;      /* Current on/off state for flashed LEDs */
-
-
-static uint32_t last_flash_toggle = 0;/* Last tick when flash_state toggled */
-
 static bool error = false;            /* Whether we are in the error state */
-
-static uint32_t hv_pwm = HV_PWM_DEFAULT;  /* Current value for HV PWM */
-/* PID controller state for HV generator */
-static int32_t hv_pid_integral = 0; /* accumulated error (samples * volts) */
-static int32_t hv_pid_prev_error = 0; /* previous error (volts) */
-static uint32_t hv_pid_last_time = 0;
 
 /* Key used to enter ESP special bridge mode on reboot (disable WDT) */
 uint32_t esp_prog_key __attribute__((section(".noinit")));
@@ -138,13 +95,6 @@ osSemaphoreId_t jsonMutexHandle;
 const osSemaphoreAttr_t jsonMutex_attributes = {
   .name = "jsonMutex"
 };
-/* Definitions for jsonTask */
-osThreadId_t hvGenTaskHandle;
-const osThreadAttr_t hvGenTask_attributes = {
-  .name = "hvGenTask",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -158,7 +108,6 @@ static void cp_changed_cb(EVSE_CP cp);
 
 void mainTaskEntry(void *argument);
 void jsonTaskEntry(void *argument);
-void hvGenTaskEntry(void *argument);
 void bridgeTaskEntry(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
@@ -213,11 +162,6 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
-  /* USER CODE END RTOS_QUEUES */
-
-  /* Create the thread(s) */
-
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST))
   {
     if (esp_prog_key == ESP_MODE_KEY)
@@ -231,14 +175,14 @@ void MX_FREERTOS_Init(void) {
       return;
     }
   }
+  /* USER CODE END RTOS_QUEUES */
 
+  /* Create the thread(s) */
   /* creation of mainTask */
   mainTaskHandle = osThreadNew(mainTaskEntry, NULL, &mainTask_attributes);
 
   /* creation of jsonTask */
   jsonTaskHandle = osThreadNew(jsonTaskEntry, NULL, &jsonTask_attributes);
-
-  hvGenTaskHandle = osThreadNew(hvGenTaskEntry, NULL, &hvGenTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -251,36 +195,6 @@ void MX_FREERTOS_Init(void) {
 }
 
 /* USER CODE BEGIN Header_mainTaskEntry */
-/**
-  * @brief  Function implementing the bridgeTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_mainTaskEntry */
-void bridgeTaskEntry(void *argument)
-{
-  /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
-  /* USER CODE BEGIN mainTaskEntry */
-
-  osDelay(3000);
-
-  /* Power Up ESP8266 */
-  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
-
-  /* Initialise Top IO expander and clear LEDs */
-  if (ioexp_init(IOEXP_TOP_LEDS))
-  {
-    ioexp_set_direction(IOEXP_TOP_LEDS, 0xAAAA);
-    ioexp_set_output(IOEXP_TOP_LEDS, 0x0000);
-  }
-
-  while (1)
-  {
-    osDelay(100);
-  }
-}
-
 /**
   * @brief  Function implementing the mainTask thread.
   * @param  argument: Not used
@@ -299,27 +213,10 @@ void mainTaskEntry(void *argument)
   /* Power Up ESP8266 */
   HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
 
-  /* Initialise Top IO expander and clear LEDs */
-  if (ioexp_init(IOEXP_TOP_LEDS))
+  /* Debug and Status LEDs */
+  if (!leds_init())
   {
-    ioexp_set_direction(IOEXP_TOP_LEDS, 0xFFFF);
-    ioexp_set_output(IOEXP_TOP_LEDS, 0x0000);
-  }
-  else
-  {
-    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Top LED IO Expander.\"}]\n");
-    error = true;
-  }
-
-  /* Initialise Bottom LED IO expander and clear LEDs */
-  if (ioexp_init(IOEXP_BOT_LEDS))
-  {
-    ioexp_set_direction(IOEXP_BOT_LEDS, 0xFFFF);
-    ioexp_set_output(IOEXP_BOT_LEDS, 0x0000);
-  }
-  else
-  {
-    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise Bottom LED IO Expander.\"}]\n");
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise LED Controller.\"}]\n");
     error = true;
   }
 
@@ -359,6 +256,12 @@ void mainTaskEntry(void *argument)
     error = true;
   }
 #endif
+
+  if (!hvgen_init())
+  {
+    printf("{\"controller\":[{\"status\":-1,\"message\":\"Failed to initialise HV Generator interface.\"}]\n");
+    error = true;
+  }
 
   if (!solax_init())
   {
@@ -404,56 +307,6 @@ void mainTaskEntry(void *argument)
       emergency_stop();
     }
 
-    /* Leds (Top 2 rows) + flashing support */
-    {
-      static uint16_t old_display_leds = 0;
-
-      /* Handle flash toggle timing */
-      if (flash_debug_leds != 0 || flash_user_mask != 0)
-      {
-        uint32_t now = HAL_GetTick();
-        if (last_flash_toggle == 0 || (now - last_flash_toggle) >= FLASH_TOGGLE_TIME)
-        {
-          flash_state = !flash_state;
-          last_flash_toggle = now;
-        }
-      }
-
-      /* Compute the LEDs to display on the top IO expander, applying flashing */
-      uint16_t display_leds = debug_leds;
-      if (flash_debug_leds != 0 && !flash_state)
-      {
-        /* When flash_state is false, clear the flashing bits so they appear off */
-        display_leds &= ~flash_debug_leds;
-      }
-
-      if (display_leds != old_display_leds)
-      {
-        old_display_leds = display_leds;
-        ioexp_set_direction(IOEXP_TOP_LEDS, ~display_leds);
-      }
-
-      /* Update user GPIO LEDs (GPIO1 / GPIO2) according to flash state */
-      /* If a user LED is marked for flashing, show flash_state, otherwise show base value */
-      if (flash_user_mask & 0x01)
-      {
-        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
-      }
-      else
-      {
-        HAL_GPIO_WritePin(GPIO1_GPIO_Port, GPIO1_Pin, (user_led_base & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-      }
-
-      if (flash_user_mask & 0x02)
-      {
-        HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET));
-      }
-      else
-      {
-        HAL_GPIO_WritePin(GPIO2_GPIO_Port, GPIO2_Pin, (user_led_base & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-      }
-    }
-
 #ifdef TARGET_CHADEMO
     /* Check shutdown */
     if (power_offset == 0 &&
@@ -487,9 +340,9 @@ void mainTaskEntry(void *argument)
     }
 #endif
 
-    /* User Buttons and LEDs */
+    /* User Button */
     {
-      static uint32_t button_time = 0;            /* Timer for button LED(s) */
+      static uint32_t button_time = 0;
 
       if (HAL_GPIO_ReadPin(GPIO3_GPIO_Port, GPIO3_Pin) == GPIO_PIN_SET)
         button_time = 0;
@@ -544,6 +397,7 @@ void jsonTaskEntry(void *argument)
     int32_t batt_voltage;
     int32_t batt_current;
     int32_t inv_voltage;
+    uint32_t hv_iso_resistance = 0;
     uint32_t err = 0;
 
     if (HAL_OK != sensor_get_value(SENSOR_ACC_CURRENT, &acc_current))
@@ -562,6 +416,9 @@ void jsonTaskEntry(void *argument)
 
     if (HAL_OK != sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage))
       err |= 1 << SENSOR_INV_VOLTAGE;
+
+    if (!hvgen_get_isolation_r(&hv_iso_resistance))
+      err |= 1 << SENSOR_MAX;
 
     // ToDo: Gather metrics and set thresholds from a working system
 #if 0
@@ -596,24 +453,24 @@ void jsonTaskEntry(void *argument)
 
     /* Update Debug LEDs */
     if (batt_voltage > HIGH_VOLTAGE_THRESHOLD)
-      debug_leds |= (1 << DBG_LED_HV_BATT);
+      leds_set((1 << DBG_LED_HV_BATT));
     else
-      debug_leds &= ~(1 << DBG_LED_HV_BATT);
+      leds_clear(1 << DBG_LED_HV_BATT);
 
     if (inv_voltage > HIGH_VOLTAGE_THRESHOLD)
-      debug_leds |= (1 << DBG_LED_HV_INV);
+      leds_set(1 << DBG_LED_HV_INV);
     else
-      debug_leds &= ~(1 << DBG_LED_HV_INV);
+      leds_clear(1 << DBG_LED_HV_INV);
 
     if (HAL_GPIO_ReadPin(CTPRE_EN_GPIO_Port, CTPRE_EN_Pin) == GPIO_PIN_SET)
-      debug_leds |= (1 << DBG_LED_CT_PRE);
+      leds_set(1 << DBG_LED_CT_PRE);
     else
-      debug_leds &= ~(1 << DBG_LED_CT_PRE);
+      leds_clear(1 << DBG_LED_CT_PRE);
 
     if (HAL_GPIO_ReadPin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin) == GPIO_PIN_SET)
-      debug_leds |= (1 << DBG_LED_CT_MAIN);
+      leds_set(1 << DBG_LED_CT_MAIN);
     else
-      debug_leds &= ~(1 << DBG_LED_CT_MAIN);
+      leds_clear(1 << DBG_LED_CT_MAIN);
 
     printf("{\"controller\":{");
     printf("\"power_offset\":%ld", power_offset);
@@ -645,13 +502,33 @@ void jsonTaskEntry(void *argument)
 /* USER CODE BEGIN Application */
 
 /**
+  * @brief  Function implementing the bridgeTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+void bridgeTaskEntry(void *argument)
+{
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
+
+  osDelay(3000);
+
+  /* Power Up ESP8266 */
+  HAL_GPIO_WritePin(ESP_EN_GPIO_Port, ESP_EN_Pin, GPIO_PIN_SET);
+
+  while (1)
+  {
+    osDelay(100);
+  }
+}
+
+/**
   * @brief  Used by modules to get the battery current (x10 V)
   * @param val Pointer to int32_t to receive the value
   * @retval 0: Success, otherwise Error value
   */
 int app_get_batt_voltage(int32_t *val)
 {
-  // ToDo: Hook this up to either a sensor (CCS2) or the Leaf Battery module
   if (HAL_OK == sensor_get_value(SENSOR_BATT_VOLTAGE, val))
     return 0;
 
@@ -665,7 +542,6 @@ int app_get_batt_voltage(int32_t *val)
   */
 int app_get_batt_current(int32_t *val)
 {
-  // ToDo: Hook this up to either a sensor (CCS2) or the Leaf Battery module
   if (HAL_OK == sensor_get_value(SENSOR_BATT_CURRENT, val))
     return 0;
 
@@ -690,110 +566,6 @@ int app_get_precharge_delta(uint32_t *val)
   *val = labs(batt_voltage - inv_voltage);
   return 0;
 }
-
-void hvGenTaskEntry(void *argument)
-{
-  /* Infinite loop */
-  for(;;)
-  {
-    /* Check HV Source Timeout */
-    if (hv_time != 0 && HAL_GetTick() - hv_time > HIGH_VOLTAGE_TIMEOUT)
-    {
-      app_process_cmd_hv((char*[]){"iso", "0"}, 2);
-      hv_time = 0;
-      printf("{\"controller\":[{\"hv_timeout\":1}]}\n");
-    }
-
-    /* HV Generator PWM - We only have feedback in ISO test mode */
-    if (hv_target != 0 && hv_time != 0)
-    {
-      int32_t batt_voltage = -1;
-      int32_t hv_current = -1;
-
-      sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
-      sensor_get_value(SENSOR_HV_TEST_CURRENT, &hv_current);
-
-      /* Calcuations based on dV, not V */
-      if (hv_current <= HV_DCDC_C || batt_voltage < 1000)
-        hv_iso_resistance = -1;
-      else
-      {
-        uint32_t p1 = 5 * (hv_current - HV_DCDC_C);
-        uint32_t p2 = HV_DCDC_M * p1 / 100 - HV_DCDC_N * p1 / 100000 * batt_voltage;
-        hv_iso_resistance = batt_voltage * batt_voltage * 10 / p2 - HV_DCDC_O;
-      }
-
-      /* Convert sensor value to volts (same as previous code) */
-      batt_voltage = batt_voltage / 10;
-
-
-      /* PID controller (integer fixed-point)
-         We assume a nominal sample time of HV_PID_SAMPLE_MS (100 ms). The scaled gains
-         are defined above as HV_PID_K*_SCALED. Calculation uses 64-bit intermediates.
-      */
-      uint32_t now = HAL_GetTick();
-      int32_t dt_ms = (hv_pid_last_time == 0) ? HV_PID_SAMPLE_MS : (int32_t)(now - hv_pid_last_time);
-      if (dt_ms < 1) dt_ms = 1;
-      if (dt_ms > HV_PID_SAMPLE_MS * 2) dt_ms = HV_PID_SAMPLE_MS; /* clamp unreasonable dt */
-
-      /* Error = target - measured (volts) */
-      int32_t error = (int32_t)hv_target - (int32_t)batt_voltage;
-
-      /* Integrate (accumulate error scaled by dt) and clamp to avoid windup */
-      hv_pid_integral += (error * dt_ms) / HV_PID_SAMPLE_MS;
-
-      /* Anti-windup: clamp integral to reasonable bounds */
-      if (hv_pid_integral > HV_PID_INTEGRAL_MAX) hv_pid_integral = HV_PID_INTEGRAL_MAX;
-      if (hv_pid_integral < -HV_PID_INTEGRAL_MAX) hv_pid_integral = -HV_PID_INTEGRAL_MAX;
-
-      /* Adjust Ki and Kd for actual dt (integer math) */
-      int32_t ki_adj = (int32_t)(((int64_t)HV_PID_KI_SCALED * dt_ms) / HV_PID_SAMPLE_MS);
-      int32_t kd_adj = (int32_t)(((int64_t)-HV_PID_KD_SCALED * HV_PID_SAMPLE_MS) / dt_ms);
-
-      /* Compute P, I, D terms using 64-bit intermediates then scale down */
-      int64_t p_term = (int64_t)HV_PID_KP_SCALED * (int64_t)error;
-      int64_t i_term = (int64_t)ki_adj * (int64_t)hv_pid_integral;
-      int64_t d_term = (int64_t)kd_adj * (int64_t)(error - hv_pid_prev_error);
-
-      int64_t pid_sum = p_term + i_term + d_term;
-      int32_t pid_out = (int32_t)(pid_sum / HV_PID_SCALE);
-
-      /* Limit change size */
-      if (pid_out > HV_PID_MAX_DELTA) pid_out = HV_PID_MAX_DELTA;
-      if (pid_out < -HV_PID_MAX_DELTA) pid_out = -HV_PID_MAX_DELTA;
-
-      /* Apply to hv_pwm and clamp */
-      int32_t new_pwm = (int32_t)((int32_t)hv_pwm + pid_out);
-      if (new_pwm > HV_PWM_MAX) new_pwm = HV_PWM_MAX;
-      if (new_pwm < HV_PWM_MIN) new_pwm = HV_PWM_MIN;
-      hv_pwm = (uint32_t)new_pwm;
-
-      /* Save state */
-      hv_pid_prev_error = error;
-      hv_pid_last_time = now;
-
-      /* Update timer compare (timer uses 0..HV_PWM_MAX scale) */
-      uint32_t ccr = hv_pwm * (htim1.Init.Period + 1) / HV_PWM_MAX;
-      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, ccr);
-
-      /* Telemetry: print PID state */
-      //printf("{\"hv_pid\":{\"error\":%ld,\"p_term\":%ld,\"i_term\":%ld,\"d_term\":%ld,\"pid_out\":%ld,\"hv_pwm\":%lu,\"batt_voltage\":%ld,\"hv_target\":%lu}}\n",
-      //        (long)error, (long)p_term, (long)i_term, (long)d_term, (long)pid_out, (unsigned long)hv_pwm, (long)batt_voltage, (unsigned long)hv_target);
-    }
-    else
-    {
-      hv_iso_resistance = -1;
-      hv_pwm = HV_PWM_DEFAULT;
-      /* Clear PID state when generator is not active so integrator doesn't accumulate */
-      hv_pid_integral = 0;
-      hv_pid_prev_error = 0;
-      hv_pid_last_time = 0;
-    }
-
-    osDelay(HV_PID_SAMPLE_MS);
-  }
-}
-
 
 /**
   * @brief  Trigger an update of the JSON output.
@@ -826,7 +598,7 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
       /* Enable the CP Line */
       /* This tells the EVSE to start charging (supply power) */
       HAL_GPIO_WritePin(EVSE_CHARGE_EN_GPIO_Port, EVSE_CHARGE_EN_Pin, GPIO_PIN_SET);
-      debug_leds |= (1 << DBG_LED_PP_INSERTED);
+      leds_set(1 << DBG_LED_PP_INSERTED);
     break;
 
     default:
@@ -843,7 +615,7 @@ static void pp_changed_cb(EVSE_PP pp, uint8_t current)
 #ifdef TARGET_CHADEMO
       chademo_stop(); /* Ensure ChaDeMo is stopped */
 #endif
-      debug_leds &= ~(1 << DBG_LED_PP_INSERTED);
+      leds_clear(1 << DBG_LED_PP_INSERTED);
     break;
   }
 
@@ -865,27 +637,27 @@ static void cp_changed_cb(EVSE_CP cp)
   {
     case EVSE_CP_A:
       solax_disable();
-      debug_leds &= ~(1 << DBG_LED_CP_READY);
-      debug_leds &= ~(1 << DBG_LED_CP_CHARGE);
+      leds_clear(1 << DBG_LED_CP_READY);
+      leds_clear(1 << DBG_LED_CP_CHARGE);
     break;
 
     case EVSE_CP_B:
       solax_set_output_power(0);
-      debug_leds |= (1 << DBG_LED_CP_READY);
-      debug_leds &= ~(1 << DBG_LED_CP_CHARGE);
+      leds_set(1 << DBG_LED_CP_READY);
+      leds_clear(1 << DBG_LED_CP_CHARGE);
     break;
 
     case EVSE_CP_C:
     case EVSE_CP_D:
-      debug_leds |= (1 << DBG_LED_CP_READY);
-      debug_leds |= (1 << DBG_LED_CP_CHARGE);
+      leds_set(1 << DBG_LED_CP_READY);
+      leds_set(1 << DBG_LED_CP_CHARGE);
     break;
 
     case EVSE_CP_ERROR:
       solax_set_output_power(0);
       solax_disable();
-      debug_leds |= (1 << DBG_LED_CP_READY);
-      debug_leds |= (1 << DBG_LED_CP_CHARGE);
+      leds_set(1 << DBG_LED_CP_READY);
+      leds_set(1 << DBG_LED_CP_CHARGE);
       flash_debug_leds |= (1 << DBG_LED_CP_READY);
       flash_debug_leds |= (1 << DBG_LED_CP_CHARGE);
     break;

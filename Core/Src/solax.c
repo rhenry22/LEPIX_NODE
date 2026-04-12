@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include "can.h"
+#include "leds.h"
 #include "sensor.h"
 #include "solax.h"
 #include "modbus.h"
@@ -783,8 +784,8 @@ void solaxModbusTask(void *argument)
       init_done = false;
 
       /* Clear the Inverter LEDs (Not present) */
-      debug_leds &= ~(1 << DBG_LED_STAT_RED_INV);
-      debug_leds &= ~(1 << DBG_LED_STAT_GREEN_INV);
+      leds_clear(1 << DBG_LED_STAT_RED_INV);
+      leds_clear(1 << DBG_LED_STAT_GREEN_INV);
 
       continue;
     }
@@ -851,14 +852,14 @@ void solaxModbusTask(void *argument)
 
     /* Set Inverter LEDs */
     if (inv_state > 0)
-      debug_leds |= (1 << DBG_LED_STAT_GREEN_INV);
+      leds_set(1 << DBG_LED_STAT_GREEN_INV);
     else
-      debug_leds &= ~(1 << DBG_LED_STAT_GREEN_INV);
+      leds_clear(1 << DBG_LED_STAT_GREEN_INV);
 
     if (solax_check_faults(inv_fault))
-      debug_leds |= (1 << DBG_LED_STAT_RED_INV);
+      leds_set(1 << DBG_LED_STAT_RED_INV);
     else
-      debug_leds &= ~(1 << DBG_LED_STAT_RED_INV);
+      leds_clear(1 << DBG_LED_STAT_RED_INV);
 
     if (ret == HAL_OK)
     {
