@@ -40,6 +40,7 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/adc.c \
+Core/Src/app.c \
 Core/Src/can.c \
 Core/Src/cmd.c \
 Core/Src/dma.c \

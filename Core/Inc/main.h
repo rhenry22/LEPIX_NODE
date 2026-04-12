@@ -66,11 +66,13 @@ void Error_Handler(void);
 void JumpToBootloader(void);
 bool cmd_init(void);
 void stdio_parser(uint8_t *ptr, uint16_t len);
-void trigger_json_update(void);
 void dump_packet(uint8_t *data, uint8_t len);
 
 int app_process_cmd_ctrl(char **args, int argc);
 
+void app_trigger_json_update(void);
+bool app_init(void);
+void app_main(void);
 int app_get_batt_voltage(int32_t *val);
 int app_get_batt_current(int32_t *val);
 int app_get_precharge_delta(uint32_t *val);

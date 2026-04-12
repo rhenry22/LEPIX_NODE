@@ -270,7 +270,7 @@ int evse_process_cmd(char **args, int argc)
   }
   else if (argc >= 1 && 0 == strcmp(args[0], "get"))
   {
-    trigger_json_update();
+    app_trigger_json_update();
     ret = 0;
   }
   return ret;

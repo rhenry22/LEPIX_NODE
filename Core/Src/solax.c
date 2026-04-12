@@ -590,7 +590,7 @@ static HAL_StatusTypeDef solax_update_state(void)
   }
 
   if (s != bms_state)
-    trigger_json_update();
+    app_trigger_json_update();
 
   return ret;
 }

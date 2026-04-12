@@ -93,9 +93,9 @@ static const cmd_entry_t cmd_table[] = {
     { "flash", process_cmd_flash },
     { "espbridge", process_cmd_esp },
     { "evse", evse_process_cmd },
+    { "solax", solax_process_cmd },
     { "ctrl", app_process_cmd_ctrl },
     //{ "batt", batt_process_cmd },
-    { "solax", solax_process_cmd },
 };
 
 /**
