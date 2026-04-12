@@ -212,7 +212,6 @@ static bool k_perm = false;                 /* Vehicle Charge permission state (
 static bool cp_ready = false;               /* Is the car plugged in? */
 
 static uint32_t state_time = 0;             /* Time that the last state transition happened */
-static uint32_t error_time = 0;             /* Timer to flash LED on error */
 
 static bool errored = false;                /* If we hit any errors, prevent starting again */
 static char last_error[ERROR_LEN+1] = {0};  /* Last error string */
@@ -285,7 +284,9 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
 
       /* Unlock connector */
       HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(LED_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
+
+      /* Turn off the EV LED */
+      debug_leds &= ~(1 << DBG_LED_STAT_GREEN_EV);
 
       /* Let the vehicle know we're unlocked */
       can_data.charger.msgid_109.fault_status &= ~MSG109_CONN_LOCK;
@@ -334,7 +335,9 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       {
         /* Lock the connector */
         HAL_GPIO_WritePin(CHADEMO_LOCK_GPIO_Port, CHADEMO_LOCK_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(LED_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+
+        /* Turn on the EV LED */
+        debug_leds |= (1 << DBG_LED_STAT_GREEN_EV);
 
         can_data.charger.msgid_109.fault_status |= MSG109_CONN_LOCK;
 
@@ -1024,14 +1027,12 @@ void chademo_process(void)
     }
   }
 
-  /* We're errored. Flash the ChaDeMo LED */
+  /* Check if we're errored */
   if (errored)
   {
-    if (HAL_GetTick() > error_time + 500)
-    {
-      error_time = HAL_GetTick();
-      HAL_GPIO_TogglePin(LED_GPIO_Port, LED3_Pin);
-    }
+    /* Green EV LED Off, Red LED On */
+    debug_leds &= ~(1 << DBG_LED_STAT_GREEN_EV);
+    debug_leds |= (1 << DBG_LED_STAT_RED_EV);
   }
 
   /* Check that we are receiving regular CAN messages from ChaDeMo */

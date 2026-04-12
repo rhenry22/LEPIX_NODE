@@ -87,7 +87,7 @@ void solax_kick(void);
 void solax_enable(void);
 void solax_disable(void);
 
-bool solax_check_faults(uint32_t *faults);
+bool solax_check_faults(uint16_t *faults);
 
 void solax_set_output_power(int16_t power);
 

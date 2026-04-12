@@ -779,6 +779,11 @@ void solaxModbusTask(void *argument)
       /* Without ModBus, we can't set the inverter power or read faults */
       inv_state = -ret;
       init_done = false;
+
+      /* Clear the Inverter LEDs (Not present) */
+      debug_leds &= ~(1 << DBG_LED_STAT_RED_INV);
+      debug_leds &= ~(1 << DBG_LED_STAT_GREEN_INV);
+
       continue;
     }
 
@@ -841,6 +846,17 @@ void solaxModbusTask(void *argument)
     {
       inv_state = 0;
     }
+
+    /* Set Inverter LEDs */
+    if (inv_state > 0)
+      debug_leds |= (1 << DBG_LED_STAT_GREEN_INV);
+    else
+      debug_leds &= ~(1 << DBG_LED_STAT_GREEN_INV);
+
+    if (solax_check_faults(inv_fault))
+      debug_leds |= (1 << DBG_LED_STAT_RED_INV);
+    else
+      debug_leds &= ~(1 << DBG_LED_STAT_RED_INV);
 
     if (ret == HAL_OK)
     {
@@ -927,10 +943,10 @@ void solax_set_output_power(int16_t power)
 /**
   * @brief  Read any faults from the inverter and make a call
   *         on any dangerous ones
-  * @param  faults 32-bit storage of fault 1 and fault 2 registers
+  * @param  faults 16-bit storage of fault 1 and fault 2 registers
   * @retval bool True: Dangerous Fault(s) detected
   */
-bool solax_check_faults(uint32_t *faults)
+bool solax_check_faults(uint16_t *faults)
 {
   bool ret = false;
 
