@@ -11,8 +11,8 @@ typedef enum
   SENSOR_ACC_VOLTAGE,       /* Voltage from 12V supply (mV) */
   SENSOR_HV_TEST_CURRENT,   /* Current into HV DCDC Test module (uA) */
   SENSOR_BATT_VOLTAGE,      /* HV Battery Voltage (V x10) */
+  SENSOR_BATT_CURRENT,      /* HV Battery Current (A x10) */
   SENSOR_INV_VOLTAGE,       /* HV Inverter Voltage (V x10) */
-  SENSOR_INV_CURRENT,       /* HV Inverter Battery Current (A x10) */
   SENSOR_EVSE_PP,           /* EVSE PP Voltage (mV) */
   SENSOR_CP,                /* CCS2 CP Voltage (mV) */
   SENSOR_MAX

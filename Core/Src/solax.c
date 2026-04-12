@@ -386,15 +386,17 @@ static HAL_StatusTypeDef solax_send_standard_response(void)
 
 static HAL_StatusTypeDef solax_update_values(void)
 {
-  HAL_StatusTypeDef ret = HAL_ERROR;
+  HAL_StatusTypeDef ret = HAL_OK;
 
   int32_t voltage = -1;  /* Battery Voltage (x10 V) */
   int32_t current = -1;  /* Battery Current (x10 A) */
 
   /* Update Measured Values */
-  ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &voltage);
-  if (ret == HAL_OK)
-    ret =  sensor_get_value(SENSOR_INV_CURRENT, &current);
+  if (ret == HAL_OK && app_get_batt_voltage(&voltage) != 0)
+    ret = HAL_ERROR;
+
+  if (ret == HAL_OK && app_get_batt_current(&current) != 0)
+    ret = HAL_ERROR;
 
   /* BMS_PackData */
   solax_data.bms.msg_1873.voltage = voltage;
@@ -455,16 +457,17 @@ static HAL_StatusTypeDef solax_update_values(void)
 
 static HAL_StatusTypeDef solax_update_state(void)
 {
-  HAL_StatusTypeDef ret = HAL_ERROR;
+  HAL_StatusTypeDef ret = HAL_OK;
   BMS_STATE s = bms_state;
 
   int32_t batt_voltage = 0;  /* Battery Voltage (x10 V) */
-  int32_t inv_voltage = 0;  /* Inverter Voltage (x10 V) */
 
   /* Update Measured Values */
-  ret = sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage);
-  if (ret == HAL_OK)
-    ret = sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage);
+  if (ret == HAL_OK && app_get_batt_voltage(&batt_voltage) != 0)
+    ret = HAL_ERROR;
+
+  if (ret == HAL_OK && app_get_precharge_delta(&precharge_delta) != 0)
+    ret = HAL_ERROR;
 
   if (ret == HAL_OK)
   {
@@ -508,18 +511,17 @@ static HAL_StatusTypeDef solax_update_state(void)
 
       case SOLAX_CONTACTOR_PRECHARGE:
       {
-        precharge_delta = labs(batt_voltage - inv_voltage);
         /* Check that we're outputting a sensible voltage */
         if (precharge_delta < SOLAX_PRECHARGE_DELTA_MAX)
         {
           /* Tell the inverter we're on */
           solax_data.bms.msg_1875.contactor = 2;
 
-          /* Close Main contactor */
-          HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_SET);
-
           if (HAL_GetTick() - precharge_start > SOLAX_MIN_PRECHARGE_TIME)
           {
+            /* Close Main contactor */
+            HAL_GPIO_WritePin(CTMAIN_EN_GPIO_Port, CTMAIN_EN_Pin, GPIO_PIN_SET);
+
 #ifndef DEBUG_SOLAX
             /* The contactors cause our current measurement to offset. */
             ret = sensor_zero_ibatt();
@@ -540,8 +542,8 @@ static HAL_StatusTypeDef solax_update_state(void)
         {
           solax_open_contactors();
           contactor_close = false;
-          snprintf(last_error, ERROR_LEN, "Precharge failed to stabilise within %ds (%ld, %ld).",
-                                          SOLAX_PRECHARGE_TIMEOUT/1000, inv_voltage, batt_voltage);
+          snprintf(last_error, ERROR_LEN, "Precharge failed to stabilise within %ds (dV %ld).",
+                                          SOLAX_PRECHARGE_TIMEOUT/1000, precharge_delta);
           precharge_start = 0;
 
           bms_state = SOLAX_FAULT;
@@ -1116,7 +1118,6 @@ int solax_process_cmd(char **args, int argc)
         bstart = false;
         last_update = 0;
     }
-
   }
   else
   {

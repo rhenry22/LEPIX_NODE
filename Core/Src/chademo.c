@@ -593,7 +593,7 @@ HAL_StatusTypeDef chademo_send_messages(void)
   if (ret != HAL_OK)
     return ret;
 
-  ret = sensor_get_value(SENSOR_INV_CURRENT, &measured_current);
+  ret = sensor_get_value(SENSOR_BATT_CURRENT, &measured_current);
   if (ret != HAL_OK)
     return ret;
 

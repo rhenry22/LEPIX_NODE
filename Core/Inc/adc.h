@@ -51,9 +51,9 @@ void MX_ADC2_Init(void);
 
 HAL_StatusTypeDef MX_ADC1_Get_Sample(uint8_t channel, uint16_t *val);
 HAL_StatusTypeDef MX_ADC1_Get_Sample_Avg(uint8_t channel, uint16_t *val);
-
+#ifdef TARGET_CCS2
 HAL_StatusTypeDef MX_ADC2_Get_Sample_Avgs(uint8_t channel, uint16_t *val_high, uint16_t *val_low);
-
+#endif
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

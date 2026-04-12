@@ -106,6 +106,9 @@ int app_process_cmd_power(char **args, int argc);
 int app_process_cmd_hv(char **args, int argc);
 int app_process_cmd_leds(char **args, int argc);
 
+int app_get_batt_voltage(int32_t *val);
+int app_get_batt_current(int32_t *val);
+int app_get_precharge_delta(uint32_t *val);
 
 /* USER CODE END EFP */
 

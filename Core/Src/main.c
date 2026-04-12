@@ -106,9 +106,9 @@ int main(void)
   MX_CAN1_Init();
   MX_CAN2_Init();
   MX_ADC1_Init();
-  #ifdef TARGET_CCS2
+#ifdef TARGET_CCS2
   MX_ADC2_Init();
-  #endif
+#endif
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_TIM1_Init();

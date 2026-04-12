@@ -200,7 +200,7 @@ HAL_StatusTypeDef sensor_get_value(SENSOR_SOURCE src, int32_t *val)
     break;
 #endif
 
-    case SENSOR_INV_CURRENT: /* A x10 */
+    case SENSOR_BATT_CURRENT: /* A x10 */
     {
       uint16_t tmp;
       ret = MX_ADC1_Get_Sample_Avg(ADC_BATT_CURR, &tmp);

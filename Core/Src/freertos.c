@@ -542,8 +542,8 @@ void jsonTaskEntry(void *argument)
     int32_t acc_voltage;
     int32_t hv_current;
     int32_t batt_voltage;
+    int32_t batt_current;
     int32_t inv_voltage;
-    int32_t inv_current;
     uint32_t err = 0;
 
     if (HAL_OK != sensor_get_value(SENSOR_ACC_CURRENT, &acc_current))
@@ -557,11 +557,11 @@ void jsonTaskEntry(void *argument)
 
     if (HAL_OK != sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage))
       err |= 1 << SENSOR_BATT_VOLTAGE;
+    if (HAL_OK != sensor_get_value(SENSOR_BATT_CURRENT, &batt_current))
+      err |= 1 << SENSOR_BATT_CURRENT;
+
     if (HAL_OK != sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage))
       err |= 1 << SENSOR_INV_VOLTAGE;
-    if (HAL_OK != sensor_get_value(SENSOR_INV_CURRENT, &inv_current))
-      err |= 1 << SENSOR_INV_CURRENT;
-
 
     // ToDo: Gather metrics and set thresholds from a working system
 #if 0
@@ -623,8 +623,8 @@ void jsonTaskEntry(void *argument)
     printf("\"status\":%ld", err);
     printf(",\"acc\":{\"v\":%ld, \"i\":%ld}", acc_voltage, acc_current);
     printf(",\"hv_iso\":{\"i\":%ld, \"r\":%ld}", hv_current, hv_iso_resistance);
-    printf(",\"battery\":{\"v\":%ld}", batt_voltage / 10);
-    printf(",\"inverter\":{\"v\":%ld, \"i\":%ld, \"dv\":%ld}", inv_voltage / 10, inv_current / 10, labs(batt_voltage - inv_voltage));
+    printf(",\"battery\":{\"v\":%ld, \"i\":%ld}", batt_voltage / 10, batt_current / 10);
+    printf(",\"inverter\":{\"v\":%ld, \"dv\":%ld}", inv_voltage / 10, labs(batt_voltage - inv_voltage));
 
     printf("}\n{");
     evse_json_update();
@@ -643,6 +643,53 @@ void jsonTaskEntry(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+
+/**
+  * @brief  Used by modules to get the battery current (x10 V)
+  * @param val Pointer to int32_t to receive the value
+  * @retval 0: Success, otherwise Error value
+  */
+int app_get_batt_voltage(int32_t *val)
+{
+  // ToDo: Hook this up to either a sensor (CCS2) or the Leaf Battery module
+  if (HAL_OK == sensor_get_value(SENSOR_BATT_VOLTAGE, val))
+    return 0;
+
+  return -1;
+}
+
+/**
+  * @brief  Used by modules to get the battery current (x10 A)
+  * @param val Pointer to int32_t to receive the value
+  * @retval 0: Success, otherwise Error value
+  */
+int app_get_batt_current(int32_t *val)
+{
+  // ToDo: Hook this up to either a sensor (CCS2) or the Leaf Battery module
+  if (HAL_OK == sensor_get_value(SENSOR_BATT_CURRENT, val))
+    return 0;
+
+  return -1;
+}
+
+/**
+  * @brief  Used by modules to get the delta between battery and inverter voltages (x10 V)
+  * @param val Pointer to int32_t to receive the value
+  * @retval 0: Success, otherwise Error value
+  */
+int app_get_precharge_delta(uint32_t *val)
+{
+  int32_t batt_voltage;
+  int32_t inv_voltage;
+
+  if (HAL_OK != sensor_get_value(SENSOR_BATT_VOLTAGE, &batt_voltage))
+    return -1;
+  if (HAL_OK != sensor_get_value(SENSOR_INV_VOLTAGE, &inv_voltage))
+    return -1;
+
+  *val = labs(batt_voltage - inv_voltage);
+  return 0;
+}
 
 void hvGenTaskEntry(void *argument)
 {
