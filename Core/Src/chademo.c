@@ -41,12 +41,6 @@
 
 /* #define DEBUG_CHADEMO */
 
-/*
- * Leakage is monitored by the Inverter and we will cause problems if done in
- * multiple places
- */
-/* #define LEAK_TEST */
-
 #define MESSAGE_INTERVAL      (100)
 
 #define DEBOUNCE_TIME         (50)
@@ -56,7 +50,7 @@
 
 #define STOP_CURRENT          (5)    /* Spec is 5A, but using 0.5A (x10) */
 #define ISOLATION_MIN_RES     (500)  /* 500kOhm */
-#define LEAK_TEST_TIME        (1000)  /* Between 200ms and 1000ms */
+#define ISOLATION_TEST_TIME   (1000)  /* Between 200ms and 1000ms */
 #define ISOLATION_MIN_VOLTAGE (3500)
 #define DEFAULT_MIN_SOC       (SOLAX_MINIMUM_SOC)
 #define ACC_CURRENT_MAX       (800 * 1000)  /* 800mA */
@@ -280,7 +274,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     case CHADEMO_STATE_OFF:
       /* These should already be off, but can be used as an emergency stop */
       hvgen_iso_test_enable(false, 0);
-      HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ2_GPIO_Port, CHADEMO_SEQ2_Pin, GPIO_PIN_RESET);
       HAL_GPIO_WritePin(CHADEMO_SEQ1_GPIO_Port, CHADEMO_SEQ1_Pin, GPIO_PIN_RESET);
 
@@ -349,17 +342,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
     }
     break;
 
-    case CHADEMO_STATE_INS_TEST_BASE:
-    {
-#ifdef LEAK_TEST
-        /* Start Earth Leakage Test */
-        HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_SET);
-
-        // Isolation testing implemented. Rely on Inverter for leakage detection
-#endif
-    }
-    break;
-
     case CHADEMO_STATE_INS_TEST:
     {
       int32_t acc_current;  /* 12V ACC Current in uA */
@@ -372,13 +354,8 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       /* Check that HV Test current is below threshold */
       if (ret != HAL_OK || hv_iso_resistance < ISOLATION_MIN_RES)
       {
-#ifdef LEAK_TEST
-        snprintf(last_error, ERROR_LEN,
-                 "Earth leakage test failed (%ld uA).", hv_current - leak_base);
-#else
         snprintf(last_error, ERROR_LEN,
                  "Isolation test failed (%ld kOhm at %ld V).", hv_iso_resistance, measured_voltage / 10);
-#endif
         new_state = CHADEMO_STATE_ERROR;
       }
       /* Check that we are able to bring up the HV Test voltage */
@@ -405,7 +382,6 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       }
 
       /* Disable HV Test */
-      HAL_GPIO_WritePin(LEAK_TEST_EN_GPIO_Port, LEAK_TEST_EN_Pin, GPIO_PIN_RESET);
       hvgen_iso_test_enable(false, 0);
     }
     break;
@@ -425,6 +401,7 @@ static void chademo_transition_state(CHADEMO_STATE new_state)
       can_data.charger.msgid_109.fault_status |= MSG109_CHG_STOPPED;
     break;
 
+    case CHADEMO_STATE_INS_TEST_BASE:
     case CHADEMO_STATE_BATT_CHECK:
     case CHADEMO_STATE_WELD_CHECK:
     case CHADEMO_STATE_WAIT_K_OFF:
@@ -826,13 +803,13 @@ void chademo_process(void)
 
     /* Vehicle Permission granted, HV turned on, waiting to settle */
     case CHADEMO_STATE_PERM_OK:
-      if (HAL_GetTick() > state_time + LEAK_TEST_TIME)
+      if (HAL_GetTick() > state_time + ISOLATION_TEST_TIME)
         chademo_transition_state(CHADEMO_STATE_INS_TEST_BASE);
     break;
 
-    /* Leak Test Started, waiting for result */
+    /* Isolation Test Started, waiting for result */
     case CHADEMO_STATE_INS_TEST_BASE:
-      if (HAL_GetTick() > state_time + LEAK_TEST_TIME)
+      if (HAL_GetTick() > state_time + ISOLATION_TEST_TIME)
         chademo_transition_state(CHADEMO_STATE_INS_TEST);
     break;
 

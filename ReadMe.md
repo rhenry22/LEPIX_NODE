@@ -39,6 +39,10 @@ solax           : Solax / FoxESS Inverter Settings
   dc_tgt_v <voltage>  : Set the target battery voltage in V x10
   soc <SoC>           : Set the battery SoC in %
   enable <enable>     : Enable / Disable the Solax BMS emulation
+
+chademo         : Control ChaDeMo
+  start               : Start a session
+  stop                : Stop a settion
 ```
 ## JSON
 ```
