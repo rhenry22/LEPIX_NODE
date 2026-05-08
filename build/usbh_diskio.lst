@@ -1,0 +1,1125 @@
+ARM GAS  /tmp/cc6xNi5E.s 			page 1
+
+
+   1              		.cpu cortex-m4
+   2              		.arch armv7e-m
+   3              		.fpu fpv4-sp-d16
+   4              		.eabi_attribute 27, 1
+   5              		.eabi_attribute 28, 1
+   6              		.eabi_attribute 20, 1
+   7              		.eabi_attribute 21, 1
+   8              		.eabi_attribute 23, 3
+   9              		.eabi_attribute 24, 1
+  10              		.eabi_attribute 25, 1
+  11              		.eabi_attribute 26, 1
+  12              		.eabi_attribute 30, 1
+  13              		.eabi_attribute 34, 1
+  14              		.eabi_attribute 18, 4
+  15              		.file	"usbh_diskio.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.file 1 "FATFS/Target/usbh_diskio.c"
+  20              		.section	.text.USBH_initialize,"ax",%progbits
+  21              		.align	1
+  22              		.global	USBH_initialize
+  23              		.syntax unified
+  24              		.thumb
+  25              		.thumb_func
+  27              	USBH_initialize:
+  28              	.LVL0:
+  29              	.LFB133:
+   1:FATFS/Target/usbh_diskio.c **** /* USER CODE BEGIN Header */
+   2:FATFS/Target/usbh_diskio.c **** /**
+   3:FATFS/Target/usbh_diskio.c ****   ******************************************************************************
+   4:FATFS/Target/usbh_diskio.c ****   * @file    usbh_diskio.c (based on usbh_diskio_dma_template.c v2.0.2)
+   5:FATFS/Target/usbh_diskio.c ****   * @brief   USB Host Disk I/O driver
+   6:FATFS/Target/usbh_diskio.c ****   ******************************************************************************
+   7:FATFS/Target/usbh_diskio.c ****   * @attention
+   8:FATFS/Target/usbh_diskio.c ****   *
+   9:FATFS/Target/usbh_diskio.c ****   * Copyright (c) 2023 STMicroelectronics.
+  10:FATFS/Target/usbh_diskio.c ****   * All rights reserved.
+  11:FATFS/Target/usbh_diskio.c ****   *
+  12:FATFS/Target/usbh_diskio.c ****   * This software is licensed under terms that can be found in the LICENSE file
+  13:FATFS/Target/usbh_diskio.c ****   * in the root directory of this software component.
+  14:FATFS/Target/usbh_diskio.c ****   * If no LICENSE file comes with this software, it is provided AS-IS.
+  15:FATFS/Target/usbh_diskio.c ****   *
+  16:FATFS/Target/usbh_diskio.c ****   ******************************************************************************
+  17:FATFS/Target/usbh_diskio.c ****   */
+  18:FATFS/Target/usbh_diskio.c **** /* USER CODE END Header */
+  19:FATFS/Target/usbh_diskio.c **** /* USER CODE BEGIN firstSection */
+  20:FATFS/Target/usbh_diskio.c **** /* can be used to modify / undefine following code or add new definitions */
+  21:FATFS/Target/usbh_diskio.c **** /* USER CODE END firstSection */
+  22:FATFS/Target/usbh_diskio.c **** 
+  23:FATFS/Target/usbh_diskio.c **** /* Includes ------------------------------------------------------------------*/
+  24:FATFS/Target/usbh_diskio.c **** #include "ff_gen_drv.h"
+  25:FATFS/Target/usbh_diskio.c **** #include "usbh_diskio.h"
+  26:FATFS/Target/usbh_diskio.c **** 
+  27:FATFS/Target/usbh_diskio.c **** /* Private typedef -----------------------------------------------------------*/
+  28:FATFS/Target/usbh_diskio.c **** /* Private define ------------------------------------------------------------*/
+  29:FATFS/Target/usbh_diskio.c **** 
+ARM GAS  /tmp/cc6xNi5E.s 			page 2
+
+
+  30:FATFS/Target/usbh_diskio.c **** #define USB_DEFAULT_BLOCK_SIZE 512
+  31:FATFS/Target/usbh_diskio.c **** 
+  32:FATFS/Target/usbh_diskio.c **** /* Private variables ---------------------------------------------------------*/
+  33:FATFS/Target/usbh_diskio.c **** static DWORD scratch[_MAX_SS / 4];
+  34:FATFS/Target/usbh_diskio.c **** extern USBH_HandleTypeDef  hUSB_Host;
+  35:FATFS/Target/usbh_diskio.c **** 
+  36:FATFS/Target/usbh_diskio.c **** /* Private function prototypes -----------------------------------------------*/
+  37:FATFS/Target/usbh_diskio.c **** DSTATUS USBH_initialize (BYTE);
+  38:FATFS/Target/usbh_diskio.c **** DSTATUS USBH_status (BYTE);
+  39:FATFS/Target/usbh_diskio.c **** DRESULT USBH_read (BYTE, BYTE*, DWORD, UINT);
+  40:FATFS/Target/usbh_diskio.c **** 
+  41:FATFS/Target/usbh_diskio.c **** #if _USE_WRITE == 1
+  42:FATFS/Target/usbh_diskio.c ****   DRESULT USBH_write (BYTE, const BYTE*, DWORD, UINT);
+  43:FATFS/Target/usbh_diskio.c **** #endif /* _USE_WRITE == 1 */
+  44:FATFS/Target/usbh_diskio.c **** 
+  45:FATFS/Target/usbh_diskio.c **** #if _USE_IOCTL == 1
+  46:FATFS/Target/usbh_diskio.c ****   DRESULT USBH_ioctl (BYTE, BYTE, void*);
+  47:FATFS/Target/usbh_diskio.c **** #endif /* _USE_IOCTL == 1 */
+  48:FATFS/Target/usbh_diskio.c **** 
+  49:FATFS/Target/usbh_diskio.c **** const Diskio_drvTypeDef  USBH_Driver =
+  50:FATFS/Target/usbh_diskio.c **** {
+  51:FATFS/Target/usbh_diskio.c ****   USBH_initialize,
+  52:FATFS/Target/usbh_diskio.c ****   USBH_status,
+  53:FATFS/Target/usbh_diskio.c ****   USBH_read,
+  54:FATFS/Target/usbh_diskio.c **** #if  _USE_WRITE == 1
+  55:FATFS/Target/usbh_diskio.c ****   USBH_write,
+  56:FATFS/Target/usbh_diskio.c **** #endif /* _USE_WRITE == 1 */
+  57:FATFS/Target/usbh_diskio.c **** #if  _USE_IOCTL == 1
+  58:FATFS/Target/usbh_diskio.c ****   USBH_ioctl,
+  59:FATFS/Target/usbh_diskio.c **** #endif /* _USE_IOCTL == 1 */
+  60:FATFS/Target/usbh_diskio.c **** };
+  61:FATFS/Target/usbh_diskio.c **** 
+  62:FATFS/Target/usbh_diskio.c **** /* USER CODE BEGIN beforeFunctionSection */
+  63:FATFS/Target/usbh_diskio.c **** /* can be used to modify / undefine following code or add new code */
+  64:FATFS/Target/usbh_diskio.c **** /* USER CODE END beforeFunctionSection */
+  65:FATFS/Target/usbh_diskio.c **** 
+  66:FATFS/Target/usbh_diskio.c **** /* Private functions ---------------------------------------------------------*/
+  67:FATFS/Target/usbh_diskio.c **** 
+  68:FATFS/Target/usbh_diskio.c **** /**
+  69:FATFS/Target/usbh_diskio.c ****   * @brief  Initializes a Drive
+  70:FATFS/Target/usbh_diskio.c ****   * @param  lun : lun id
+  71:FATFS/Target/usbh_diskio.c ****   * @retval DSTATUS: Operation status
+  72:FATFS/Target/usbh_diskio.c ****   */
+  73:FATFS/Target/usbh_diskio.c **** DSTATUS USBH_initialize(BYTE lun)
+  74:FATFS/Target/usbh_diskio.c **** {
+  30              		.loc 1 74 1 view -0
+  31              		.cfi_startproc
+  32              		@ args = 0, pretend = 0, frame = 0
+  33              		@ frame_needed = 0, uses_anonymous_args = 0
+  34              		@ link register save eliminated.
+  75:FATFS/Target/usbh_diskio.c ****   /* CAUTION : USB Host library has to be initialized in the application */
+  76:FATFS/Target/usbh_diskio.c **** 
+  77:FATFS/Target/usbh_diskio.c ****   return RES_OK;
+  35              		.loc 1 77 3 view .LVU1
+  78:FATFS/Target/usbh_diskio.c **** }
+  36              		.loc 1 78 1 is_stmt 0 view .LVU2
+  37 0000 0020     		movs	r0, #0
+ARM GAS  /tmp/cc6xNi5E.s 			page 3
+
+
+  38              	.LVL1:
+  39              		.loc 1 78 1 view .LVU3
+  40 0002 7047     		bx	lr
+  41              		.cfi_endproc
+  42              	.LFE133:
+  44              		.section	.text.USBH_status,"ax",%progbits
+  45              		.align	1
+  46              		.global	USBH_status
+  47              		.syntax unified
+  48              		.thumb
+  49              		.thumb_func
+  51              	USBH_status:
+  52              	.LVL2:
+  53              	.LFB134:
+  79:FATFS/Target/usbh_diskio.c **** 
+  80:FATFS/Target/usbh_diskio.c **** /**
+  81:FATFS/Target/usbh_diskio.c ****   * @brief  Gets Disk Status
+  82:FATFS/Target/usbh_diskio.c ****   * @param  lun : lun id
+  83:FATFS/Target/usbh_diskio.c ****   * @retval DSTATUS: Operation status
+  84:FATFS/Target/usbh_diskio.c ****   */
+  85:FATFS/Target/usbh_diskio.c **** DSTATUS USBH_status(BYTE lun)
+  86:FATFS/Target/usbh_diskio.c **** {
+  54              		.loc 1 86 1 is_stmt 1 view -0
+  55              		.cfi_startproc
+  56              		@ args = 0, pretend = 0, frame = 0
+  57              		@ frame_needed = 0, uses_anonymous_args = 0
+  58              		.loc 1 86 1 is_stmt 0 view .LVU5
+  59 0000 08B5     		push	{r3, lr}
+  60              	.LCFI0:
+  61              		.cfi_def_cfa_offset 8
+  62              		.cfi_offset 3, -8
+  63              		.cfi_offset 14, -4
+  64 0002 0146     		mov	r1, r0
+  87:FATFS/Target/usbh_diskio.c ****   DRESULT res = RES_ERROR;
+  65              		.loc 1 87 3 is_stmt 1 view .LVU6
+  66              	.LVL3:
+  88:FATFS/Target/usbh_diskio.c **** 
+  89:FATFS/Target/usbh_diskio.c ****   if(USBH_MSC_UnitIsReady(&hUSB_Host, lun))
+  67              		.loc 1 89 3 view .LVU7
+  68              		.loc 1 89 6 is_stmt 0 view .LVU8
+  69 0004 0348     		ldr	r0, .L6
+  70              	.LVL4:
+  71              		.loc 1 89 6 view .LVU9
+  72 0006 FFF7FEFF 		bl	USBH_MSC_UnitIsReady
+  73              	.LVL5:
+  74              		.loc 1 89 5 discriminator 1 view .LVU10
+  75 000a 08B1     		cbz	r0, .L4
+  90:FATFS/Target/usbh_diskio.c ****   {
+  91:FATFS/Target/usbh_diskio.c ****     res = RES_OK;
+  76              		.loc 1 91 9 view .LVU11
+  77 000c 0020     		movs	r0, #0
+  78              	.L3:
+  79              	.LVL6:
+  92:FATFS/Target/usbh_diskio.c ****   }
+  93:FATFS/Target/usbh_diskio.c ****   else
+  94:FATFS/Target/usbh_diskio.c ****   {
+  95:FATFS/Target/usbh_diskio.c ****     res = RES_ERROR;
+ARM GAS  /tmp/cc6xNi5E.s 			page 4
+
+
+  96:FATFS/Target/usbh_diskio.c ****   }
+  97:FATFS/Target/usbh_diskio.c **** 
+  98:FATFS/Target/usbh_diskio.c ****   return res;
+  80              		.loc 1 98 3 is_stmt 1 view .LVU12
+  99:FATFS/Target/usbh_diskio.c **** }
+  81              		.loc 1 99 1 is_stmt 0 view .LVU13
+  82 000e 08BD     		pop	{r3, pc}
+  83              	.LVL7:
+  84              	.L4:
+  95:FATFS/Target/usbh_diskio.c ****   }
+  85              		.loc 1 95 9 view .LVU14
+  86 0010 0120     		movs	r0, #1
+  87 0012 FCE7     		b	.L3
+  88              	.L7:
+  89              		.align	2
+  90              	.L6:
+  91 0014 00000000 		.word	hUsbHostHS
+  92              		.cfi_endproc
+  93              	.LFE134:
+  95              		.section	.text.USBH_read,"ax",%progbits
+  96              		.align	1
+  97              		.global	USBH_read
+  98              		.syntax unified
+  99              		.thumb
+ 100              		.thumb_func
+ 102              	USBH_read:
+ 103              	.LVL8:
+ 104              	.LFB135:
+ 100:FATFS/Target/usbh_diskio.c **** 
+ 101:FATFS/Target/usbh_diskio.c **** /* USER CODE BEGIN beforeReadSection */
+ 102:FATFS/Target/usbh_diskio.c **** /* can be used to modify previous code / undefine following code / add new code */
+ 103:FATFS/Target/usbh_diskio.c **** /* USER CODE END beforeReadSection */
+ 104:FATFS/Target/usbh_diskio.c **** 
+ 105:FATFS/Target/usbh_diskio.c **** /**
+ 106:FATFS/Target/usbh_diskio.c ****   * @brief  Reads Sector(s)
+ 107:FATFS/Target/usbh_diskio.c ****   * @param  lun : lun id
+ 108:FATFS/Target/usbh_diskio.c ****   * @param  *buff: Data buffer to store read data
+ 109:FATFS/Target/usbh_diskio.c ****   * @param  sector: Sector address (LBA)
+ 110:FATFS/Target/usbh_diskio.c ****   * @param  count: Number of sectors to read (1..128)
+ 111:FATFS/Target/usbh_diskio.c ****   * @retval DRESULT: Operation result
+ 112:FATFS/Target/usbh_diskio.c ****   */
+ 113:FATFS/Target/usbh_diskio.c **** DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
+ 114:FATFS/Target/usbh_diskio.c **** {
+ 105              		.loc 1 114 1 is_stmt 1 view -0
+ 106              		.cfi_startproc
+ 107              		@ args = 0, pretend = 0, frame = 56
+ 108              		@ frame_needed = 0, uses_anonymous_args = 0
+ 109              		.loc 1 114 1 is_stmt 0 view .LVU16
+ 110 0000 2DE9F041 		push	{r4, r5, r6, r7, r8, lr}
+ 111              	.LCFI1:
+ 112              		.cfi_def_cfa_offset 24
+ 113              		.cfi_offset 4, -24
+ 114              		.cfi_offset 5, -20
+ 115              		.cfi_offset 6, -16
+ 116              		.cfi_offset 7, -12
+ 117              		.cfi_offset 8, -8
+ 118              		.cfi_offset 14, -4
+ARM GAS  /tmp/cc6xNi5E.s 			page 5
+
+
+ 119 0004 90B0     		sub	sp, sp, #64
+ 120              	.LCFI2:
+ 121              		.cfi_def_cfa_offset 88
+ 122 0006 0746     		mov	r7, r0
+ 123 0008 0E46     		mov	r6, r1
+ 124 000a 9046     		mov	r8, r2
+ 115:FATFS/Target/usbh_diskio.c ****   DRESULT res = RES_ERROR;
+ 125              		.loc 1 115 3 is_stmt 1 view .LVU17
+ 126              	.LVL9:
+ 116:FATFS/Target/usbh_diskio.c ****   MSC_LUNTypeDef info;
+ 127              		.loc 1 116 3 view .LVU18
+ 117:FATFS/Target/usbh_diskio.c ****   USBH_StatusTypeDef  status = USBH_OK;
+ 128              		.loc 1 117 3 view .LVU19
+ 118:FATFS/Target/usbh_diskio.c **** 
+ 119:FATFS/Target/usbh_diskio.c ****   if (((DWORD)buff & 3) && (((HCD_HandleTypeDef *)hUSB_Host.pData)->Init.dma_enable))
+ 129              		.loc 1 119 3 view .LVU20
+ 130              		.loc 1 119 6 is_stmt 0 view .LVU21
+ 131 000c 11F0030F 		tst	r1, #3
+ 132 0010 04D0     		beq	.L9
+ 133              		.loc 1 119 60 discriminator 1 view .LVU22
+ 134 0012 214A     		ldr	r2, .L21
+ 135              	.LVL10:
+ 136              		.loc 1 119 60 discriminator 1 view .LVU23
+ 137 0014 D2F8D023 		ldr	r2, [r2, #976]
+ 138              		.loc 1 119 73 discriminator 1 view .LVU24
+ 139 0018 1269     		ldr	r2, [r2, #16]
+ 140              		.loc 1 119 25 discriminator 1 view .LVU25
+ 141 001a 62B9     		cbnz	r2, .L14
+ 142              	.L9:
+ 120:FATFS/Target/usbh_diskio.c ****   {
+ 121:FATFS/Target/usbh_diskio.c ****     while ((count--)&&(status == USBH_OK))
+ 122:FATFS/Target/usbh_diskio.c ****     {
+ 123:FATFS/Target/usbh_diskio.c ****       status = USBH_MSC_Read(&hUSB_Host, lun, sector + count, (uint8_t *)scratch, 1);
+ 124:FATFS/Target/usbh_diskio.c **** 
+ 125:FATFS/Target/usbh_diskio.c ****       if(status == USBH_OK)
+ 126:FATFS/Target/usbh_diskio.c ****       {
+ 127:FATFS/Target/usbh_diskio.c ****         memcpy (&buff[count * _MAX_SS] ,scratch, _MAX_SS);
+ 128:FATFS/Target/usbh_diskio.c ****       }
+ 129:FATFS/Target/usbh_diskio.c ****       else
+ 130:FATFS/Target/usbh_diskio.c ****       {
+ 131:FATFS/Target/usbh_diskio.c ****         break;
+ 132:FATFS/Target/usbh_diskio.c ****       }
+ 133:FATFS/Target/usbh_diskio.c ****     }
+ 134:FATFS/Target/usbh_diskio.c ****   }
+ 135:FATFS/Target/usbh_diskio.c ****   else
+ 136:FATFS/Target/usbh_diskio.c ****   {
+ 137:FATFS/Target/usbh_diskio.c ****     status = USBH_MSC_Read(&hUSB_Host, lun, sector, buff, count);
+ 143              		.loc 1 137 5 is_stmt 1 view .LVU26
+ 144              		.loc 1 137 14 is_stmt 0 view .LVU27
+ 145 001c 0093     		str	r3, [sp]
+ 146 001e 3346     		mov	r3, r6
+ 147              	.LVL11:
+ 148              		.loc 1 137 14 view .LVU28
+ 149 0020 4246     		mov	r2, r8
+ 150 0022 3946     		mov	r1, r7
+ 151              	.LVL12:
+ 152              		.loc 1 137 14 view .LVU29
+ARM GAS  /tmp/cc6xNi5E.s 			page 6
+
+
+ 153 0024 1C48     		ldr	r0, .L21
+ 154              	.LVL13:
+ 155              		.loc 1 137 14 view .LVU30
+ 156 0026 FFF7FEFF 		bl	USBH_MSC_Read
+ 157              	.LVL14:
+ 158              		.loc 1 137 14 view .LVU31
+ 159 002a 0546     		mov	r5, r0
+ 160              	.LVL15:
+ 161              	.L11:
+ 138:FATFS/Target/usbh_diskio.c ****   }
+ 139:FATFS/Target/usbh_diskio.c **** 
+ 140:FATFS/Target/usbh_diskio.c ****   if(status == USBH_OK)
+ 162              		.loc 1 140 3 is_stmt 1 view .LVU32
+ 163              		.loc 1 140 5 is_stmt 0 view .LVU33
+ 164 002c F5B9     		cbnz	r5, .L19
+ 165              	.LVL16:
+ 166              	.L13:
+ 141:FATFS/Target/usbh_diskio.c ****   {
+ 142:FATFS/Target/usbh_diskio.c ****     res = RES_OK;
+ 143:FATFS/Target/usbh_diskio.c ****   }
+ 144:FATFS/Target/usbh_diskio.c ****   else
+ 145:FATFS/Target/usbh_diskio.c ****   {
+ 146:FATFS/Target/usbh_diskio.c ****     USBH_MSC_GetLUNInfo(&hUSB_Host, lun, &info);
+ 147:FATFS/Target/usbh_diskio.c **** 
+ 148:FATFS/Target/usbh_diskio.c ****     switch (info.sense.asc)
+ 149:FATFS/Target/usbh_diskio.c ****     {
+ 150:FATFS/Target/usbh_diskio.c ****     case SCSI_ASC_LOGICAL_UNIT_NOT_READY:
+ 151:FATFS/Target/usbh_diskio.c ****     case SCSI_ASC_MEDIUM_NOT_PRESENT:
+ 152:FATFS/Target/usbh_diskio.c ****     case SCSI_ASC_NOT_READY_TO_READY_CHANGE:
+ 153:FATFS/Target/usbh_diskio.c ****       USBH_ErrLog ("USB Disk is not ready!");
+ 154:FATFS/Target/usbh_diskio.c ****       res = RES_NOTRDY;
+ 155:FATFS/Target/usbh_diskio.c ****       break;
+ 156:FATFS/Target/usbh_diskio.c **** 
+ 157:FATFS/Target/usbh_diskio.c ****     default:
+ 158:FATFS/Target/usbh_diskio.c ****       res = RES_ERROR;
+ 159:FATFS/Target/usbh_diskio.c ****       break;
+ 160:FATFS/Target/usbh_diskio.c ****     }
+ 161:FATFS/Target/usbh_diskio.c ****   }
+ 162:FATFS/Target/usbh_diskio.c **** 
+ 163:FATFS/Target/usbh_diskio.c ****   return res;
+ 167              		.loc 1 163 3 is_stmt 1 view .LVU34
+ 164:FATFS/Target/usbh_diskio.c **** }
+ 168              		.loc 1 164 1 is_stmt 0 view .LVU35
+ 169 002e 2846     		mov	r0, r5
+ 170 0030 10B0     		add	sp, sp, #64
+ 171              	.LCFI3:
+ 172              		.cfi_remember_state
+ 173              		.cfi_def_cfa_offset 24
+ 174              		@ sp needed
+ 175 0032 BDE8F081 		pop	{r4, r5, r6, r7, r8, pc}
+ 176              	.LVL17:
+ 177              	.L14:
+ 178              	.LCFI4:
+ 179              		.cfi_restore_state
+ 117:FATFS/Target/usbh_diskio.c **** 
+ 180              		.loc 1 117 23 view .LVU36
+ 181 0036 0025     		movs	r5, #0
+ARM GAS  /tmp/cc6xNi5E.s 			page 7
+
+
+ 182              	.LVL18:
+ 183              	.L10:
+ 121:FATFS/Target/usbh_diskio.c ****     {
+ 184              		.loc 1 121 21 is_stmt 1 view .LVU37
+ 121:FATFS/Target/usbh_diskio.c ****     {
+ 185              		.loc 1 121 18 is_stmt 0 view .LVU38
+ 186 0038 5C1E     		subs	r4, r3, #1
+ 187              	.LVL19:
+ 121:FATFS/Target/usbh_diskio.c ****     {
+ 188              		.loc 1 121 21 view .LVU39
+ 189 003a 002B     		cmp	r3, #0
+ 190 003c F6D0     		beq	.L11
+ 121:FATFS/Target/usbh_diskio.c ****     {
+ 191              		.loc 1 121 21 discriminator 1 view .LVU40
+ 192 003e 002D     		cmp	r5, #0
+ 193 0040 F4D1     		bne	.L11
+ 123:FATFS/Target/usbh_diskio.c **** 
+ 194              		.loc 1 123 7 is_stmt 1 view .LVU41
+ 123:FATFS/Target/usbh_diskio.c **** 
+ 195              		.loc 1 123 16 is_stmt 0 view .LVU42
+ 196 0042 0123     		movs	r3, #1
+ 197 0044 0093     		str	r3, [sp]
+ 198 0046 154B     		ldr	r3, .L21+4
+ 199 0048 04EB0802 		add	r2, r4, r8
+ 200 004c 3946     		mov	r1, r7
+ 201 004e 1248     		ldr	r0, .L21
+ 202 0050 FFF7FEFF 		bl	USBH_MSC_Read
+ 203              	.LVL20:
+ 125:FATFS/Target/usbh_diskio.c ****       {
+ 204              		.loc 1 125 7 is_stmt 1 view .LVU43
+ 125:FATFS/Target/usbh_diskio.c ****       {
+ 205              		.loc 1 125 9 is_stmt 0 view .LVU44
+ 206 0054 0546     		mov	r5, r0
+ 207 0056 0028     		cmp	r0, #0
+ 208 0058 E8D1     		bne	.L11
+ 127:FATFS/Target/usbh_diskio.c ****       }
+ 209              		.loc 1 127 9 is_stmt 1 view .LVU45
+ 210 005a 4FF40072 		mov	r2, #512
+ 211 005e 0F49     		ldr	r1, .L21+4
+ 212 0060 06EB4420 		add	r0, r6, r4, lsl #9
+ 213              	.LVL21:
+ 127:FATFS/Target/usbh_diskio.c ****       }
+ 214              		.loc 1 127 9 is_stmt 0 view .LVU46
+ 215 0064 FFF7FEFF 		bl	memcpy
+ 216              	.LVL22:
+ 121:FATFS/Target/usbh_diskio.c ****     {
+ 217              		.loc 1 121 18 view .LVU47
+ 218 0068 2346     		mov	r3, r4
+ 219 006a E5E7     		b	.L10
+ 220              	.LVL23:
+ 221              	.L19:
+ 146:FATFS/Target/usbh_diskio.c **** 
+ 222              		.loc 1 146 5 is_stmt 1 view .LVU48
+ 223 006c 03AA     		add	r2, sp, #12
+ 224 006e 3946     		mov	r1, r7
+ 225 0070 0948     		ldr	r0, .L21
+ 226 0072 FFF7FEFF 		bl	USBH_MSC_GetLUNInfo
+ARM GAS  /tmp/cc6xNi5E.s 			page 8
+
+
+ 227              	.LVL24:
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 228              		.loc 1 148 5 view .LVU49
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 229              		.loc 1 148 23 is_stmt 0 view .LVU50
+ 230 0076 9DF81930 		ldrb	r3, [sp, #25]	@ zero_extendqisi2
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 231              		.loc 1 148 5 view .LVU51
+ 232 007a 282B     		cmp	r3, #40
+ 233 007c 07D0     		beq	.L15
+ 234 007e 3A2B     		cmp	r3, #58
+ 235 0080 07D0     		beq	.L16
+ 236 0082 042B     		cmp	r3, #4
+ 237 0084 01D0     		beq	.L20
+ 158:FATFS/Target/usbh_diskio.c ****       break;
+ 238              		.loc 1 158 11 view .LVU52
+ 239 0086 0125     		movs	r5, #1
+ 240              	.LVL25:
+ 158:FATFS/Target/usbh_diskio.c ****       break;
+ 241              		.loc 1 158 11 view .LVU53
+ 242 0088 D1E7     		b	.L13
+ 243              	.LVL26:
+ 244              	.L20:
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 245              		.loc 1 148 5 view .LVU54
+ 246 008a 0325     		movs	r5, #3
+ 247              	.LVL27:
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 248              		.loc 1 148 5 view .LVU55
+ 249 008c CFE7     		b	.L13
+ 250              	.LVL28:
+ 251              	.L15:
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 252              		.loc 1 148 5 view .LVU56
+ 253 008e 0325     		movs	r5, #3
+ 254              	.LVL29:
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 255              		.loc 1 148 5 view .LVU57
+ 256 0090 CDE7     		b	.L13
+ 257              	.LVL30:
+ 258              	.L16:
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 259              		.loc 1 148 5 view .LVU58
+ 260 0092 0325     		movs	r5, #3
+ 261              	.LVL31:
+ 148:FATFS/Target/usbh_diskio.c ****     {
+ 262              		.loc 1 148 5 view .LVU59
+ 263 0094 CBE7     		b	.L13
+ 264              	.L22:
+ 265 0096 00BF     		.align	2
+ 266              	.L21:
+ 267 0098 00000000 		.word	hUsbHostHS
+ 268 009c 00000000 		.word	scratch
+ 269              		.cfi_endproc
+ 270              	.LFE135:
+ 272              		.section	.text.USBH_ioctl,"ax",%progbits
+ 273              		.align	1
+ARM GAS  /tmp/cc6xNi5E.s 			page 9
+
+
+ 274              		.global	USBH_ioctl
+ 275              		.syntax unified
+ 276              		.thumb
+ 277              		.thumb_func
+ 279              	USBH_ioctl:
+ 280              	.LVL32:
+ 281              	.LFB137:
+ 165:FATFS/Target/usbh_diskio.c **** 
+ 166:FATFS/Target/usbh_diskio.c **** /* USER CODE BEGIN beforeWriteSection */
+ 167:FATFS/Target/usbh_diskio.c **** /* can be used to modify previous code / undefine following code / add new code */
+ 168:FATFS/Target/usbh_diskio.c **** /* USER CODE END beforeWriteSection */
+ 169:FATFS/Target/usbh_diskio.c **** 
+ 170:FATFS/Target/usbh_diskio.c **** /**
+ 171:FATFS/Target/usbh_diskio.c ****   * @brief  Writes Sector(s)
+ 172:FATFS/Target/usbh_diskio.c ****   * @param  lun : lun id
+ 173:FATFS/Target/usbh_diskio.c ****   * @param  *buff: Data to be written
+ 174:FATFS/Target/usbh_diskio.c ****   * @param  sector: Sector address (LBA)
+ 175:FATFS/Target/usbh_diskio.c ****   * @param  count: Number of sectors to write (1..128)
+ 176:FATFS/Target/usbh_diskio.c ****   * @retval DRESULT: Operation result
+ 177:FATFS/Target/usbh_diskio.c ****   */
+ 178:FATFS/Target/usbh_diskio.c **** #if _USE_WRITE == 1
+ 179:FATFS/Target/usbh_diskio.c **** DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+ 180:FATFS/Target/usbh_diskio.c **** {
+ 181:FATFS/Target/usbh_diskio.c ****   DRESULT res = RES_ERROR;
+ 182:FATFS/Target/usbh_diskio.c ****   MSC_LUNTypeDef info;
+ 183:FATFS/Target/usbh_diskio.c ****   USBH_StatusTypeDef  status = USBH_OK;
+ 184:FATFS/Target/usbh_diskio.c **** 
+ 185:FATFS/Target/usbh_diskio.c ****   if (((DWORD)buff & 3) && (((HCD_HandleTypeDef *)hUSB_Host.pData)->Init.dma_enable))
+ 186:FATFS/Target/usbh_diskio.c ****   {
+ 187:FATFS/Target/usbh_diskio.c **** 
+ 188:FATFS/Target/usbh_diskio.c ****     while (count--)
+ 189:FATFS/Target/usbh_diskio.c ****     {
+ 190:FATFS/Target/usbh_diskio.c ****       memcpy (scratch, &buff[count * _MAX_SS], _MAX_SS);
+ 191:FATFS/Target/usbh_diskio.c **** 
+ 192:FATFS/Target/usbh_diskio.c ****       status = USBH_MSC_Write(&hUSB_Host, lun, sector + count, (BYTE *)scratch, 1) ;
+ 193:FATFS/Target/usbh_diskio.c ****       if(status == USBH_FAIL)
+ 194:FATFS/Target/usbh_diskio.c ****       {
+ 195:FATFS/Target/usbh_diskio.c ****         break;
+ 196:FATFS/Target/usbh_diskio.c ****       }
+ 197:FATFS/Target/usbh_diskio.c ****     }
+ 198:FATFS/Target/usbh_diskio.c ****   }
+ 199:FATFS/Target/usbh_diskio.c ****   else
+ 200:FATFS/Target/usbh_diskio.c ****   {
+ 201:FATFS/Target/usbh_diskio.c ****     status = USBH_MSC_Write(&hUSB_Host, lun, sector, (BYTE *)buff, count);
+ 202:FATFS/Target/usbh_diskio.c ****   }
+ 203:FATFS/Target/usbh_diskio.c **** 
+ 204:FATFS/Target/usbh_diskio.c ****   if(status == USBH_OK)
+ 205:FATFS/Target/usbh_diskio.c ****   {
+ 206:FATFS/Target/usbh_diskio.c ****     res = RES_OK;
+ 207:FATFS/Target/usbh_diskio.c ****   }
+ 208:FATFS/Target/usbh_diskio.c ****   else
+ 209:FATFS/Target/usbh_diskio.c ****   {
+ 210:FATFS/Target/usbh_diskio.c ****     USBH_MSC_GetLUNInfo(&hUSB_Host, lun, &info);
+ 211:FATFS/Target/usbh_diskio.c **** 
+ 212:FATFS/Target/usbh_diskio.c ****     switch (info.sense.asc)
+ 213:FATFS/Target/usbh_diskio.c ****     {
+ 214:FATFS/Target/usbh_diskio.c ****     case SCSI_ASC_WRITE_PROTECTED:
+ARM GAS  /tmp/cc6xNi5E.s 			page 10
+
+
+ 215:FATFS/Target/usbh_diskio.c ****       USBH_ErrLog("USB Disk is Write protected!");
+ 216:FATFS/Target/usbh_diskio.c ****       res = RES_WRPRT;
+ 217:FATFS/Target/usbh_diskio.c ****       break;
+ 218:FATFS/Target/usbh_diskio.c **** 
+ 219:FATFS/Target/usbh_diskio.c ****     case SCSI_ASC_LOGICAL_UNIT_NOT_READY:
+ 220:FATFS/Target/usbh_diskio.c ****     case SCSI_ASC_MEDIUM_NOT_PRESENT:
+ 221:FATFS/Target/usbh_diskio.c ****     case SCSI_ASC_NOT_READY_TO_READY_CHANGE:
+ 222:FATFS/Target/usbh_diskio.c ****       USBH_ErrLog("USB Disk is not ready!");
+ 223:FATFS/Target/usbh_diskio.c ****       res = RES_NOTRDY;
+ 224:FATFS/Target/usbh_diskio.c ****       break;
+ 225:FATFS/Target/usbh_diskio.c **** 
+ 226:FATFS/Target/usbh_diskio.c ****     default:
+ 227:FATFS/Target/usbh_diskio.c ****       res = RES_ERROR;
+ 228:FATFS/Target/usbh_diskio.c ****       break;
+ 229:FATFS/Target/usbh_diskio.c ****     }
+ 230:FATFS/Target/usbh_diskio.c ****   }
+ 231:FATFS/Target/usbh_diskio.c **** 
+ 232:FATFS/Target/usbh_diskio.c ****   return res;
+ 233:FATFS/Target/usbh_diskio.c **** }
+ 234:FATFS/Target/usbh_diskio.c **** #endif /* _USE_WRITE == 1 */
+ 235:FATFS/Target/usbh_diskio.c **** 
+ 236:FATFS/Target/usbh_diskio.c **** /* USER CODE BEGIN beforeIoctlSection */
+ 237:FATFS/Target/usbh_diskio.c **** /* can be used to modify previous code / undefine following code / add new code */
+ 238:FATFS/Target/usbh_diskio.c **** /* USER CODE END beforeIoctlSection */
+ 239:FATFS/Target/usbh_diskio.c **** 
+ 240:FATFS/Target/usbh_diskio.c **** /**
+ 241:FATFS/Target/usbh_diskio.c ****   * @brief  I/O control operation
+ 242:FATFS/Target/usbh_diskio.c ****   * @param  lun : lun id
+ 243:FATFS/Target/usbh_diskio.c ****   * @param  cmd: Control code
+ 244:FATFS/Target/usbh_diskio.c ****   * @param  *buff: Buffer to send/receive control data
+ 245:FATFS/Target/usbh_diskio.c ****   * @retval DRESULT: Operation result
+ 246:FATFS/Target/usbh_diskio.c ****   */
+ 247:FATFS/Target/usbh_diskio.c **** #if _USE_IOCTL == 1
+ 248:FATFS/Target/usbh_diskio.c **** DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
+ 249:FATFS/Target/usbh_diskio.c **** {
+ 282              		.loc 1 249 1 is_stmt 1 view -0
+ 283              		.cfi_startproc
+ 284              		@ args = 0, pretend = 0, frame = 56
+ 285              		@ frame_needed = 0, uses_anonymous_args = 0
+ 286              		.loc 1 249 1 is_stmt 0 view .LVU61
+ 287 0000 30B5     		push	{r4, r5, lr}
+ 288              	.LCFI5:
+ 289              		.cfi_def_cfa_offset 12
+ 290              		.cfi_offset 4, -12
+ 291              		.cfi_offset 5, -8
+ 292              		.cfi_offset 14, -4
+ 293 0002 8FB0     		sub	sp, sp, #60
+ 294              	.LCFI6:
+ 295              		.cfi_def_cfa_offset 72
+ 296 0004 0C46     		mov	r4, r1
+ 297 0006 1546     		mov	r5, r2
+ 250:FATFS/Target/usbh_diskio.c ****   DRESULT res = RES_ERROR;
+ 298              		.loc 1 250 3 is_stmt 1 view .LVU62
+ 299              	.LVL33:
+ 251:FATFS/Target/usbh_diskio.c ****   MSC_LUNTypeDef info;
+ 300              		.loc 1 251 3 view .LVU63
+ 252:FATFS/Target/usbh_diskio.c **** 
+ARM GAS  /tmp/cc6xNi5E.s 			page 11
+
+
+ 253:FATFS/Target/usbh_diskio.c ****   switch (cmd)
+ 301              		.loc 1 253 3 view .LVU64
+ 302 0008 0329     		cmp	r1, #3
+ 303 000a 24D8     		bhi	.L30
+ 304 000c DFE801F0 		tbb	[pc, r1]
+ 305              	.L26:
+ 306 0010 02       		.byte	(.L29-.L26)/2
+ 307 0011 05       		.byte	(.L28-.L26)/2
+ 308 0012 0E       		.byte	(.L27-.L26)/2
+ 309 0013 18       		.byte	(.L25-.L26)/2
+ 310              		.p2align 1
+ 311              	.L29:
+ 312 0014 0846     		mov	r0, r1
+ 313              	.LVL34:
+ 314              	.L24:
+ 254:FATFS/Target/usbh_diskio.c ****   {
+ 255:FATFS/Target/usbh_diskio.c ****   /* Make sure that no pending write process */
+ 256:FATFS/Target/usbh_diskio.c ****   case CTRL_SYNC:
+ 257:FATFS/Target/usbh_diskio.c ****     res = RES_OK;
+ 258:FATFS/Target/usbh_diskio.c ****     break;
+ 259:FATFS/Target/usbh_diskio.c **** 
+ 260:FATFS/Target/usbh_diskio.c ****   /* Get number of sectors on the disk (DWORD) */
+ 261:FATFS/Target/usbh_diskio.c ****   case GET_SECTOR_COUNT :
+ 262:FATFS/Target/usbh_diskio.c ****     if(USBH_MSC_GetLUNInfo(&hUSB_Host, lun, &info) == USBH_OK)
+ 263:FATFS/Target/usbh_diskio.c ****     {
+ 264:FATFS/Target/usbh_diskio.c ****       *(DWORD*)buff = info.capacity.block_nbr;
+ 265:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 266:FATFS/Target/usbh_diskio.c ****     }
+ 267:FATFS/Target/usbh_diskio.c ****     else
+ 268:FATFS/Target/usbh_diskio.c ****     {
+ 269:FATFS/Target/usbh_diskio.c ****       res = RES_ERROR;
+ 270:FATFS/Target/usbh_diskio.c ****     }
+ 271:FATFS/Target/usbh_diskio.c ****     break;
+ 272:FATFS/Target/usbh_diskio.c **** 
+ 273:FATFS/Target/usbh_diskio.c ****   /* Get R/W sector size (WORD) */
+ 274:FATFS/Target/usbh_diskio.c ****   case GET_SECTOR_SIZE :
+ 275:FATFS/Target/usbh_diskio.c ****     if(USBH_MSC_GetLUNInfo(&hUSB_Host, lun, &info) == USBH_OK)
+ 276:FATFS/Target/usbh_diskio.c ****     {
+ 277:FATFS/Target/usbh_diskio.c ****       *(DWORD*)buff = info.capacity.block_size;
+ 278:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 279:FATFS/Target/usbh_diskio.c ****     }
+ 280:FATFS/Target/usbh_diskio.c ****     else
+ 281:FATFS/Target/usbh_diskio.c ****     {
+ 282:FATFS/Target/usbh_diskio.c ****       res = RES_ERROR;
+ 283:FATFS/Target/usbh_diskio.c ****     }
+ 284:FATFS/Target/usbh_diskio.c ****     break;
+ 285:FATFS/Target/usbh_diskio.c **** 
+ 286:FATFS/Target/usbh_diskio.c ****     /* Get erase block size in unit of sector (DWORD) */
+ 287:FATFS/Target/usbh_diskio.c ****   case GET_BLOCK_SIZE :
+ 288:FATFS/Target/usbh_diskio.c **** 
+ 289:FATFS/Target/usbh_diskio.c ****     if(USBH_MSC_GetLUNInfo(&hUSB_Host, lun, &info) == USBH_OK)
+ 290:FATFS/Target/usbh_diskio.c ****     {
+ 291:FATFS/Target/usbh_diskio.c ****       *(DWORD*)buff = info.capacity.block_size / USB_DEFAULT_BLOCK_SIZE;
+ 292:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 293:FATFS/Target/usbh_diskio.c ****     }
+ 294:FATFS/Target/usbh_diskio.c ****     else
+ 295:FATFS/Target/usbh_diskio.c ****     {
+ARM GAS  /tmp/cc6xNi5E.s 			page 12
+
+
+ 296:FATFS/Target/usbh_diskio.c ****       res = RES_ERROR;
+ 297:FATFS/Target/usbh_diskio.c ****     }
+ 298:FATFS/Target/usbh_diskio.c ****     break;
+ 299:FATFS/Target/usbh_diskio.c **** 
+ 300:FATFS/Target/usbh_diskio.c ****   default:
+ 301:FATFS/Target/usbh_diskio.c ****     res = RES_PARERR;
+ 302:FATFS/Target/usbh_diskio.c ****   }
+ 303:FATFS/Target/usbh_diskio.c **** 
+ 304:FATFS/Target/usbh_diskio.c ****   return res;
+ 315              		.loc 1 304 3 view .LVU65
+ 305:FATFS/Target/usbh_diskio.c **** }
+ 316              		.loc 1 305 1 is_stmt 0 view .LVU66
+ 317 0016 0FB0     		add	sp, sp, #60
+ 318              	.LCFI7:
+ 319              		.cfi_remember_state
+ 320              		.cfi_def_cfa_offset 12
+ 321              		@ sp needed
+ 322 0018 30BD     		pop	{r4, r5, pc}
+ 323              	.LVL35:
+ 324              	.L28:
+ 325              	.LCFI8:
+ 326              		.cfi_restore_state
+ 262:FATFS/Target/usbh_diskio.c ****     {
+ 327              		.loc 1 262 5 is_stmt 1 view .LVU67
+ 262:FATFS/Target/usbh_diskio.c ****     {
+ 328              		.loc 1 262 8 is_stmt 0 view .LVU68
+ 329 001a 01AA     		add	r2, sp, #4
+ 330              	.LVL36:
+ 262:FATFS/Target/usbh_diskio.c ****     {
+ 331              		.loc 1 262 8 view .LVU69
+ 332 001c 0146     		mov	r1, r0
+ 333              	.LVL37:
+ 262:FATFS/Target/usbh_diskio.c ****     {
+ 334              		.loc 1 262 8 view .LVU70
+ 335 001e 1248     		ldr	r0, .L35
+ 336              	.LVL38:
+ 262:FATFS/Target/usbh_diskio.c ****     {
+ 337              		.loc 1 262 8 view .LVU71
+ 338 0020 FFF7FEFF 		bl	USBH_MSC_GetLUNInfo
+ 339              	.LVL39:
+ 262:FATFS/Target/usbh_diskio.c ****     {
+ 340              		.loc 1 262 7 discriminator 1 view .LVU72
+ 341 0024 C8B9     		cbnz	r0, .L31
+ 264:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 342              		.loc 1 264 7 is_stmt 1 view .LVU73
+ 264:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 343              		.loc 1 264 36 is_stmt 0 view .LVU74
+ 344 0026 029B     		ldr	r3, [sp, #8]
+ 264:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 345              		.loc 1 264 21 view .LVU75
+ 346 0028 2B60     		str	r3, [r5]
+ 265:FATFS/Target/usbh_diskio.c ****     }
+ 347              		.loc 1 265 7 is_stmt 1 view .LVU76
+ 348              	.LVL40:
+ 265:FATFS/Target/usbh_diskio.c ****     }
+ 349              		.loc 1 265 7 is_stmt 0 view .LVU77
+ 350 002a F4E7     		b	.L24
+ARM GAS  /tmp/cc6xNi5E.s 			page 13
+
+
+ 351              	.LVL41:
+ 352              	.L27:
+ 275:FATFS/Target/usbh_diskio.c ****     {
+ 353              		.loc 1 275 5 is_stmt 1 view .LVU78
+ 275:FATFS/Target/usbh_diskio.c ****     {
+ 354              		.loc 1 275 8 is_stmt 0 view .LVU79
+ 355 002c 01AA     		add	r2, sp, #4
+ 356              	.LVL42:
+ 275:FATFS/Target/usbh_diskio.c ****     {
+ 357              		.loc 1 275 8 view .LVU80
+ 358 002e 0146     		mov	r1, r0
+ 359              	.LVL43:
+ 275:FATFS/Target/usbh_diskio.c ****     {
+ 360              		.loc 1 275 8 view .LVU81
+ 361 0030 0D48     		ldr	r0, .L35
+ 362              	.LVL44:
+ 275:FATFS/Target/usbh_diskio.c ****     {
+ 363              		.loc 1 275 8 view .LVU82
+ 364 0032 FFF7FEFF 		bl	USBH_MSC_GetLUNInfo
+ 365              	.LVL45:
+ 275:FATFS/Target/usbh_diskio.c ****     {
+ 366              		.loc 1 275 7 discriminator 1 view .LVU83
+ 367 0036 90B9     		cbnz	r0, .L32
+ 277:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 368              		.loc 1 277 7 is_stmt 1 view .LVU84
+ 277:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 369              		.loc 1 277 36 is_stmt 0 view .LVU85
+ 370 0038 BDF80C30 		ldrh	r3, [sp, #12]
+ 277:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 371              		.loc 1 277 21 view .LVU86
+ 372 003c 2B60     		str	r3, [r5]
+ 278:FATFS/Target/usbh_diskio.c ****     }
+ 373              		.loc 1 278 7 is_stmt 1 view .LVU87
+ 374              	.LVL46:
+ 278:FATFS/Target/usbh_diskio.c ****     }
+ 375              		.loc 1 278 7 is_stmt 0 view .LVU88
+ 376 003e EAE7     		b	.L24
+ 377              	.LVL47:
+ 378              	.L25:
+ 289:FATFS/Target/usbh_diskio.c ****     {
+ 379              		.loc 1 289 5 is_stmt 1 view .LVU89
+ 289:FATFS/Target/usbh_diskio.c ****     {
+ 380              		.loc 1 289 8 is_stmt 0 view .LVU90
+ 381 0040 01AA     		add	r2, sp, #4
+ 382              	.LVL48:
+ 289:FATFS/Target/usbh_diskio.c ****     {
+ 383              		.loc 1 289 8 view .LVU91
+ 384 0042 0146     		mov	r1, r0
+ 385              	.LVL49:
+ 289:FATFS/Target/usbh_diskio.c ****     {
+ 386              		.loc 1 289 8 view .LVU92
+ 387 0044 0848     		ldr	r0, .L35
+ 388              	.LVL50:
+ 289:FATFS/Target/usbh_diskio.c ****     {
+ 389              		.loc 1 289 8 view .LVU93
+ 390 0046 FFF7FEFF 		bl	USBH_MSC_GetLUNInfo
+ 391              	.LVL51:
+ARM GAS  /tmp/cc6xNi5E.s 			page 14
+
+
+ 289:FATFS/Target/usbh_diskio.c ****     {
+ 392              		.loc 1 289 7 discriminator 1 view .LVU94
+ 393 004a 50B9     		cbnz	r0, .L33
+ 291:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 394              		.loc 1 291 7 is_stmt 1 view .LVU95
+ 291:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 395              		.loc 1 291 36 is_stmt 0 view .LVU96
+ 396 004c BDF80C30 		ldrh	r3, [sp, #12]
+ 291:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 397              		.loc 1 291 48 view .LVU97
+ 398 0050 5B0A     		lsrs	r3, r3, #9
+ 291:FATFS/Target/usbh_diskio.c ****       res = RES_OK;
+ 399              		.loc 1 291 21 view .LVU98
+ 400 0052 2B60     		str	r3, [r5]
+ 292:FATFS/Target/usbh_diskio.c ****     }
+ 401              		.loc 1 292 7 is_stmt 1 view .LVU99
+ 402              	.LVL52:
+ 292:FATFS/Target/usbh_diskio.c ****     }
+ 403              		.loc 1 292 7 is_stmt 0 view .LVU100
+ 404 0054 DFE7     		b	.L24
+ 405              	.LVL53:
+ 406              	.L30:
+ 301:FATFS/Target/usbh_diskio.c ****   }
+ 407              		.loc 1 301 9 view .LVU101
+ 408 0056 0420     		movs	r0, #4
+ 409              	.LVL54:
+ 301:FATFS/Target/usbh_diskio.c ****   }
+ 410              		.loc 1 301 9 view .LVU102
+ 411 0058 DDE7     		b	.L24
+ 412              	.LVL55:
+ 413              	.L31:
+ 269:FATFS/Target/usbh_diskio.c ****     }
+ 414              		.loc 1 269 11 view .LVU103
+ 415 005a 2046     		mov	r0, r4
+ 416 005c DBE7     		b	.L24
+ 417              	.L32:
+ 282:FATFS/Target/usbh_diskio.c ****     }
+ 418              		.loc 1 282 11 view .LVU104
+ 419 005e 0120     		movs	r0, #1
+ 420 0060 D9E7     		b	.L24
+ 421              	.L33:
+ 296:FATFS/Target/usbh_diskio.c ****     }
+ 422              		.loc 1 296 11 view .LVU105
+ 423 0062 0120     		movs	r0, #1
+ 424 0064 D7E7     		b	.L24
+ 425              	.L36:
+ 426 0066 00BF     		.align	2
+ 427              	.L35:
+ 428 0068 00000000 		.word	hUsbHostHS
+ 429              		.cfi_endproc
+ 430              	.LFE137:
+ 432              		.section	.text.USBH_write,"ax",%progbits
+ 433              		.align	1
+ 434              		.global	USBH_write
+ 435              		.syntax unified
+ 436              		.thumb
+ 437              		.thumb_func
+ARM GAS  /tmp/cc6xNi5E.s 			page 15
+
+
+ 439              	USBH_write:
+ 440              	.LVL56:
+ 441              	.LFB136:
+ 180:FATFS/Target/usbh_diskio.c ****   DRESULT res = RES_ERROR;
+ 442              		.loc 1 180 1 is_stmt 1 view -0
+ 443              		.cfi_startproc
+ 444              		@ args = 0, pretend = 0, frame = 56
+ 445              		@ frame_needed = 0, uses_anonymous_args = 0
+ 180:FATFS/Target/usbh_diskio.c ****   DRESULT res = RES_ERROR;
+ 446              		.loc 1 180 1 is_stmt 0 view .LVU107
+ 447 0000 2DE9F041 		push	{r4, r5, r6, r7, r8, lr}
+ 448              	.LCFI9:
+ 449              		.cfi_def_cfa_offset 24
+ 450              		.cfi_offset 4, -24
+ 451              		.cfi_offset 5, -20
+ 452              		.cfi_offset 6, -16
+ 453              		.cfi_offset 7, -12
+ 454              		.cfi_offset 8, -8
+ 455              		.cfi_offset 14, -4
+ 456 0004 90B0     		sub	sp, sp, #64
+ 457              	.LCFI10:
+ 458              		.cfi_def_cfa_offset 88
+ 459 0006 0746     		mov	r7, r0
+ 460 0008 0E46     		mov	r6, r1
+ 461 000a 9046     		mov	r8, r2
+ 462 000c 1C46     		mov	r4, r3
+ 181:FATFS/Target/usbh_diskio.c ****   MSC_LUNTypeDef info;
+ 463              		.loc 1 181 3 is_stmt 1 view .LVU108
+ 464              	.LVL57:
+ 182:FATFS/Target/usbh_diskio.c ****   USBH_StatusTypeDef  status = USBH_OK;
+ 465              		.loc 1 182 3 view .LVU109
+ 183:FATFS/Target/usbh_diskio.c **** 
+ 466              		.loc 1 183 3 view .LVU110
+ 185:FATFS/Target/usbh_diskio.c ****   {
+ 467              		.loc 1 185 3 view .LVU111
+ 185:FATFS/Target/usbh_diskio.c ****   {
+ 468              		.loc 1 185 6 is_stmt 0 view .LVU112
+ 469 000e 11F0030F 		tst	r1, #3
+ 470 0012 04D0     		beq	.L38
+ 185:FATFS/Target/usbh_diskio.c ****   {
+ 471              		.loc 1 185 60 discriminator 1 view .LVU113
+ 472 0014 224B     		ldr	r3, .L54
+ 473              	.LVL58:
+ 185:FATFS/Target/usbh_diskio.c ****   {
+ 474              		.loc 1 185 60 discriminator 1 view .LVU114
+ 475 0016 D3F8D033 		ldr	r3, [r3, #976]
+ 185:FATFS/Target/usbh_diskio.c ****   {
+ 476              		.loc 1 185 73 discriminator 1 view .LVU115
+ 477 001a 1B69     		ldr	r3, [r3, #16]
+ 185:FATFS/Target/usbh_diskio.c ****   {
+ 478              		.loc 1 185 25 discriminator 1 view .LVU116
+ 479 001c 53B9     		cbnz	r3, .L44
+ 480              	.L38:
+ 201:FATFS/Target/usbh_diskio.c ****   }
+ 481              		.loc 1 201 5 is_stmt 1 view .LVU117
+ 201:FATFS/Target/usbh_diskio.c ****   }
+ 482              		.loc 1 201 14 is_stmt 0 view .LVU118
+ARM GAS  /tmp/cc6xNi5E.s 			page 16
+
+
+ 483 001e 0094     		str	r4, [sp]
+ 484 0020 3346     		mov	r3, r6
+ 485 0022 4246     		mov	r2, r8
+ 486              	.LVL59:
+ 201:FATFS/Target/usbh_diskio.c ****   }
+ 487              		.loc 1 201 14 view .LVU119
+ 488 0024 3946     		mov	r1, r7
+ 489              	.LVL60:
+ 201:FATFS/Target/usbh_diskio.c ****   }
+ 490              		.loc 1 201 14 view .LVU120
+ 491 0026 1E48     		ldr	r0, .L54
+ 492              	.LVL61:
+ 201:FATFS/Target/usbh_diskio.c ****   }
+ 493              		.loc 1 201 14 view .LVU121
+ 494 0028 FFF7FEFF 		bl	USBH_MSC_Write
+ 495              	.LVL62:
+ 496              	.L40:
+ 204:FATFS/Target/usbh_diskio.c ****   {
+ 497              		.loc 1 204 3 is_stmt 1 view .LVU122
+ 204:FATFS/Target/usbh_diskio.c ****   {
+ 498              		.loc 1 204 5 is_stmt 0 view .LVU123
+ 499 002c D8B9     		cbnz	r0, .L50
+ 500              	.LVL63:
+ 501              	.L42:
+ 232:FATFS/Target/usbh_diskio.c **** }
+ 502              		.loc 1 232 3 is_stmt 1 view .LVU124
+ 233:FATFS/Target/usbh_diskio.c **** #endif /* _USE_WRITE == 1 */
+ 503              		.loc 1 233 1 is_stmt 0 view .LVU125
+ 504 002e 10B0     		add	sp, sp, #64
+ 505              	.LCFI11:
+ 506              		.cfi_remember_state
+ 507              		.cfi_def_cfa_offset 24
+ 508              		@ sp needed
+ 509 0030 BDE8F081 		pop	{r4, r5, r6, r7, r8, pc}
+ 510              	.LVL64:
+ 511              	.L44:
+ 512              	.LCFI12:
+ 513              		.cfi_restore_state
+ 183:FATFS/Target/usbh_diskio.c **** 
+ 514              		.loc 1 183 23 view .LVU126
+ 515 0034 0020     		movs	r0, #0
+ 516              	.LVL65:
+ 517              	.L39:
+ 188:FATFS/Target/usbh_diskio.c ****     {
+ 518              		.loc 1 188 12 is_stmt 1 view .LVU127
+ 519 0036 2346     		mov	r3, r4
+ 188:FATFS/Target/usbh_diskio.c ****     {
+ 520              		.loc 1 188 17 is_stmt 0 view .LVU128
+ 521 0038 013C     		subs	r4, r4, #1
+ 522              	.LVL66:
+ 188:FATFS/Target/usbh_diskio.c ****     {
+ 523              		.loc 1 188 12 view .LVU129
+ 524 003a 002B     		cmp	r3, #0
+ 525 003c F6D0     		beq	.L40
+ 190:FATFS/Target/usbh_diskio.c **** 
+ 526              		.loc 1 190 7 is_stmt 1 view .LVU130
+ 527 003e 194D     		ldr	r5, .L54+4
+ARM GAS  /tmp/cc6xNi5E.s 			page 17
+
+
+ 528 0040 4FF40072 		mov	r2, #512
+ 529 0044 06EB4421 		add	r1, r6, r4, lsl #9
+ 530 0048 2846     		mov	r0, r5
+ 531              	.LVL67:
+ 190:FATFS/Target/usbh_diskio.c **** 
+ 532              		.loc 1 190 7 is_stmt 0 view .LVU131
+ 533 004a FFF7FEFF 		bl	memcpy
+ 534              	.LVL68:
+ 192:FATFS/Target/usbh_diskio.c ****       if(status == USBH_FAIL)
+ 535              		.loc 1 192 7 is_stmt 1 view .LVU132
+ 192:FATFS/Target/usbh_diskio.c ****       if(status == USBH_FAIL)
+ 536              		.loc 1 192 16 is_stmt 0 view .LVU133
+ 537 004e 0123     		movs	r3, #1
+ 538 0050 0093     		str	r3, [sp]
+ 539 0052 2B46     		mov	r3, r5
+ 540 0054 04EB0802 		add	r2, r4, r8
+ 541 0058 3946     		mov	r1, r7
+ 542 005a 1148     		ldr	r0, .L54
+ 543 005c FFF7FEFF 		bl	USBH_MSC_Write
+ 544              	.LVL69:
+ 193:FATFS/Target/usbh_diskio.c ****       {
+ 545              		.loc 1 193 7 is_stmt 1 view .LVU134
+ 193:FATFS/Target/usbh_diskio.c ****       {
+ 546              		.loc 1 193 9 is_stmt 0 view .LVU135
+ 547 0060 0228     		cmp	r0, #2
+ 548 0062 E8D1     		bne	.L39
+ 549 0064 E2E7     		b	.L40
+ 550              	.L50:
+ 210:FATFS/Target/usbh_diskio.c **** 
+ 551              		.loc 1 210 5 is_stmt 1 view .LVU136
+ 552 0066 03AA     		add	r2, sp, #12
+ 553 0068 3946     		mov	r1, r7
+ 554 006a 0D48     		ldr	r0, .L54
+ 555              	.LVL70:
+ 210:FATFS/Target/usbh_diskio.c **** 
+ 556              		.loc 1 210 5 is_stmt 0 view .LVU137
+ 557 006c FFF7FEFF 		bl	USBH_MSC_GetLUNInfo
+ 558              	.LVL71:
+ 212:FATFS/Target/usbh_diskio.c ****     {
+ 559              		.loc 1 212 5 is_stmt 1 view .LVU138
+ 212:FATFS/Target/usbh_diskio.c ****     {
+ 560              		.loc 1 212 23 is_stmt 0 view .LVU139
+ 561 0070 9DF81930 		ldrb	r3, [sp, #25]	@ zero_extendqisi2
+ 212:FATFS/Target/usbh_diskio.c ****     {
+ 562              		.loc 1 212 5 view .LVU140
+ 563 0074 272B     		cmp	r3, #39
+ 564 0076 0ED0     		beq	.L45
+ 565 0078 05D9     		bls	.L51
+ 566 007a 282B     		cmp	r3, #40
+ 567 007c 0DD0     		beq	.L47
+ 568 007e 3A2B     		cmp	r3, #58
+ 569 0080 07D0     		beq	.L52
+ 227:FATFS/Target/usbh_diskio.c ****       break;
+ 570              		.loc 1 227 11 view .LVU141
+ 571 0082 0120     		movs	r0, #1
+ 572 0084 D3E7     		b	.L42
+ 573              	.L51:
+ARM GAS  /tmp/cc6xNi5E.s 			page 18
+
+
+ 212:FATFS/Target/usbh_diskio.c ****     {
+ 574              		.loc 1 212 5 view .LVU142
+ 575 0086 042B     		cmp	r3, #4
+ 576 0088 01D0     		beq	.L53
+ 227:FATFS/Target/usbh_diskio.c ****       break;
+ 577              		.loc 1 227 11 view .LVU143
+ 578 008a 0120     		movs	r0, #1
+ 579 008c CFE7     		b	.L42
+ 580              	.L53:
+ 223:FATFS/Target/usbh_diskio.c ****       break;
+ 581              		.loc 1 223 11 view .LVU144
+ 582 008e 0320     		movs	r0, #3
+ 583 0090 CDE7     		b	.L42
+ 584              	.L52:
+ 585 0092 0320     		movs	r0, #3
+ 586 0094 CBE7     		b	.L42
+ 587              	.L45:
+ 212:FATFS/Target/usbh_diskio.c ****     {
+ 588              		.loc 1 212 5 view .LVU145
+ 589 0096 0220     		movs	r0, #2
+ 590 0098 C9E7     		b	.L42
+ 591              	.L47:
+ 223:FATFS/Target/usbh_diskio.c ****       break;
+ 592              		.loc 1 223 11 view .LVU146
+ 593 009a 0320     		movs	r0, #3
+ 594 009c C7E7     		b	.L42
+ 595              	.L55:
+ 596 009e 00BF     		.align	2
+ 597              	.L54:
+ 598 00a0 00000000 		.word	hUsbHostHS
+ 599 00a4 00000000 		.word	scratch
+ 600              		.cfi_endproc
+ 601              	.LFE136:
+ 603              		.global	USBH_Driver
+ 604              		.section	.rodata.USBH_Driver,"a"
+ 605              		.align	2
+ 608              	USBH_Driver:
+ 609 0000 00000000 		.word	USBH_initialize
+ 610 0004 00000000 		.word	USBH_status
+ 611 0008 00000000 		.word	USBH_read
+ 612 000c 00000000 		.word	USBH_write
+ 613 0010 00000000 		.word	USBH_ioctl
+ 614              		.section	.bss.scratch,"aw",%nobits
+ 615              		.align	2
+ 618              	scratch:
+ 619 0000 00000000 		.space	512
+ 619      00000000 
+ 619      00000000 
+ 619      00000000 
+ 619      00000000 
+ 620              		.text
+ 621              	.Letext0:
+ 622              		.file 2 "Middlewares/Third_Party/FatFs/src/integer.h"
+ 623              		.file 3 "Middlewares/Third_Party/FatFs/src/diskio.h"
+ 624              		.file 4 "/usr/lib/gcc/arm-none-eabi/14.2.1/include/stdint.h"
+ 625              		.file 5 "Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h"
+ 626              		.file 6 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_def.h"
+ARM GAS  /tmp/cc6xNi5E.s 			page 19
+
+
+ 627              		.file 7 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_usb.h"
+ 628              		.file 8 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_hcd.h"
+ 629              		.file 9 "Middlewares/ST/STM32_USB_Host_Library/Core/Inc/usbh_def.h"
+ 630              		.file 10 "Middlewares/ST/STM32_USB_Host_Library/Class/MSC/Inc/usbh_msc_scsi.h"
+ 631              		.file 11 "Middlewares/ST/STM32_USB_Host_Library/Class/MSC/Inc/usbh_msc.h"
+ 632              		.file 12 "Middlewares/Third_Party/FatFs/src/ff_gen_drv.h"
+ 633              		.file 13 "FATFS/Target/usbh_diskio.h"
+ 634              		.file 14 "/usr/include/newlib/string.h"
+ 635              		.file 15 "<built-in>"
+ARM GAS  /tmp/cc6xNi5E.s 			page 20
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 usbh_diskio.c
+     /tmp/cc6xNi5E.s:21     .text.USBH_initialize:00000000 $t
+     /tmp/cc6xNi5E.s:27     .text.USBH_initialize:00000000 USBH_initialize
+     /tmp/cc6xNi5E.s:45     .text.USBH_status:00000000 $t
+     /tmp/cc6xNi5E.s:51     .text.USBH_status:00000000 USBH_status
+     /tmp/cc6xNi5E.s:91     .text.USBH_status:00000014 $d
+     /tmp/cc6xNi5E.s:96     .text.USBH_read:00000000 $t
+     /tmp/cc6xNi5E.s:102    .text.USBH_read:00000000 USBH_read
+     /tmp/cc6xNi5E.s:267    .text.USBH_read:00000098 $d
+     /tmp/cc6xNi5E.s:618    .bss.scratch:00000000 scratch
+     /tmp/cc6xNi5E.s:273    .text.USBH_ioctl:00000000 $t
+     /tmp/cc6xNi5E.s:279    .text.USBH_ioctl:00000000 USBH_ioctl
+     /tmp/cc6xNi5E.s:306    .text.USBH_ioctl:00000010 $d
+     /tmp/cc6xNi5E.s:310    .text.USBH_ioctl:00000014 $t
+     /tmp/cc6xNi5E.s:428    .text.USBH_ioctl:00000068 $d
+     /tmp/cc6xNi5E.s:433    .text.USBH_write:00000000 $t
+     /tmp/cc6xNi5E.s:439    .text.USBH_write:00000000 USBH_write
+     /tmp/cc6xNi5E.s:598    .text.USBH_write:000000a0 $d
+     /tmp/cc6xNi5E.s:608    .rodata.USBH_Driver:00000000 USBH_Driver
+     /tmp/cc6xNi5E.s:605    .rodata.USBH_Driver:00000000 $d
+     /tmp/cc6xNi5E.s:615    .bss.scratch:00000000 $d
+
+UNDEFINED SYMBOLS
+USBH_MSC_UnitIsReady
+hUsbHostHS
+USBH_MSC_Read
+memcpy
+USBH_MSC_GetLUNInfo
+USBH_MSC_Write

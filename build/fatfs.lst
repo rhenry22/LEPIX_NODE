@@ -1,0 +1,437 @@
+ARM GAS  /tmp/cce15EuJ.s 			page 1
+
+
+   1              		.cpu cortex-m4
+   2              		.arch armv7e-m
+   3              		.fpu fpv4-sp-d16
+   4              		.eabi_attribute 27, 1
+   5              		.eabi_attribute 28, 1
+   6              		.eabi_attribute 20, 1
+   7              		.eabi_attribute 21, 1
+   8              		.eabi_attribute 23, 3
+   9              		.eabi_attribute 24, 1
+  10              		.eabi_attribute 25, 1
+  11              		.eabi_attribute 26, 1
+  12              		.eabi_attribute 30, 1
+  13              		.eabi_attribute 34, 1
+  14              		.eabi_attribute 18, 4
+  15              		.file	"fatfs.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.file 1 "FATFS/App/fatfs.c"
+  20              		.section	.text.MX_FATFS_Init,"ax",%progbits
+  21              		.align	1
+  22              		.global	MX_FATFS_Init
+  23              		.syntax unified
+  24              		.thumb
+  25              		.thumb_func
+  27              	MX_FATFS_Init:
+  28              	.LFB133:
+   1:FATFS/App/fatfs.c **** /* USER CODE BEGIN Header */
+   2:FATFS/App/fatfs.c **** /**
+   3:FATFS/App/fatfs.c ****   ******************************************************************************
+   4:FATFS/App/fatfs.c ****   * @file   fatfs.c
+   5:FATFS/App/fatfs.c ****   * @brief  Code for fatfs applications
+   6:FATFS/App/fatfs.c ****   ******************************************************************************
+   7:FATFS/App/fatfs.c ****   * @attention
+   8:FATFS/App/fatfs.c ****   *
+   9:FATFS/App/fatfs.c ****   * Copyright (c) 2023 STMicroelectronics.
+  10:FATFS/App/fatfs.c ****   * All rights reserved.
+  11:FATFS/App/fatfs.c ****   *
+  12:FATFS/App/fatfs.c ****   * This software is licensed under terms that can be found in the LICENSE file
+  13:FATFS/App/fatfs.c ****   * in the root directory of this software component.
+  14:FATFS/App/fatfs.c ****   * If no LICENSE file comes with this software, it is provided AS-IS.
+  15:FATFS/App/fatfs.c ****   *
+  16:FATFS/App/fatfs.c ****   ******************************************************************************
+  17:FATFS/App/fatfs.c ****   */
+  18:FATFS/App/fatfs.c **** /* USER CODE END Header */
+  19:FATFS/App/fatfs.c **** #include "fatfs.h"
+  20:FATFS/App/fatfs.c **** 
+  21:FATFS/App/fatfs.c **** #include <stdio.h>
+  22:FATFS/App/fatfs.c **** 
+  23:FATFS/App/fatfs.c **** uint8_t retSD;    /* Return value for SD */
+  24:FATFS/App/fatfs.c **** char SDPath[4];   /* SD logical drive path */
+  25:FATFS/App/fatfs.c **** FATFS SDFatFS;    /* File system object for SD logical drive */
+  26:FATFS/App/fatfs.c **** FIL SDFile;       /* File object for SD */
+  27:FATFS/App/fatfs.c **** uint8_t retUSBH;    /* Return value for USBH */
+  28:FATFS/App/fatfs.c **** char USBHPath[4];   /* USBH logical drive path */
+  29:FATFS/App/fatfs.c **** FATFS USBHFatFS;    /* File system object for USBH logical drive */
+  30:FATFS/App/fatfs.c **** FIL USBHFile;       /* File object for USBH */
+ARM GAS  /tmp/cce15EuJ.s 			page 2
+
+
+  31:FATFS/App/fatfs.c **** 
+  32:FATFS/App/fatfs.c **** /* USER CODE BEGIN Variables */
+  33:FATFS/App/fatfs.c **** 
+  34:FATFS/App/fatfs.c **** /* USER CODE END Variables */
+  35:FATFS/App/fatfs.c **** 
+  36:FATFS/App/fatfs.c **** void MX_FATFS_Init(void)
+  37:FATFS/App/fatfs.c **** {
+  29              		.loc 1 37 1 view -0
+  30              		.cfi_startproc
+  31              		@ args = 0, pretend = 0, frame = 0
+  32              		@ frame_needed = 0, uses_anonymous_args = 0
+  33 0000 08B5     		push	{r3, lr}
+  34              	.LCFI0:
+  35              		.cfi_def_cfa_offset 8
+  36              		.cfi_offset 3, -8
+  37              		.cfi_offset 14, -4
+  38:FATFS/App/fatfs.c ****   /*## FatFS: Link the SD driver ###########################*/
+  39:FATFS/App/fatfs.c ****   retSD = FATFS_LinkDriver(&SD_Driver, SDPath);
+  38              		.loc 1 39 3 view .LVU1
+  39              		.loc 1 39 11 is_stmt 0 view .LVU2
+  40 0002 0649     		ldr	r1, .L3
+  41 0004 0648     		ldr	r0, .L3+4
+  42 0006 FFF7FEFF 		bl	FATFS_LinkDriver
+  43              	.LVL0:
+  44              		.loc 1 39 9 discriminator 1 view .LVU3
+  45 000a 064B     		ldr	r3, .L3+8
+  46 000c 1870     		strb	r0, [r3]
+  40:FATFS/App/fatfs.c ****   /*## FatFS: Link the USBH driver ###########################*/
+  41:FATFS/App/fatfs.c ****   retUSBH = FATFS_LinkDriver(&USBH_Driver, USBHPath);
+  47              		.loc 1 41 3 is_stmt 1 view .LVU4
+  48              		.loc 1 41 13 is_stmt 0 view .LVU5
+  49 000e 0649     		ldr	r1, .L3+12
+  50 0010 0648     		ldr	r0, .L3+16
+  51 0012 FFF7FEFF 		bl	FATFS_LinkDriver
+  52              	.LVL1:
+  53              		.loc 1 41 11 discriminator 1 view .LVU6
+  54 0016 064B     		ldr	r3, .L3+20
+  55 0018 1870     		strb	r0, [r3]
+  42:FATFS/App/fatfs.c **** 
+  43:FATFS/App/fatfs.c ****   /* USER CODE BEGIN Init */
+  44:FATFS/App/fatfs.c ****   /* additional user code for init */
+  45:FATFS/App/fatfs.c ****   /* USER CODE END Init */
+  46:FATFS/App/fatfs.c **** }
+  56              		.loc 1 46 1 view .LVU7
+  57 001a 08BD     		pop	{r3, pc}
+  58              	.L4:
+  59              		.align	2
+  60              	.L3:
+  61 001c 00000000 		.word	SDPath
+  62 0020 00000000 		.word	SD_Driver
+  63 0024 00000000 		.word	retSD
+  64 0028 00000000 		.word	USBHPath
+  65 002c 00000000 		.word	USBH_Driver
+  66 0030 00000000 		.word	retUSBH
+  67              		.cfi_endproc
+  68              	.LFE133:
+  70              		.section	.text.get_fattime,"ax",%progbits
+ARM GAS  /tmp/cce15EuJ.s 			page 3
+
+
+  71              		.align	1
+  72              		.global	get_fattime
+  73              		.syntax unified
+  74              		.thumb
+  75              		.thumb_func
+  77              	get_fattime:
+  78              	.LFB134:
+  47:FATFS/App/fatfs.c **** 
+  48:FATFS/App/fatfs.c **** /**
+  49:FATFS/App/fatfs.c ****   * @brief  Gets Time from RTC
+  50:FATFS/App/fatfs.c ****   * @param  None
+  51:FATFS/App/fatfs.c ****   * @retval Time in DWORD
+  52:FATFS/App/fatfs.c ****   */
+  53:FATFS/App/fatfs.c **** DWORD get_fattime(void)
+  54:FATFS/App/fatfs.c **** {
+  79              		.loc 1 54 1 is_stmt 1 view -0
+  80              		.cfi_startproc
+  81              		@ args = 0, pretend = 0, frame = 0
+  82              		@ frame_needed = 0, uses_anonymous_args = 0
+  83              		@ link register save eliminated.
+  55:FATFS/App/fatfs.c ****   /* USER CODE BEGIN get_fattime */
+  56:FATFS/App/fatfs.c ****   return 0;
+  84              		.loc 1 56 3 view .LVU9
+  57:FATFS/App/fatfs.c ****   /* USER CODE END get_fattime */
+  58:FATFS/App/fatfs.c **** }
+  85              		.loc 1 58 1 is_stmt 0 view .LVU10
+  86 0000 0020     		movs	r0, #0
+  87 0002 7047     		bx	lr
+  88              		.cfi_endproc
+  89              	.LFE134:
+  91              		.section	.rodata.MX_FATFS_USB_Drive_Connected.str1.4,"aMS",%progbits,1
+  92              		.align	2
+  93              	.LC0:
+  94 0000 44726976 		.ascii	"Drive %s     Error\015\012\000"
+  94      65202573 
+  94      20202020 
+  94      20457272 
+  94      6F720D0A 
+  95 0015 000000   		.align	2
+  96              	.LC1:
+  97 0018 44726976 		.ascii	"Drive %s     %luMB\015\012\000"
+  97      65202573 
+  97      20202020 
+  97      20256C75 
+  97      4D420D0A 
+  98              		.section	.text.MX_FATFS_USB_Drive_Connected,"ax",%progbits
+  99              		.align	1
+ 100              		.global	MX_FATFS_USB_Drive_Connected
+ 101              		.syntax unified
+ 102              		.thumb
+ 103              		.thumb_func
+ 105              	MX_FATFS_USB_Drive_Connected:
+ 106              	.LFB135:
+  59:FATFS/App/fatfs.c **** 
+  60:FATFS/App/fatfs.c **** /* USER CODE BEGIN Application */
+  61:FATFS/App/fatfs.c **** 
+  62:FATFS/App/fatfs.c **** /**
+ARM GAS  /tmp/cce15EuJ.s 			page 4
+
+
+  63:FATFS/App/fatfs.c ****   * @brief Callback when USB Drive is inserted
+  64:FATFS/App/fatfs.c ****   * @retval None
+  65:FATFS/App/fatfs.c ****   */
+  66:FATFS/App/fatfs.c **** void MX_FATFS_USB_Drive_Connected(void)
+  67:FATFS/App/fatfs.c **** {
+ 107              		.loc 1 67 1 is_stmt 1 view -0
+ 108              		.cfi_startproc
+ 109              		@ args = 0, pretend = 0, frame = 568
+ 110              		@ frame_needed = 0, uses_anonymous_args = 0
+ 111 0000 00B5     		push	{lr}
+ 112              	.LCFI1:
+ 113              		.cfi_def_cfa_offset 4
+ 114              		.cfi_offset 14, -4
+ 115 0002 ADF50F7D 		sub	sp, sp, #572
+ 116              	.LCFI2:
+ 117              		.cfi_def_cfa_offset 576
+  68:FATFS/App/fatfs.c ****   FATFS fs;
+ 118              		.loc 1 68 3 view .LVU12
+  69:FATFS/App/fatfs.c ****   FRESULT res;
+ 119              		.loc 1 69 3 view .LVU13
+  70:FATFS/App/fatfs.c **** 
+  71:FATFS/App/fatfs.c ****   res = f_mount(&fs, USBHPath, 0);
+ 120              		.loc 1 71 3 view .LVU14
+ 121              		.loc 1 71 9 is_stmt 0 view .LVU15
+ 122 0006 0022     		movs	r2, #0
+ 123 0008 1249     		ldr	r1, .L13
+ 124 000a 02A8     		add	r0, sp, #8
+ 125 000c FFF7FEFF 		bl	f_mount
+ 126              	.LVL2:
+  72:FATFS/App/fatfs.c ****   if(res == FR_OK) 
+ 127              		.loc 1 72 3 is_stmt 1 view .LVU16
+ 128              		.loc 1 72 5 is_stmt 0 view .LVU17
+ 129 0010 18B1     		cbz	r0, .L11
+ 130              	.LVL3:
+ 131              	.L6:
+  73:FATFS/App/fatfs.c ****   {
+  74:FATFS/App/fatfs.c ****     uint32_t freeClust;
+  75:FATFS/App/fatfs.c ****     FATFS* fs_ptr = &fs;
+  76:FATFS/App/fatfs.c ****     res = f_getfree(USBHPath, &freeClust, &fs_ptr); // Warning! This fills fs.n_fatent and fs.csize
+  77:FATFS/App/fatfs.c ****     if(res != FR_OK) {
+  78:FATFS/App/fatfs.c ****         printf("Drive %s     Error\r\n", USBHPath);
+  79:FATFS/App/fatfs.c ****         return;
+  80:FATFS/App/fatfs.c ****     }
+  81:FATFS/App/fatfs.c **** 
+  82:FATFS/App/fatfs.c ****     uint32_t totalBlocks = (fs.n_fatent - 2) * fs.csize;
+  83:FATFS/App/fatfs.c ****     printf("Drive %s     %luMB\r\n", USBHPath, totalBlocks / 2000);
+  84:FATFS/App/fatfs.c ****   }
+  85:FATFS/App/fatfs.c **** }
+ 132              		.loc 1 85 1 view .LVU18
+ 133 0012 0DF50F7D 		add	sp, sp, #572
+ 134              	.LCFI3:
+ 135              		.cfi_remember_state
+ 136              		.cfi_def_cfa_offset 4
+ 137              		@ sp needed
+ 138 0016 5DF804FB 		ldr	pc, [sp], #4
+ 139              	.LVL4:
+ 140              	.L11:
+ARM GAS  /tmp/cce15EuJ.s 			page 5
+
+
+ 141              	.LCFI4:
+ 142              		.cfi_restore_state
+ 143              	.LBB2:
+  74:FATFS/App/fatfs.c ****     FATFS* fs_ptr = &fs;
+ 144              		.loc 1 74 5 is_stmt 1 view .LVU19
+  75:FATFS/App/fatfs.c ****     res = f_getfree(USBHPath, &freeClust, &fs_ptr); // Warning! This fills fs.n_fatent and fs.csize
+ 145              		.loc 1 75 5 view .LVU20
+  75:FATFS/App/fatfs.c ****     res = f_getfree(USBHPath, &freeClust, &fs_ptr); // Warning! This fills fs.n_fatent and fs.csize
+ 146              		.loc 1 75 12 is_stmt 0 view .LVU21
+ 147 001a 01AA     		add	r2, sp, #4
+ 148 001c 02AB     		add	r3, sp, #8
+ 149 001e 1360     		str	r3, [r2]
+  76:FATFS/App/fatfs.c ****     if(res != FR_OK) {
+ 150              		.loc 1 76 5 is_stmt 1 view .LVU22
+  76:FATFS/App/fatfs.c ****     if(res != FR_OK) {
+ 151              		.loc 1 76 11 is_stmt 0 view .LVU23
+ 152 0020 6946     		mov	r1, sp
+ 153 0022 0C48     		ldr	r0, .L13
+ 154              	.LVL5:
+  76:FATFS/App/fatfs.c ****     if(res != FR_OK) {
+ 155              		.loc 1 76 11 view .LVU24
+ 156 0024 FFF7FEFF 		bl	f_getfree
+ 157              	.LVL6:
+  77:FATFS/App/fatfs.c ****         printf("Drive %s     Error\r\n", USBHPath);
+ 158              		.loc 1 77 5 is_stmt 1 view .LVU25
+  77:FATFS/App/fatfs.c ****         printf("Drive %s     Error\r\n", USBHPath);
+ 159              		.loc 1 77 7 is_stmt 0 view .LVU26
+ 160 0028 70B9     		cbnz	r0, .L12
+  82:FATFS/App/fatfs.c ****     printf("Drive %s     %luMB\r\n", USBHPath, totalBlocks / 2000);
+ 161              		.loc 1 82 5 is_stmt 1 view .LVU27
+  82:FATFS/App/fatfs.c ****     printf("Drive %s     %luMB\r\n", USBHPath, totalBlocks / 2000);
+ 162              		.loc 1 82 31 is_stmt 0 view .LVU28
+ 163 002a 079B     		ldr	r3, [sp, #28]
+  82:FATFS/App/fatfs.c ****     printf("Drive %s     %luMB\r\n", USBHPath, totalBlocks / 2000);
+ 164              		.loc 1 82 41 view .LVU29
+ 165 002c 9A1E     		subs	r2, r3, #2
+  82:FATFS/App/fatfs.c ****     printf("Drive %s     %luMB\r\n", USBHPath, totalBlocks / 2000);
+ 166              		.loc 1 82 50 view .LVU30
+ 167 002e BDF81230 		ldrh	r3, [sp, #18]
+  82:FATFS/App/fatfs.c ****     printf("Drive %s     %luMB\r\n", USBHPath, totalBlocks / 2000);
+ 168              		.loc 1 82 14 view .LVU31
+ 169 0032 03FB02F2 		mul	r2, r3, r2
+ 170              	.LVL7:
+  83:FATFS/App/fatfs.c ****   }
+ 171              		.loc 1 83 5 is_stmt 1 view .LVU32
+ 172 0036 084B     		ldr	r3, .L13+4
+ 173 0038 A3FB0232 		umull	r3, r2, r3, r2
+ 174              	.LVL8:
+  83:FATFS/App/fatfs.c ****   }
+ 175              		.loc 1 83 5 is_stmt 0 view .LVU33
+ 176 003c D209     		lsrs	r2, r2, #7
+ 177 003e 0549     		ldr	r1, .L13
+ 178 0040 0648     		ldr	r0, .L13+8
+ 179              	.LVL9:
+  83:FATFS/App/fatfs.c ****   }
+ 180              		.loc 1 83 5 view .LVU34
+ 181 0042 FFF7FEFF 		bl	printf
+ARM GAS  /tmp/cce15EuJ.s 			page 6
+
+
+ 182              	.LVL10:
+  83:FATFS/App/fatfs.c ****   }
+ 183              		.loc 1 83 5 view .LVU35
+ 184 0046 E4E7     		b	.L6
+ 185              	.LVL11:
+ 186              	.L12:
+  78:FATFS/App/fatfs.c ****         return;
+ 187              		.loc 1 78 9 is_stmt 1 view .LVU36
+ 188 0048 0249     		ldr	r1, .L13
+ 189 004a 0548     		ldr	r0, .L13+12
+ 190              	.LVL12:
+  78:FATFS/App/fatfs.c ****         return;
+ 191              		.loc 1 78 9 is_stmt 0 view .LVU37
+ 192 004c FFF7FEFF 		bl	printf
+ 193              	.LVL13:
+  79:FATFS/App/fatfs.c ****     }
+ 194              		.loc 1 79 9 is_stmt 1 view .LVU38
+ 195 0050 DFE7     		b	.L6
+ 196              	.L14:
+ 197 0052 00BF     		.align	2
+ 198              	.L13:
+ 199 0054 00000000 		.word	USBHPath
+ 200 0058 D34D6210 		.word	274877907
+ 201 005c 18000000 		.word	.LC1
+ 202 0060 00000000 		.word	.LC0
+ 203              	.LBE2:
+ 204              		.cfi_endproc
+ 205              	.LFE135:
+ 207              		.global	USBHFile
+ 208              		.section	.bss.USBHFile,"aw",%nobits
+ 209              		.align	2
+ 212              	USBHFile:
+ 213 0000 00000000 		.space	560
+ 213      00000000 
+ 213      00000000 
+ 213      00000000 
+ 213      00000000 
+ 214              		.global	USBHFatFS
+ 215              		.section	.bss.USBHFatFS,"aw",%nobits
+ 216              		.align	2
+ 219              	USBHFatFS:
+ 220 0000 00000000 		.space	560
+ 220      00000000 
+ 220      00000000 
+ 220      00000000 
+ 220      00000000 
+ 221              		.global	USBHPath
+ 222              		.section	.bss.USBHPath,"aw",%nobits
+ 223              		.align	2
+ 226              	USBHPath:
+ 227 0000 00000000 		.space	4
+ 228              		.global	retUSBH
+ 229              		.section	.bss.retUSBH,"aw",%nobits
+ 232              	retUSBH:
+ 233 0000 00       		.space	1
+ 234              		.global	SDFile
+ 235              		.section	.bss.SDFile,"aw",%nobits
+ARM GAS  /tmp/cce15EuJ.s 			page 7
+
+
+ 236              		.align	2
+ 239              	SDFile:
+ 240 0000 00000000 		.space	560
+ 240      00000000 
+ 240      00000000 
+ 240      00000000 
+ 240      00000000 
+ 241              		.global	SDFatFS
+ 242              		.section	.bss.SDFatFS,"aw",%nobits
+ 243              		.align	2
+ 246              	SDFatFS:
+ 247 0000 00000000 		.space	560
+ 247      00000000 
+ 247      00000000 
+ 247      00000000 
+ 247      00000000 
+ 248              		.global	SDPath
+ 249              		.section	.bss.SDPath,"aw",%nobits
+ 250              		.align	2
+ 253              	SDPath:
+ 254 0000 00000000 		.space	4
+ 255              		.global	retSD
+ 256              		.section	.bss.retSD,"aw",%nobits
+ 259              	retSD:
+ 260 0000 00       		.space	1
+ 261              		.text
+ 262              	.Letext0:
+ 263              		.file 2 "Middlewares/Third_Party/FatFs/src/integer.h"
+ 264              		.file 3 "/usr/lib/gcc/arm-none-eabi/14.2.1/include/stdint.h"
+ 265              		.file 4 "Middlewares/Third_Party/FatFs/src/ff.h"
+ 266              		.file 5 "Middlewares/Third_Party/FatFs/src/diskio.h"
+ 267              		.file 6 "Middlewares/Third_Party/FatFs/src/ff_gen_drv.h"
+ 268              		.file 7 "FATFS/Target/sd_diskio.h"
+ 269              		.file 8 "FATFS/Target/usbh_diskio.h"
+ 270              		.file 9 "FATFS/App/fatfs.h"
+ 271              		.file 10 "/usr/include/newlib/stdio.h"
+ARM GAS  /tmp/cce15EuJ.s 			page 8
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 fatfs.c
+     /tmp/cce15EuJ.s:21     .text.MX_FATFS_Init:00000000 $t
+     /tmp/cce15EuJ.s:27     .text.MX_FATFS_Init:00000000 MX_FATFS_Init
+     /tmp/cce15EuJ.s:61     .text.MX_FATFS_Init:0000001c $d
+     /tmp/cce15EuJ.s:253    .bss.SDPath:00000000 SDPath
+     /tmp/cce15EuJ.s:259    .bss.retSD:00000000 retSD
+     /tmp/cce15EuJ.s:226    .bss.USBHPath:00000000 USBHPath
+     /tmp/cce15EuJ.s:232    .bss.retUSBH:00000000 retUSBH
+     /tmp/cce15EuJ.s:71     .text.get_fattime:00000000 $t
+     /tmp/cce15EuJ.s:77     .text.get_fattime:00000000 get_fattime
+     /tmp/cce15EuJ.s:92     .rodata.MX_FATFS_USB_Drive_Connected.str1.4:00000000 $d
+     /tmp/cce15EuJ.s:99     .text.MX_FATFS_USB_Drive_Connected:00000000 $t
+     /tmp/cce15EuJ.s:105    .text.MX_FATFS_USB_Drive_Connected:00000000 MX_FATFS_USB_Drive_Connected
+     /tmp/cce15EuJ.s:199    .text.MX_FATFS_USB_Drive_Connected:00000054 $d
+     /tmp/cce15EuJ.s:212    .bss.USBHFile:00000000 USBHFile
+     /tmp/cce15EuJ.s:209    .bss.USBHFile:00000000 $d
+     /tmp/cce15EuJ.s:219    .bss.USBHFatFS:00000000 USBHFatFS
+     /tmp/cce15EuJ.s:216    .bss.USBHFatFS:00000000 $d
+     /tmp/cce15EuJ.s:223    .bss.USBHPath:00000000 $d
+     /tmp/cce15EuJ.s:233    .bss.retUSBH:00000000 $d
+     /tmp/cce15EuJ.s:239    .bss.SDFile:00000000 SDFile
+     /tmp/cce15EuJ.s:236    .bss.SDFile:00000000 $d
+     /tmp/cce15EuJ.s:246    .bss.SDFatFS:00000000 SDFatFS
+     /tmp/cce15EuJ.s:243    .bss.SDFatFS:00000000 $d
+     /tmp/cce15EuJ.s:250    .bss.SDPath:00000000 $d
+     /tmp/cce15EuJ.s:260    .bss.retSD:00000000 $d
+
+UNDEFINED SYMBOLS
+FATFS_LinkDriver
+SD_Driver
+USBH_Driver
+f_mount
+f_getfree
+printf

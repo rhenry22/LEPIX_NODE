@@ -43,6 +43,7 @@ Core/Src/rtc.c \
 Core/Src/sdio.c \
 Core/Src/spi.c \
 Core/Src/usart.c \
+Code/Src/artnet.c \
 Core/Src/stm32f4xx_it.c \
 Core/Src/stm32f4xx_hal_msp.c \
 Core/Src/system_stm32f4xx.c \

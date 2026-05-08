@@ -1,4 +1,4 @@
-/* USER CODE BEGIN Header */
+#include <stdio.h>/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file    can.c
@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "can.h"
+#include <stdio.h>
 
 /* USER CODE BEGIN 0 */
 

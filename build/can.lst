@@ -1,0 +1,1634 @@
+ARM GAS  /tmp/cczM9vCV.s 			page 1
+
+
+   1              		.cpu cortex-m4
+   2              		.arch armv7e-m
+   3              		.fpu fpv4-sp-d16
+   4              		.eabi_attribute 27, 1
+   5              		.eabi_attribute 28, 1
+   6              		.eabi_attribute 20, 1
+   7              		.eabi_attribute 21, 1
+   8              		.eabi_attribute 23, 3
+   9              		.eabi_attribute 24, 1
+  10              		.eabi_attribute 25, 1
+  11              		.eabi_attribute 26, 1
+  12              		.eabi_attribute 30, 1
+  13              		.eabi_attribute 34, 1
+  14              		.eabi_attribute 18, 4
+  15              		.file	"can.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.file 1 "Core/Src/can.c"
+  20              		.section	.text.MX_CAN1_Init,"ax",%progbits
+  21              		.align	1
+  22              		.global	MX_CAN1_Init
+  23              		.syntax unified
+  24              		.thumb
+  25              		.thumb_func
+  27              	MX_CAN1_Init:
+  28              	.LFB133:
+   1:Core/Src/can.c **** #include <stdio.h>/* USER CODE BEGIN Header */
+   2:Core/Src/can.c **** /**
+   3:Core/Src/can.c ****   ******************************************************************************
+   4:Core/Src/can.c ****   * @file    can.c
+   5:Core/Src/can.c ****   * @brief   This file provides code for the configuration
+   6:Core/Src/can.c ****   *          of the CAN instances.
+   7:Core/Src/can.c ****   ******************************************************************************
+   8:Core/Src/can.c ****   * @attention
+   9:Core/Src/can.c ****   *
+  10:Core/Src/can.c ****   * Copyright (c) 2023 STMicroelectronics.
+  11:Core/Src/can.c ****   * All rights reserved.
+  12:Core/Src/can.c ****   *
+  13:Core/Src/can.c ****   * This software is licensed under terms that can be found in the LICENSE file
+  14:Core/Src/can.c ****   * in the root directory of this software component.
+  15:Core/Src/can.c ****   * If no LICENSE file comes with this software, it is provided AS-IS.
+  16:Core/Src/can.c ****   *
+  17:Core/Src/can.c ****   ******************************************************************************
+  18:Core/Src/can.c ****   */
+  19:Core/Src/can.c **** /* USER CODE END Header */
+  20:Core/Src/can.c **** /* Includes ------------------------------------------------------------------*/
+  21:Core/Src/can.c **** #include "can.h"
+  22:Core/Src/can.c **** #include <stdio.h>
+  23:Core/Src/can.c **** 
+  24:Core/Src/can.c **** /* USER CODE BEGIN 0 */
+  25:Core/Src/can.c **** 
+  26:Core/Src/can.c **** /* USER CODE END 0 */
+  27:Core/Src/can.c **** 
+  28:Core/Src/can.c **** CAN_HandleTypeDef hcan1;
+  29:Core/Src/can.c **** CAN_HandleTypeDef hcan2;
+  30:Core/Src/can.c **** 
+ARM GAS  /tmp/cczM9vCV.s 			page 2
+
+
+  31:Core/Src/can.c **** /* CAN1 init function */
+  32:Core/Src/can.c **** void MX_CAN1_Init(void)
+  33:Core/Src/can.c **** {
+  29              		.loc 1 33 1 view -0
+  30              		.cfi_startproc
+  31              		@ args = 0, pretend = 0, frame = 0
+  32              		@ frame_needed = 0, uses_anonymous_args = 0
+  33 0000 08B5     		push	{r3, lr}
+  34              	.LCFI0:
+  35              		.cfi_def_cfa_offset 8
+  36              		.cfi_offset 3, -8
+  37              		.cfi_offset 14, -4
+  34:Core/Src/can.c **** 
+  35:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_Init 0 */
+  36:Core/Src/can.c **** 
+  37:Core/Src/can.c ****   /* USER CODE END CAN1_Init 0 */
+  38:Core/Src/can.c **** 
+  39:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_Init 1 */
+  40:Core/Src/can.c **** 
+  41:Core/Src/can.c ****   /* USER CODE END CAN1_Init 1 */
+  42:Core/Src/can.c ****   hcan1.Instance = CAN1;
+  38              		.loc 1 42 3 view .LVU1
+  39              		.loc 1 42 18 is_stmt 0 view .LVU2
+  40 0002 0D48     		ldr	r0, .L5
+  41 0004 0D4B     		ldr	r3, .L5+4
+  42 0006 0360     		str	r3, [r0]
+  43:Core/Src/can.c ****   hcan1.Init.Prescaler = 6;
+  43              		.loc 1 43 3 is_stmt 1 view .LVU3
+  44              		.loc 1 43 24 is_stmt 0 view .LVU4
+  45 0008 0623     		movs	r3, #6
+  46 000a 4360     		str	r3, [r0, #4]
+  44:Core/Src/can.c ****   hcan1.Init.Mode = CAN_MODE_NORMAL;
+  47              		.loc 1 44 3 is_stmt 1 view .LVU5
+  48              		.loc 1 44 19 is_stmt 0 view .LVU6
+  49 000c 0023     		movs	r3, #0
+  50 000e 8360     		str	r3, [r0, #8]
+  45:Core/Src/can.c ****   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  51              		.loc 1 45 3 is_stmt 1 view .LVU7
+  52              		.loc 1 45 28 is_stmt 0 view .LVU8
+  53 0010 C360     		str	r3, [r0, #12]
+  46:Core/Src/can.c ****   hcan1.Init.TimeSeg1 = CAN_BS1_6TQ;
+  54              		.loc 1 46 3 is_stmt 1 view .LVU9
+  55              		.loc 1 46 23 is_stmt 0 view .LVU10
+  56 0012 4FF4A022 		mov	r2, #327680
+  57 0016 0261     		str	r2, [r0, #16]
+  47:Core/Src/can.c ****   hcan1.Init.TimeSeg2 = CAN_BS2_7TQ;
+  58              		.loc 1 47 3 is_stmt 1 view .LVU11
+  59              		.loc 1 47 23 is_stmt 0 view .LVU12
+  60 0018 4FF4C002 		mov	r2, #6291456
+  61 001c 4261     		str	r2, [r0, #20]
+  48:Core/Src/can.c ****   hcan1.Init.TimeTriggeredMode = DISABLE;
+  62              		.loc 1 48 3 is_stmt 1 view .LVU13
+  63              		.loc 1 48 32 is_stmt 0 view .LVU14
+  64 001e 0376     		strb	r3, [r0, #24]
+  49:Core/Src/can.c ****   hcan1.Init.AutoBusOff = DISABLE;
+  65              		.loc 1 49 3 is_stmt 1 view .LVU15
+  66              		.loc 1 49 25 is_stmt 0 view .LVU16
+ARM GAS  /tmp/cczM9vCV.s 			page 3
+
+
+  67 0020 4376     		strb	r3, [r0, #25]
+  50:Core/Src/can.c ****   hcan1.Init.AutoWakeUp = DISABLE;
+  68              		.loc 1 50 3 is_stmt 1 view .LVU17
+  69              		.loc 1 50 25 is_stmt 0 view .LVU18
+  70 0022 8376     		strb	r3, [r0, #26]
+  51:Core/Src/can.c ****   hcan1.Init.AutoRetransmission = DISABLE;
+  71              		.loc 1 51 3 is_stmt 1 view .LVU19
+  72              		.loc 1 51 33 is_stmt 0 view .LVU20
+  73 0024 C376     		strb	r3, [r0, #27]
+  52:Core/Src/can.c ****   hcan1.Init.ReceiveFifoLocked = DISABLE;
+  74              		.loc 1 52 3 is_stmt 1 view .LVU21
+  75              		.loc 1 52 32 is_stmt 0 view .LVU22
+  76 0026 0377     		strb	r3, [r0, #28]
+  53:Core/Src/can.c ****   hcan1.Init.TransmitFifoPriority = DISABLE;
+  77              		.loc 1 53 3 is_stmt 1 view .LVU23
+  78              		.loc 1 53 35 is_stmt 0 view .LVU24
+  79 0028 4377     		strb	r3, [r0, #29]
+  54:Core/Src/can.c ****   if (HAL_CAN_Init(&hcan1) != HAL_OK)
+  80              		.loc 1 54 3 is_stmt 1 view .LVU25
+  81              		.loc 1 54 7 is_stmt 0 view .LVU26
+  82 002a FFF7FEFF 		bl	HAL_CAN_Init
+  83              	.LVL0:
+  84              		.loc 1 54 6 discriminator 1 view .LVU27
+  85 002e 00B9     		cbnz	r0, .L4
+  86              	.L1:
+  55:Core/Src/can.c ****   {
+  56:Core/Src/can.c ****     Error_Handler();
+  57:Core/Src/can.c ****   }
+  58:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_Init 2 */
+  59:Core/Src/can.c **** 
+  60:Core/Src/can.c ****   /* USER CODE END CAN1_Init 2 */
+  61:Core/Src/can.c **** 
+  62:Core/Src/can.c **** }
+  87              		.loc 1 62 1 view .LVU28
+  88 0030 08BD     		pop	{r3, pc}
+  89              	.L4:
+  56:Core/Src/can.c ****   }
+  90              		.loc 1 56 5 is_stmt 1 view .LVU29
+  91 0032 FFF7FEFF 		bl	Error_Handler
+  92              	.LVL1:
+  93              		.loc 1 62 1 is_stmt 0 view .LVU30
+  94 0036 FBE7     		b	.L1
+  95              	.L6:
+  96              		.align	2
+  97              	.L5:
+  98 0038 00000000 		.word	hcan1
+  99 003c 00640040 		.word	1073767424
+ 100              		.cfi_endproc
+ 101              	.LFE133:
+ 103              		.section	.text.MX_CAN2_Init,"ax",%progbits
+ 104              		.align	1
+ 105              		.global	MX_CAN2_Init
+ 106              		.syntax unified
+ 107              		.thumb
+ 108              		.thumb_func
+ 110              	MX_CAN2_Init:
+ 111              	.LFB134:
+ARM GAS  /tmp/cczM9vCV.s 			page 4
+
+
+  63:Core/Src/can.c **** /* CAN2 init function */
+  64:Core/Src/can.c **** void MX_CAN2_Init(void)
+  65:Core/Src/can.c **** {
+ 112              		.loc 1 65 1 is_stmt 1 view -0
+ 113              		.cfi_startproc
+ 114              		@ args = 0, pretend = 0, frame = 0
+ 115              		@ frame_needed = 0, uses_anonymous_args = 0
+ 116 0000 08B5     		push	{r3, lr}
+ 117              	.LCFI1:
+ 118              		.cfi_def_cfa_offset 8
+ 119              		.cfi_offset 3, -8
+ 120              		.cfi_offset 14, -4
+  66:Core/Src/can.c **** 
+  67:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_Init 0 */
+  68:Core/Src/can.c **** 
+  69:Core/Src/can.c ****   /* USER CODE END CAN2_Init 0 */
+  70:Core/Src/can.c **** 
+  71:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_Init 1 */
+  72:Core/Src/can.c **** 
+  73:Core/Src/can.c ****   /* USER CODE END CAN2_Init 1 */
+  74:Core/Src/can.c ****   hcan2.Instance = CAN2;
+ 121              		.loc 1 74 3 view .LVU32
+ 122              		.loc 1 74 18 is_stmt 0 view .LVU33
+ 123 0002 0D48     		ldr	r0, .L11
+ 124 0004 0D4B     		ldr	r3, .L11+4
+ 125 0006 0360     		str	r3, [r0]
+  75:Core/Src/can.c ****   hcan2.Init.Prescaler = 6;
+ 126              		.loc 1 75 3 is_stmt 1 view .LVU34
+ 127              		.loc 1 75 24 is_stmt 0 view .LVU35
+ 128 0008 0623     		movs	r3, #6
+ 129 000a 4360     		str	r3, [r0, #4]
+  76:Core/Src/can.c ****   hcan2.Init.Mode = CAN_MODE_NORMAL;
+ 130              		.loc 1 76 3 is_stmt 1 view .LVU36
+ 131              		.loc 1 76 19 is_stmt 0 view .LVU37
+ 132 000c 0023     		movs	r3, #0
+ 133 000e 8360     		str	r3, [r0, #8]
+  77:Core/Src/can.c ****   hcan2.Init.SyncJumpWidth = CAN_SJW_1TQ;
+ 134              		.loc 1 77 3 is_stmt 1 view .LVU38
+ 135              		.loc 1 77 28 is_stmt 0 view .LVU39
+ 136 0010 C360     		str	r3, [r0, #12]
+  78:Core/Src/can.c ****   hcan2.Init.TimeSeg1 = CAN_BS1_6TQ;
+ 137              		.loc 1 78 3 is_stmt 1 view .LVU40
+ 138              		.loc 1 78 23 is_stmt 0 view .LVU41
+ 139 0012 4FF4A022 		mov	r2, #327680
+ 140 0016 0261     		str	r2, [r0, #16]
+  79:Core/Src/can.c ****   hcan2.Init.TimeSeg2 = CAN_BS2_7TQ;
+ 141              		.loc 1 79 3 is_stmt 1 view .LVU42
+ 142              		.loc 1 79 23 is_stmt 0 view .LVU43
+ 143 0018 4FF4C002 		mov	r2, #6291456
+ 144 001c 4261     		str	r2, [r0, #20]
+  80:Core/Src/can.c ****   hcan2.Init.TimeTriggeredMode = DISABLE;
+ 145              		.loc 1 80 3 is_stmt 1 view .LVU44
+ 146              		.loc 1 80 32 is_stmt 0 view .LVU45
+ 147 001e 0376     		strb	r3, [r0, #24]
+  81:Core/Src/can.c ****   hcan2.Init.AutoBusOff = DISABLE;
+ 148              		.loc 1 81 3 is_stmt 1 view .LVU46
+ 149              		.loc 1 81 25 is_stmt 0 view .LVU47
+ARM GAS  /tmp/cczM9vCV.s 			page 5
+
+
+ 150 0020 4376     		strb	r3, [r0, #25]
+  82:Core/Src/can.c ****   hcan2.Init.AutoWakeUp = DISABLE;
+ 151              		.loc 1 82 3 is_stmt 1 view .LVU48
+ 152              		.loc 1 82 25 is_stmt 0 view .LVU49
+ 153 0022 8376     		strb	r3, [r0, #26]
+  83:Core/Src/can.c ****   hcan2.Init.AutoRetransmission = DISABLE;
+ 154              		.loc 1 83 3 is_stmt 1 view .LVU50
+ 155              		.loc 1 83 33 is_stmt 0 view .LVU51
+ 156 0024 C376     		strb	r3, [r0, #27]
+  84:Core/Src/can.c ****   hcan2.Init.ReceiveFifoLocked = DISABLE;
+ 157              		.loc 1 84 3 is_stmt 1 view .LVU52
+ 158              		.loc 1 84 32 is_stmt 0 view .LVU53
+ 159 0026 0377     		strb	r3, [r0, #28]
+  85:Core/Src/can.c ****   hcan2.Init.TransmitFifoPriority = DISABLE;
+ 160              		.loc 1 85 3 is_stmt 1 view .LVU54
+ 161              		.loc 1 85 35 is_stmt 0 view .LVU55
+ 162 0028 4377     		strb	r3, [r0, #29]
+  86:Core/Src/can.c ****   if (HAL_CAN_Init(&hcan2) != HAL_OK)
+ 163              		.loc 1 86 3 is_stmt 1 view .LVU56
+ 164              		.loc 1 86 7 is_stmt 0 view .LVU57
+ 165 002a FFF7FEFF 		bl	HAL_CAN_Init
+ 166              	.LVL2:
+ 167              		.loc 1 86 6 discriminator 1 view .LVU58
+ 168 002e 00B9     		cbnz	r0, .L10
+ 169              	.L7:
+  87:Core/Src/can.c ****   {
+  88:Core/Src/can.c ****     Error_Handler();
+  89:Core/Src/can.c ****   }
+  90:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_Init 2 */
+  91:Core/Src/can.c **** 
+  92:Core/Src/can.c ****   /* USER CODE END CAN2_Init 2 */
+  93:Core/Src/can.c **** 
+  94:Core/Src/can.c **** }
+ 170              		.loc 1 94 1 view .LVU59
+ 171 0030 08BD     		pop	{r3, pc}
+ 172              	.L10:
+  88:Core/Src/can.c ****   }
+ 173              		.loc 1 88 5 is_stmt 1 view .LVU60
+ 174 0032 FFF7FEFF 		bl	Error_Handler
+ 175              	.LVL3:
+ 176              		.loc 1 94 1 is_stmt 0 view .LVU61
+ 177 0036 FBE7     		b	.L7
+ 178              	.L12:
+ 179              		.align	2
+ 180              	.L11:
+ 181 0038 00000000 		.word	hcan2
+ 182 003c 00680040 		.word	1073768448
+ 183              		.cfi_endproc
+ 184              	.LFE134:
+ 186              		.section	.text.HAL_CAN_MspInit,"ax",%progbits
+ 187              		.align	1
+ 188              		.global	HAL_CAN_MspInit
+ 189              		.syntax unified
+ 190              		.thumb
+ 191              		.thumb_func
+ 193              	HAL_CAN_MspInit:
+ 194              	.LVL4:
+ARM GAS  /tmp/cczM9vCV.s 			page 6
+
+
+ 195              	.LFB135:
+  95:Core/Src/can.c **** 
+  96:Core/Src/can.c **** static uint32_t HAL_RCC_CAN1_CLK_ENABLED=0;
+  97:Core/Src/can.c **** 
+  98:Core/Src/can.c **** void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
+  99:Core/Src/can.c **** {
+ 196              		.loc 1 99 1 is_stmt 1 view -0
+ 197              		.cfi_startproc
+ 198              		@ args = 0, pretend = 0, frame = 40
+ 199              		@ frame_needed = 0, uses_anonymous_args = 0
+ 200              		.loc 1 99 1 is_stmt 0 view .LVU63
+ 201 0000 10B5     		push	{r4, lr}
+ 202              	.LCFI2:
+ 203              		.cfi_def_cfa_offset 8
+ 204              		.cfi_offset 4, -8
+ 205              		.cfi_offset 14, -4
+ 206 0002 8AB0     		sub	sp, sp, #40
+ 207              	.LCFI3:
+ 208              		.cfi_def_cfa_offset 48
+ 100:Core/Src/can.c **** 
+ 101:Core/Src/can.c ****   GPIO_InitTypeDef GPIO_InitStruct = {0};
+ 209              		.loc 1 101 3 is_stmt 1 view .LVU64
+ 210              		.loc 1 101 20 is_stmt 0 view .LVU65
+ 211 0004 0023     		movs	r3, #0
+ 212 0006 0593     		str	r3, [sp, #20]
+ 213 0008 0693     		str	r3, [sp, #24]
+ 214 000a 0793     		str	r3, [sp, #28]
+ 215 000c 0893     		str	r3, [sp, #32]
+ 216 000e 0993     		str	r3, [sp, #36]
+ 102:Core/Src/can.c ****   if(canHandle->Instance==CAN1)
+ 217              		.loc 1 102 3 is_stmt 1 view .LVU66
+ 218              		.loc 1 102 15 is_stmt 0 view .LVU67
+ 219 0010 0368     		ldr	r3, [r0]
+ 220              		.loc 1 102 5 view .LVU68
+ 221 0012 554A     		ldr	r2, .L23
+ 222 0014 9342     		cmp	r3, r2
+ 223 0016 04D0     		beq	.L19
+ 103:Core/Src/can.c ****   {
+ 104:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_MspInit 0 */
+ 105:Core/Src/can.c **** 
+ 106:Core/Src/can.c ****   /* USER CODE END CAN1_MspInit 0 */
+ 107:Core/Src/can.c ****     /* CAN1 clock enable */
+ 108:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED++;
+ 109:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==1){
+ 110:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_ENABLE();
+ 111:Core/Src/can.c ****     }
+ 112:Core/Src/can.c **** 
+ 113:Core/Src/can.c ****     __HAL_RCC_GPIOD_CLK_ENABLE();
+ 114:Core/Src/can.c ****     /**CAN1 GPIO Configuration
+ 115:Core/Src/can.c ****     PD0     ------> CAN1_RX
+ 116:Core/Src/can.c ****     PD1     ------> CAN1_TX
+ 117:Core/Src/can.c ****     */
+ 118:Core/Src/can.c ****     GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
+ 119:Core/Src/can.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 120:Core/Src/can.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 121:Core/Src/can.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 122:Core/Src/can.c ****     GPIO_InitStruct.Alternate = GPIO_AF9_CAN1;
+ARM GAS  /tmp/cczM9vCV.s 			page 7
+
+
+ 123:Core/Src/can.c ****     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+ 124:Core/Src/can.c **** 
+ 125:Core/Src/can.c ****     /* CAN1 interrupt Init */
+ 126:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN1_TX_IRQn, 0, 0);
+ 127:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN1_TX_IRQn);
+ 128:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN1_RX0_IRQn, 0, 0);
+ 129:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN1_RX0_IRQn);
+ 130:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN1_RX1_IRQn, 0, 0);
+ 131:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN1_RX1_IRQn);
+ 132:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN1_SCE_IRQn, 0, 0);
+ 133:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
+ 134:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_MspInit 1 */
+ 135:Core/Src/can.c **** 
+ 136:Core/Src/can.c ****   /* USER CODE END CAN1_MspInit 1 */
+ 137:Core/Src/can.c ****   }
+ 138:Core/Src/can.c ****   else if(canHandle->Instance==CAN2)
+ 224              		.loc 1 138 8 is_stmt 1 view .LVU69
+ 225              		.loc 1 138 10 is_stmt 0 view .LVU70
+ 226 0018 544A     		ldr	r2, .L23+4
+ 227 001a 9342     		cmp	r3, r2
+ 228 001c 4CD0     		beq	.L20
+ 229              	.LVL5:
+ 230              	.L13:
+ 139:Core/Src/can.c ****   {
+ 140:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_MspInit 0 */
+ 141:Core/Src/can.c **** 
+ 142:Core/Src/can.c ****   /* USER CODE END CAN2_MspInit 0 */
+ 143:Core/Src/can.c ****     /* CAN2 clock enable */
+ 144:Core/Src/can.c ****     __HAL_RCC_CAN2_CLK_ENABLE();
+ 145:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED++;
+ 146:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==1){
+ 147:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_ENABLE();
+ 148:Core/Src/can.c ****     }
+ 149:Core/Src/can.c **** 
+ 150:Core/Src/can.c ****     __HAL_RCC_GPIOB_CLK_ENABLE();
+ 151:Core/Src/can.c ****     /**CAN2 GPIO Configuration
+ 152:Core/Src/can.c ****     PB5     ------> CAN2_RX
+ 153:Core/Src/can.c ****     PB6     ------> CAN2_TX
+ 154:Core/Src/can.c ****     */
+ 155:Core/Src/can.c ****     GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
+ 156:Core/Src/can.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 157:Core/Src/can.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 158:Core/Src/can.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 159:Core/Src/can.c ****     GPIO_InitStruct.Alternate = GPIO_AF9_CAN2;
+ 160:Core/Src/can.c ****     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+ 161:Core/Src/can.c **** 
+ 162:Core/Src/can.c ****     /* CAN2 interrupt Init */
+ 163:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN2_TX_IRQn, 0, 0);
+ 164:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN2_TX_IRQn);
+ 165:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN2_RX0_IRQn, 0, 0);
+ 166:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN2_RX0_IRQn);
+ 167:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN2_RX1_IRQn, 0, 0);
+ 168:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN2_RX1_IRQn);
+ 169:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN2_SCE_IRQn, 0, 0);
+ 170:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN2_SCE_IRQn);
+ 171:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_MspInit 1 */
+ 172:Core/Src/can.c **** 
+ARM GAS  /tmp/cczM9vCV.s 			page 8
+
+
+ 173:Core/Src/can.c ****   /* USER CODE END CAN2_MspInit 1 */
+ 174:Core/Src/can.c ****   }
+ 175:Core/Src/can.c **** }
+ 231              		.loc 1 175 1 view .LVU71
+ 232 001e 0AB0     		add	sp, sp, #40
+ 233              	.LCFI4:
+ 234              		.cfi_remember_state
+ 235              		.cfi_def_cfa_offset 8
+ 236              		@ sp needed
+ 237 0020 10BD     		pop	{r4, pc}
+ 238              	.LVL6:
+ 239              	.L19:
+ 240              	.LCFI5:
+ 241              		.cfi_restore_state
+ 108:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==1){
+ 242              		.loc 1 108 5 is_stmt 1 view .LVU72
+ 108:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==1){
+ 243              		.loc 1 108 29 is_stmt 0 view .LVU73
+ 244 0022 534A     		ldr	r2, .L23+8
+ 245 0024 1368     		ldr	r3, [r2]
+ 246 0026 0133     		adds	r3, r3, #1
+ 247 0028 1360     		str	r3, [r2]
+ 109:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_ENABLE();
+ 248              		.loc 1 109 5 is_stmt 1 view .LVU74
+ 109:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_ENABLE();
+ 249              		.loc 1 109 7 is_stmt 0 view .LVU75
+ 250 002a 012B     		cmp	r3, #1
+ 251 002c 37D0     		beq	.L21
+ 252              	.L15:
+ 110:Core/Src/can.c ****     }
+ 253              		.loc 1 110 7 is_stmt 1 discriminator 1 view .LVU76
+ 113:Core/Src/can.c ****     /**CAN1 GPIO Configuration
+ 254              		.loc 1 113 5 view .LVU77
+ 255              	.LBB2:
+ 113:Core/Src/can.c ****     /**CAN1 GPIO Configuration
+ 256              		.loc 1 113 5 view .LVU78
+ 257 002e 0024     		movs	r4, #0
+ 258 0030 0194     		str	r4, [sp, #4]
+ 113:Core/Src/can.c ****     /**CAN1 GPIO Configuration
+ 259              		.loc 1 113 5 view .LVU79
+ 260 0032 504B     		ldr	r3, .L23+12
+ 261 0034 1A6B     		ldr	r2, [r3, #48]
+ 262 0036 42F00802 		orr	r2, r2, #8
+ 263 003a 1A63     		str	r2, [r3, #48]
+ 113:Core/Src/can.c ****     /**CAN1 GPIO Configuration
+ 264              		.loc 1 113 5 view .LVU80
+ 265 003c 1B6B     		ldr	r3, [r3, #48]
+ 266 003e 03F00803 		and	r3, r3, #8
+ 267 0042 0193     		str	r3, [sp, #4]
+ 113:Core/Src/can.c ****     /**CAN1 GPIO Configuration
+ 268              		.loc 1 113 5 view .LVU81
+ 269 0044 019B     		ldr	r3, [sp, #4]
+ 270              	.LBE2:
+ 113:Core/Src/can.c ****     /**CAN1 GPIO Configuration
+ 271              		.loc 1 113 5 view .LVU82
+ 118:Core/Src/can.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 272              		.loc 1 118 5 view .LVU83
+ARM GAS  /tmp/cczM9vCV.s 			page 9
+
+
+ 118:Core/Src/can.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 273              		.loc 1 118 25 is_stmt 0 view .LVU84
+ 274 0046 0323     		movs	r3, #3
+ 275 0048 0593     		str	r3, [sp, #20]
+ 119:Core/Src/can.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 276              		.loc 1 119 5 is_stmt 1 view .LVU85
+ 119:Core/Src/can.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 277              		.loc 1 119 26 is_stmt 0 view .LVU86
+ 278 004a 0222     		movs	r2, #2
+ 279 004c 0692     		str	r2, [sp, #24]
+ 120:Core/Src/can.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 280              		.loc 1 120 5 is_stmt 1 view .LVU87
+ 121:Core/Src/can.c ****     GPIO_InitStruct.Alternate = GPIO_AF9_CAN1;
+ 281              		.loc 1 121 5 view .LVU88
+ 121:Core/Src/can.c ****     GPIO_InitStruct.Alternate = GPIO_AF9_CAN1;
+ 282              		.loc 1 121 27 is_stmt 0 view .LVU89
+ 283 004e 0893     		str	r3, [sp, #32]
+ 122:Core/Src/can.c ****     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+ 284              		.loc 1 122 5 is_stmt 1 view .LVU90
+ 122:Core/Src/can.c ****     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+ 285              		.loc 1 122 31 is_stmt 0 view .LVU91
+ 286 0050 0923     		movs	r3, #9
+ 287 0052 0993     		str	r3, [sp, #36]
+ 123:Core/Src/can.c **** 
+ 288              		.loc 1 123 5 is_stmt 1 view .LVU92
+ 289 0054 05A9     		add	r1, sp, #20
+ 290 0056 4848     		ldr	r0, .L23+16
+ 291              	.LVL7:
+ 123:Core/Src/can.c **** 
+ 292              		.loc 1 123 5 is_stmt 0 view .LVU93
+ 293 0058 FFF7FEFF 		bl	HAL_GPIO_Init
+ 294              	.LVL8:
+ 126:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN1_TX_IRQn);
+ 295              		.loc 1 126 5 is_stmt 1 view .LVU94
+ 296 005c 2246     		mov	r2, r4
+ 297 005e 2146     		mov	r1, r4
+ 298 0060 1320     		movs	r0, #19
+ 299 0062 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 300              	.LVL9:
+ 127:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN1_RX0_IRQn, 0, 0);
+ 301              		.loc 1 127 5 view .LVU95
+ 302 0066 1320     		movs	r0, #19
+ 303 0068 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 304              	.LVL10:
+ 128:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN1_RX0_IRQn);
+ 305              		.loc 1 128 5 view .LVU96
+ 306 006c 2246     		mov	r2, r4
+ 307 006e 2146     		mov	r1, r4
+ 308 0070 1420     		movs	r0, #20
+ 309 0072 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 310              	.LVL11:
+ 129:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN1_RX1_IRQn, 0, 0);
+ 311              		.loc 1 129 5 view .LVU97
+ 312 0076 1420     		movs	r0, #20
+ 313 0078 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 314              	.LVL12:
+ 130:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN1_RX1_IRQn);
+ARM GAS  /tmp/cczM9vCV.s 			page 10
+
+
+ 315              		.loc 1 130 5 view .LVU98
+ 316 007c 2246     		mov	r2, r4
+ 317 007e 2146     		mov	r1, r4
+ 318 0080 1520     		movs	r0, #21
+ 319 0082 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 320              	.LVL13:
+ 131:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN1_SCE_IRQn, 0, 0);
+ 321              		.loc 1 131 5 view .LVU99
+ 322 0086 1520     		movs	r0, #21
+ 323 0088 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 324              	.LVL14:
+ 132:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
+ 325              		.loc 1 132 5 view .LVU100
+ 326 008c 2246     		mov	r2, r4
+ 327 008e 2146     		mov	r1, r4
+ 328 0090 1620     		movs	r0, #22
+ 329 0092 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 330              	.LVL15:
+ 133:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_MspInit 1 */
+ 331              		.loc 1 133 5 view .LVU101
+ 332 0096 1620     		movs	r0, #22
+ 333 0098 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 334              	.LVL16:
+ 335 009c BFE7     		b	.L13
+ 336              	.LVL17:
+ 337              	.L21:
+ 110:Core/Src/can.c ****     }
+ 338              		.loc 1 110 7 view .LVU102
+ 339              	.LBB3:
+ 110:Core/Src/can.c ****     }
+ 340              		.loc 1 110 7 view .LVU103
+ 341 009e 0023     		movs	r3, #0
+ 342 00a0 0093     		str	r3, [sp]
+ 110:Core/Src/can.c ****     }
+ 343              		.loc 1 110 7 view .LVU104
+ 344 00a2 344B     		ldr	r3, .L23+12
+ 345 00a4 1A6C     		ldr	r2, [r3, #64]
+ 346 00a6 42F00072 		orr	r2, r2, #33554432
+ 347 00aa 1A64     		str	r2, [r3, #64]
+ 110:Core/Src/can.c ****     }
+ 348              		.loc 1 110 7 view .LVU105
+ 349 00ac 1B6C     		ldr	r3, [r3, #64]
+ 350 00ae 03F00073 		and	r3, r3, #33554432
+ 351 00b2 0093     		str	r3, [sp]
+ 110:Core/Src/can.c ****     }
+ 352              		.loc 1 110 7 view .LVU106
+ 353 00b4 009B     		ldr	r3, [sp]
+ 354 00b6 BAE7     		b	.L15
+ 355              	.L20:
+ 356              	.LBE3:
+ 144:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED++;
+ 357              		.loc 1 144 5 view .LVU107
+ 358              	.LBB4:
+ 144:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED++;
+ 359              		.loc 1 144 5 view .LVU108
+ 360 00b8 0023     		movs	r3, #0
+ 361 00ba 0293     		str	r3, [sp, #8]
+ARM GAS  /tmp/cczM9vCV.s 			page 11
+
+
+ 144:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED++;
+ 362              		.loc 1 144 5 view .LVU109
+ 363 00bc 2D4B     		ldr	r3, .L23+12
+ 364 00be 1A6C     		ldr	r2, [r3, #64]
+ 365 00c0 42F08062 		orr	r2, r2, #67108864
+ 366 00c4 1A64     		str	r2, [r3, #64]
+ 144:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED++;
+ 367              		.loc 1 144 5 view .LVU110
+ 368 00c6 1B6C     		ldr	r3, [r3, #64]
+ 369 00c8 03F08063 		and	r3, r3, #67108864
+ 370 00cc 0293     		str	r3, [sp, #8]
+ 144:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED++;
+ 371              		.loc 1 144 5 view .LVU111
+ 372 00ce 029B     		ldr	r3, [sp, #8]
+ 373              	.LBE4:
+ 144:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED++;
+ 374              		.loc 1 144 5 view .LVU112
+ 145:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==1){
+ 375              		.loc 1 145 5 view .LVU113
+ 145:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==1){
+ 376              		.loc 1 145 29 is_stmt 0 view .LVU114
+ 377 00d0 274A     		ldr	r2, .L23+8
+ 378 00d2 1368     		ldr	r3, [r2]
+ 379 00d4 0133     		adds	r3, r3, #1
+ 380 00d6 1360     		str	r3, [r2]
+ 146:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_ENABLE();
+ 381              		.loc 1 146 5 is_stmt 1 view .LVU115
+ 146:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_ENABLE();
+ 382              		.loc 1 146 7 is_stmt 0 view .LVU116
+ 383 00d8 012B     		cmp	r3, #1
+ 384 00da 38D0     		beq	.L22
+ 385              	.L17:
+ 147:Core/Src/can.c ****     }
+ 386              		.loc 1 147 7 is_stmt 1 discriminator 1 view .LVU117
+ 150:Core/Src/can.c ****     /**CAN2 GPIO Configuration
+ 387              		.loc 1 150 5 view .LVU118
+ 388              	.LBB5:
+ 150:Core/Src/can.c ****     /**CAN2 GPIO Configuration
+ 389              		.loc 1 150 5 view .LVU119
+ 390 00dc 0024     		movs	r4, #0
+ 391 00de 0494     		str	r4, [sp, #16]
+ 150:Core/Src/can.c ****     /**CAN2 GPIO Configuration
+ 392              		.loc 1 150 5 view .LVU120
+ 393 00e0 244B     		ldr	r3, .L23+12
+ 394 00e2 1A6B     		ldr	r2, [r3, #48]
+ 395 00e4 42F00202 		orr	r2, r2, #2
+ 396 00e8 1A63     		str	r2, [r3, #48]
+ 150:Core/Src/can.c ****     /**CAN2 GPIO Configuration
+ 397              		.loc 1 150 5 view .LVU121
+ 398 00ea 1B6B     		ldr	r3, [r3, #48]
+ 399 00ec 03F00203 		and	r3, r3, #2
+ 400 00f0 0493     		str	r3, [sp, #16]
+ 150:Core/Src/can.c ****     /**CAN2 GPIO Configuration
+ 401              		.loc 1 150 5 view .LVU122
+ 402 00f2 049B     		ldr	r3, [sp, #16]
+ 403              	.LBE5:
+ 150:Core/Src/can.c ****     /**CAN2 GPIO Configuration
+ARM GAS  /tmp/cczM9vCV.s 			page 12
+
+
+ 404              		.loc 1 150 5 view .LVU123
+ 155:Core/Src/can.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 405              		.loc 1 155 5 view .LVU124
+ 155:Core/Src/can.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 406              		.loc 1 155 25 is_stmt 0 view .LVU125
+ 407 00f4 6023     		movs	r3, #96
+ 408 00f6 0593     		str	r3, [sp, #20]
+ 156:Core/Src/can.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 409              		.loc 1 156 5 is_stmt 1 view .LVU126
+ 156:Core/Src/can.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 410              		.loc 1 156 26 is_stmt 0 view .LVU127
+ 411 00f8 0223     		movs	r3, #2
+ 412 00fa 0693     		str	r3, [sp, #24]
+ 157:Core/Src/can.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 413              		.loc 1 157 5 is_stmt 1 view .LVU128
+ 158:Core/Src/can.c ****     GPIO_InitStruct.Alternate = GPIO_AF9_CAN2;
+ 414              		.loc 1 158 5 view .LVU129
+ 158:Core/Src/can.c ****     GPIO_InitStruct.Alternate = GPIO_AF9_CAN2;
+ 415              		.loc 1 158 27 is_stmt 0 view .LVU130
+ 416 00fc 0323     		movs	r3, #3
+ 417 00fe 0893     		str	r3, [sp, #32]
+ 159:Core/Src/can.c ****     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+ 418              		.loc 1 159 5 is_stmt 1 view .LVU131
+ 159:Core/Src/can.c ****     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+ 419              		.loc 1 159 31 is_stmt 0 view .LVU132
+ 420 0100 0923     		movs	r3, #9
+ 421 0102 0993     		str	r3, [sp, #36]
+ 160:Core/Src/can.c **** 
+ 422              		.loc 1 160 5 is_stmt 1 view .LVU133
+ 423 0104 05A9     		add	r1, sp, #20
+ 424 0106 1D48     		ldr	r0, .L23+20
+ 425              	.LVL18:
+ 160:Core/Src/can.c **** 
+ 426              		.loc 1 160 5 is_stmt 0 view .LVU134
+ 427 0108 FFF7FEFF 		bl	HAL_GPIO_Init
+ 428              	.LVL19:
+ 163:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN2_TX_IRQn);
+ 429              		.loc 1 163 5 is_stmt 1 view .LVU135
+ 430 010c 2246     		mov	r2, r4
+ 431 010e 2146     		mov	r1, r4
+ 432 0110 3F20     		movs	r0, #63
+ 433 0112 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 434              	.LVL20:
+ 164:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN2_RX0_IRQn, 0, 0);
+ 435              		.loc 1 164 5 view .LVU136
+ 436 0116 3F20     		movs	r0, #63
+ 437 0118 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 438              	.LVL21:
+ 165:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN2_RX0_IRQn);
+ 439              		.loc 1 165 5 view .LVU137
+ 440 011c 2246     		mov	r2, r4
+ 441 011e 2146     		mov	r1, r4
+ 442 0120 4020     		movs	r0, #64
+ 443 0122 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 444              	.LVL22:
+ 166:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN2_RX1_IRQn, 0, 0);
+ 445              		.loc 1 166 5 view .LVU138
+ARM GAS  /tmp/cczM9vCV.s 			page 13
+
+
+ 446 0126 4020     		movs	r0, #64
+ 447 0128 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 448              	.LVL23:
+ 167:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN2_RX1_IRQn);
+ 449              		.loc 1 167 5 view .LVU139
+ 450 012c 2246     		mov	r2, r4
+ 451 012e 2146     		mov	r1, r4
+ 452 0130 4120     		movs	r0, #65
+ 453 0132 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 454              	.LVL24:
+ 168:Core/Src/can.c ****     HAL_NVIC_SetPriority(CAN2_SCE_IRQn, 0, 0);
+ 455              		.loc 1 168 5 view .LVU140
+ 456 0136 4120     		movs	r0, #65
+ 457 0138 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 458              	.LVL25:
+ 169:Core/Src/can.c ****     HAL_NVIC_EnableIRQ(CAN2_SCE_IRQn);
+ 459              		.loc 1 169 5 view .LVU141
+ 460 013c 2246     		mov	r2, r4
+ 461 013e 2146     		mov	r1, r4
+ 462 0140 4220     		movs	r0, #66
+ 463 0142 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 464              	.LVL26:
+ 170:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_MspInit 1 */
+ 465              		.loc 1 170 5 view .LVU142
+ 466 0146 4220     		movs	r0, #66
+ 467 0148 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 468              	.LVL27:
+ 469              		.loc 1 175 1 is_stmt 0 view .LVU143
+ 470 014c 67E7     		b	.L13
+ 471              	.LVL28:
+ 472              	.L22:
+ 147:Core/Src/can.c ****     }
+ 473              		.loc 1 147 7 is_stmt 1 view .LVU144
+ 474              	.LBB6:
+ 147:Core/Src/can.c ****     }
+ 475              		.loc 1 147 7 view .LVU145
+ 476 014e 0023     		movs	r3, #0
+ 477 0150 0393     		str	r3, [sp, #12]
+ 147:Core/Src/can.c ****     }
+ 478              		.loc 1 147 7 view .LVU146
+ 479 0152 084B     		ldr	r3, .L23+12
+ 480 0154 1A6C     		ldr	r2, [r3, #64]
+ 481 0156 42F00072 		orr	r2, r2, #33554432
+ 482 015a 1A64     		str	r2, [r3, #64]
+ 147:Core/Src/can.c ****     }
+ 483              		.loc 1 147 7 view .LVU147
+ 484 015c 1B6C     		ldr	r3, [r3, #64]
+ 485 015e 03F00073 		and	r3, r3, #33554432
+ 486 0162 0393     		str	r3, [sp, #12]
+ 147:Core/Src/can.c ****     }
+ 487              		.loc 1 147 7 view .LVU148
+ 488 0164 039B     		ldr	r3, [sp, #12]
+ 489 0166 B9E7     		b	.L17
+ 490              	.L24:
+ 491              		.align	2
+ 492              	.L23:
+ 493 0168 00640040 		.word	1073767424
+ARM GAS  /tmp/cczM9vCV.s 			page 14
+
+
+ 494 016c 00680040 		.word	1073768448
+ 495 0170 00000000 		.word	HAL_RCC_CAN1_CLK_ENABLED
+ 496 0174 00380240 		.word	1073887232
+ 497 0178 000C0240 		.word	1073875968
+ 498 017c 00040240 		.word	1073873920
+ 499              	.LBE6:
+ 500              		.cfi_endproc
+ 501              	.LFE135:
+ 503              		.section	.text.HAL_CAN_MspDeInit,"ax",%progbits
+ 504              		.align	1
+ 505              		.global	HAL_CAN_MspDeInit
+ 506              		.syntax unified
+ 507              		.thumb
+ 508              		.thumb_func
+ 510              	HAL_CAN_MspDeInit:
+ 511              	.LVL29:
+ 512              	.LFB136:
+ 176:Core/Src/can.c **** 
+ 177:Core/Src/can.c **** void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
+ 178:Core/Src/can.c **** {
+ 513              		.loc 1 178 1 view -0
+ 514              		.cfi_startproc
+ 515              		@ args = 0, pretend = 0, frame = 0
+ 516              		@ frame_needed = 0, uses_anonymous_args = 0
+ 517              		.loc 1 178 1 is_stmt 0 view .LVU150
+ 518 0000 08B5     		push	{r3, lr}
+ 519              	.LCFI6:
+ 520              		.cfi_def_cfa_offset 8
+ 521              		.cfi_offset 3, -8
+ 522              		.cfi_offset 14, -4
+ 179:Core/Src/can.c **** 
+ 180:Core/Src/can.c ****   if(canHandle->Instance==CAN1)
+ 523              		.loc 1 180 3 is_stmt 1 view .LVU151
+ 524              		.loc 1 180 15 is_stmt 0 view .LVU152
+ 525 0002 0368     		ldr	r3, [r0]
+ 526              		.loc 1 180 5 view .LVU153
+ 527 0004 214A     		ldr	r2, .L33
+ 528 0006 9342     		cmp	r3, r2
+ 529 0008 03D0     		beq	.L31
+ 181:Core/Src/can.c ****   {
+ 182:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_MspDeInit 0 */
+ 183:Core/Src/can.c **** 
+ 184:Core/Src/can.c ****   /* USER CODE END CAN1_MspDeInit 0 */
+ 185:Core/Src/can.c ****     /* Peripheral clock disable */
+ 186:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED--;
+ 187:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==0){
+ 188:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_DISABLE();
+ 189:Core/Src/can.c ****     }
+ 190:Core/Src/can.c **** 
+ 191:Core/Src/can.c ****     /**CAN1 GPIO Configuration
+ 192:Core/Src/can.c ****     PD0     ------> CAN1_RX
+ 193:Core/Src/can.c ****     PD1     ------> CAN1_TX
+ 194:Core/Src/can.c ****     */
+ 195:Core/Src/can.c ****     HAL_GPIO_DeInit(GPIOD, GPIO_PIN_0|GPIO_PIN_1);
+ 196:Core/Src/can.c **** 
+ 197:Core/Src/can.c ****     /* CAN1 interrupt Deinit */
+ 198:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN1_TX_IRQn);
+ARM GAS  /tmp/cczM9vCV.s 			page 15
+
+
+ 199:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN1_RX0_IRQn);
+ 200:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN1_RX1_IRQn);
+ 201:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN1_SCE_IRQn);
+ 202:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_MspDeInit 1 */
+ 203:Core/Src/can.c **** 
+ 204:Core/Src/can.c ****   /* USER CODE END CAN1_MspDeInit 1 */
+ 205:Core/Src/can.c ****   }
+ 206:Core/Src/can.c ****   else if(canHandle->Instance==CAN2)
+ 530              		.loc 1 206 8 is_stmt 1 view .LVU154
+ 531              		.loc 1 206 10 is_stmt 0 view .LVU155
+ 532 000a 214A     		ldr	r2, .L33+4
+ 533 000c 9342     		cmp	r3, r2
+ 534 000e 1BD0     		beq	.L32
+ 535              	.LVL30:
+ 536              	.L25:
+ 207:Core/Src/can.c ****   {
+ 208:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_MspDeInit 0 */
+ 209:Core/Src/can.c **** 
+ 210:Core/Src/can.c ****   /* USER CODE END CAN2_MspDeInit 0 */
+ 211:Core/Src/can.c ****     /* Peripheral clock disable */
+ 212:Core/Src/can.c ****     __HAL_RCC_CAN2_CLK_DISABLE();
+ 213:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED--;
+ 214:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==0){
+ 215:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_DISABLE();
+ 216:Core/Src/can.c ****     }
+ 217:Core/Src/can.c **** 
+ 218:Core/Src/can.c ****     /**CAN2 GPIO Configuration
+ 219:Core/Src/can.c ****     PB5     ------> CAN2_RX
+ 220:Core/Src/can.c ****     PB6     ------> CAN2_TX
+ 221:Core/Src/can.c ****     */
+ 222:Core/Src/can.c ****     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_5|GPIO_PIN_6);
+ 223:Core/Src/can.c **** 
+ 224:Core/Src/can.c ****     /* CAN2 interrupt Deinit */
+ 225:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN2_TX_IRQn);
+ 226:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN2_RX0_IRQn);
+ 227:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN2_RX1_IRQn);
+ 228:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN2_SCE_IRQn);
+ 229:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_MspDeInit 1 */
+ 230:Core/Src/can.c **** 
+ 231:Core/Src/can.c ****   /* USER CODE END CAN2_MspDeInit 1 */
+ 232:Core/Src/can.c ****   }
+ 233:Core/Src/can.c **** }
+ 537              		.loc 1 233 1 view .LVU156
+ 538 0010 08BD     		pop	{r3, pc}
+ 539              	.LVL31:
+ 540              	.L31:
+ 186:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==0){
+ 541              		.loc 1 186 5 is_stmt 1 view .LVU157
+ 186:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==0){
+ 542              		.loc 1 186 29 is_stmt 0 view .LVU158
+ 543 0012 204A     		ldr	r2, .L33+8
+ 544 0014 1368     		ldr	r3, [r2]
+ 545 0016 013B     		subs	r3, r3, #1
+ 546 0018 1360     		str	r3, [r2]
+ 187:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_DISABLE();
+ 547              		.loc 1 187 5 is_stmt 1 view .LVU159
+ 187:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_DISABLE();
+ARM GAS  /tmp/cczM9vCV.s 			page 16
+
+
+ 548              		.loc 1 187 7 is_stmt 0 view .LVU160
+ 549 001a 23B9     		cbnz	r3, .L27
+ 188:Core/Src/can.c ****     }
+ 550              		.loc 1 188 7 is_stmt 1 view .LVU161
+ 551 001c 1E4A     		ldr	r2, .L33+12
+ 552 001e 136C     		ldr	r3, [r2, #64]
+ 553 0020 23F00073 		bic	r3, r3, #33554432
+ 554 0024 1364     		str	r3, [r2, #64]
+ 555              	.L27:
+ 195:Core/Src/can.c **** 
+ 556              		.loc 1 195 5 view .LVU162
+ 557 0026 0321     		movs	r1, #3
+ 558 0028 1C48     		ldr	r0, .L33+16
+ 559              	.LVL32:
+ 195:Core/Src/can.c **** 
+ 560              		.loc 1 195 5 is_stmt 0 view .LVU163
+ 561 002a FFF7FEFF 		bl	HAL_GPIO_DeInit
+ 562              	.LVL33:
+ 198:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN1_RX0_IRQn);
+ 563              		.loc 1 198 5 is_stmt 1 view .LVU164
+ 564 002e 1320     		movs	r0, #19
+ 565 0030 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 566              	.LVL34:
+ 199:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN1_RX1_IRQn);
+ 567              		.loc 1 199 5 view .LVU165
+ 568 0034 1420     		movs	r0, #20
+ 569 0036 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 570              	.LVL35:
+ 200:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN1_SCE_IRQn);
+ 571              		.loc 1 200 5 view .LVU166
+ 572 003a 1520     		movs	r0, #21
+ 573 003c FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 574              	.LVL36:
+ 201:Core/Src/can.c ****   /* USER CODE BEGIN CAN1_MspDeInit 1 */
+ 575              		.loc 1 201 5 view .LVU167
+ 576 0040 1620     		movs	r0, #22
+ 577 0042 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 578              	.LVL37:
+ 579 0046 E3E7     		b	.L25
+ 580              	.LVL38:
+ 581              	.L32:
+ 212:Core/Src/can.c ****     HAL_RCC_CAN1_CLK_ENABLED--;
+ 582              		.loc 1 212 5 view .LVU168
+ 583 0048 02F5E832 		add	r2, r2, #118784
+ 584 004c 136C     		ldr	r3, [r2, #64]
+ 585 004e 23F08063 		bic	r3, r3, #67108864
+ 586 0052 1364     		str	r3, [r2, #64]
+ 213:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==0){
+ 587              		.loc 1 213 5 view .LVU169
+ 213:Core/Src/can.c ****     if(HAL_RCC_CAN1_CLK_ENABLED==0){
+ 588              		.loc 1 213 29 is_stmt 0 view .LVU170
+ 589 0054 0F4A     		ldr	r2, .L33+8
+ 590 0056 1368     		ldr	r3, [r2]
+ 591 0058 013B     		subs	r3, r3, #1
+ 592 005a 1360     		str	r3, [r2]
+ 214:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_DISABLE();
+ 593              		.loc 1 214 5 is_stmt 1 view .LVU171
+ARM GAS  /tmp/cczM9vCV.s 			page 17
+
+
+ 214:Core/Src/can.c ****       __HAL_RCC_CAN1_CLK_DISABLE();
+ 594              		.loc 1 214 7 is_stmt 0 view .LVU172
+ 595 005c 23B9     		cbnz	r3, .L29
+ 215:Core/Src/can.c ****     }
+ 596              		.loc 1 215 7 is_stmt 1 view .LVU173
+ 597 005e 0E4A     		ldr	r2, .L33+12
+ 598 0060 136C     		ldr	r3, [r2, #64]
+ 599 0062 23F00073 		bic	r3, r3, #33554432
+ 600 0066 1364     		str	r3, [r2, #64]
+ 601              	.L29:
+ 222:Core/Src/can.c **** 
+ 602              		.loc 1 222 5 view .LVU174
+ 603 0068 6021     		movs	r1, #96
+ 604 006a 0D48     		ldr	r0, .L33+20
+ 605              	.LVL39:
+ 222:Core/Src/can.c **** 
+ 606              		.loc 1 222 5 is_stmt 0 view .LVU175
+ 607 006c FFF7FEFF 		bl	HAL_GPIO_DeInit
+ 608              	.LVL40:
+ 225:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN2_RX0_IRQn);
+ 609              		.loc 1 225 5 is_stmt 1 view .LVU176
+ 610 0070 3F20     		movs	r0, #63
+ 611 0072 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 612              	.LVL41:
+ 226:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN2_RX1_IRQn);
+ 613              		.loc 1 226 5 view .LVU177
+ 614 0076 4020     		movs	r0, #64
+ 615 0078 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 616              	.LVL42:
+ 227:Core/Src/can.c ****     HAL_NVIC_DisableIRQ(CAN2_SCE_IRQn);
+ 617              		.loc 1 227 5 view .LVU178
+ 618 007c 4120     		movs	r0, #65
+ 619 007e FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 620              	.LVL43:
+ 228:Core/Src/can.c ****   /* USER CODE BEGIN CAN2_MspDeInit 1 */
+ 621              		.loc 1 228 5 view .LVU179
+ 622 0082 4220     		movs	r0, #66
+ 623 0084 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 624              	.LVL44:
+ 625              		.loc 1 233 1 is_stmt 0 view .LVU180
+ 626 0088 C2E7     		b	.L25
+ 627              	.L34:
+ 628 008a 00BF     		.align	2
+ 629              	.L33:
+ 630 008c 00640040 		.word	1073767424
+ 631 0090 00680040 		.word	1073768448
+ 632 0094 00000000 		.word	HAL_RCC_CAN1_CLK_ENABLED
+ 633 0098 00380240 		.word	1073887232
+ 634 009c 000C0240 		.word	1073875968
+ 635 00a0 00040240 		.word	1073873920
+ 636              		.cfi_endproc
+ 637              	.LFE136:
+ 639              		.section	.rodata.MX_CAN_Loopback_Check.str1.4,"aMS",%progbits,1
+ 640              		.align	2
+ 641              	.LC0:
+ 642 0000 43414E31 		.ascii	"CAN1 Filter failed\015\000"
+ 642      2046696C 
+ARM GAS  /tmp/cczM9vCV.s 			page 18
+
+
+ 642      74657220 
+ 642      6661696C 
+ 642      65640D00 
+ 643              		.align	2
+ 644              	.LC1:
+ 645 0014 43414E31 		.ascii	"CAN1 Start failed\015\000"
+ 645      20537461 
+ 645      72742066 
+ 645      61696C65 
+ 645      640D00
+ 646 0027 00       		.align	2
+ 647              	.LC2:
+ 648 0028 43414E32 		.ascii	"CAN2 Start failed\015\000"
+ 648      20537461 
+ 648      72742066 
+ 648      61696C65 
+ 648      640D00
+ 649 003b 00       		.align	2
+ 650              	.LC3:
+ 651 003c 43414E32 		.ascii	"CAN2 Queue TX failed\015\000"
+ 651      20517565 
+ 651      75652054 
+ 651      58206661 
+ 651      696C6564 
+ 652 0052 0000     		.align	2
+ 653              	.LC4:
+ 654 0054 43414E31 		.ascii	"CAN1 RX FIFO failed\015\000"
+ 654      20525820 
+ 654      4649464F 
+ 654      20666169 
+ 654      6C65640D 
+ 655 0069 000000   		.align	2
+ 656              	.LC5:
+ 657 006c 43414E31 		.ascii	"CAN1 RX failed\015\000"
+ 657      20525820 
+ 657      6661696C 
+ 657      65640D00 
+ 658              		.align	2
+ 659              	.LC6:
+ 660 007c 43414E20 		.ascii	"CAN Validation failed\015\000"
+ 660      56616C69 
+ 660      64617469 
+ 660      6F6E2066 
+ 660      61696C65 
+ 661 0093 00       		.align	2
+ 662              	.LC7:
+ 663 0094 43414E20 		.ascii	"CAN Loopback Success!\015\000"
+ 663      4C6F6F70 
+ 663      6261636B 
+ 663      20537563 
+ 663      63657373 
+ 664              		.section	.text.MX_CAN_Loopback_Check,"ax",%progbits
+ 665              		.align	1
+ 666              		.global	MX_CAN_Loopback_Check
+ 667              		.syntax unified
+ 668              		.thumb
+ 669              		.thumb_func
+ARM GAS  /tmp/cczM9vCV.s 			page 19
+
+
+ 671              	MX_CAN_Loopback_Check:
+ 672              	.LFB137:
+ 234:Core/Src/can.c **** 
+ 235:Core/Src/can.c **** /* USER CODE BEGIN 1 */
+ 236:Core/Src/can.c **** 
+ 237:Core/Src/can.c **** /**
+ 238:Core/Src/can.c ****   * @brief Check CAN1 and CAN2 with loopback cable
+ 239:Core/Src/can.c ****   * @retval None
+ 240:Core/Src/can.c ****   */
+ 241:Core/Src/can.c **** HAL_StatusTypeDef MX_CAN_Loopback_Check(void)
+ 242:Core/Src/can.c **** {
+ 673              		.loc 1 242 1 is_stmt 1 view -0
+ 674              		.cfi_startproc
+ 675              		@ args = 0, pretend = 0, frame = 112
+ 676              		@ frame_needed = 0, uses_anonymous_args = 0
+ 677 0000 10B5     		push	{r4, lr}
+ 678              	.LCFI7:
+ 679              		.cfi_def_cfa_offset 8
+ 680              		.cfi_offset 4, -8
+ 681              		.cfi_offset 14, -4
+ 682 0002 9CB0     		sub	sp, sp, #112
+ 683              	.LCFI8:
+ 684              		.cfi_def_cfa_offset 120
+ 243:Core/Src/can.c ****   HAL_StatusTypeDef ret = HAL_ERROR;
+ 685              		.loc 1 243 3 view .LVU182
+ 686              	.LVL45:
+ 244:Core/Src/can.c **** 
+ 245:Core/Src/can.c ****   CAN_TxHeaderTypeDef   TxHeader;
+ 687              		.loc 1 245 3 view .LVU183
+ 246:Core/Src/can.c ****   CAN_RxHeaderTypeDef   RxHeader;
+ 688              		.loc 1 246 3 view .LVU184
+ 247:Core/Src/can.c ****   uint8_t               TxData[8];
+ 689              		.loc 1 247 3 view .LVU185
+ 248:Core/Src/can.c ****   uint8_t               RxData[8];
+ 690              		.loc 1 248 3 view .LVU186
+ 249:Core/Src/can.c ****   uint32_t              TxMailbox;
+ 691              		.loc 1 249 3 view .LVU187
+ 250:Core/Src/can.c **** 
+ 251:Core/Src/can.c ****   CAN_FilterTypeDef  sFilterConfig;
+ 692              		.loc 1 251 3 view .LVU188
+ 252:Core/Src/can.c ****   
+ 253:Core/Src/can.c ****   /*##-2- Configure the CAN Filter ###########################################*/
+ 254:Core/Src/can.c ****   sFilterConfig.FilterBank = 0;
+ 693              		.loc 1 254 3 view .LVU189
+ 694              		.loc 1 254 28 is_stmt 0 view .LVU190
+ 695 0004 0023     		movs	r3, #0
+ 696 0006 0593     		str	r3, [sp, #20]
+ 255:Core/Src/can.c ****   sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+ 697              		.loc 1 255 3 is_stmt 1 view .LVU191
+ 698              		.loc 1 255 28 is_stmt 0 view .LVU192
+ 699 0008 0693     		str	r3, [sp, #24]
+ 256:Core/Src/can.c ****   sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
+ 700              		.loc 1 256 3 is_stmt 1 view .LVU193
+ 701              		.loc 1 256 29 is_stmt 0 view .LVU194
+ 702 000a 0122     		movs	r2, #1
+ 703 000c 0792     		str	r2, [sp, #28]
+ 257:Core/Src/can.c ****   sFilterConfig.FilterIdHigh = 0x0000;
+ARM GAS  /tmp/cczM9vCV.s 			page 20
+
+
+ 704              		.loc 1 257 3 is_stmt 1 view .LVU195
+ 705              		.loc 1 257 30 is_stmt 0 view .LVU196
+ 706 000e 0093     		str	r3, [sp]
+ 258:Core/Src/can.c ****   sFilterConfig.FilterIdLow = 0x0000;
+ 707              		.loc 1 258 3 is_stmt 1 view .LVU197
+ 708              		.loc 1 258 29 is_stmt 0 view .LVU198
+ 709 0010 0193     		str	r3, [sp, #4]
+ 259:Core/Src/can.c ****   sFilterConfig.FilterMaskIdHigh = 0x0000;
+ 710              		.loc 1 259 3 is_stmt 1 view .LVU199
+ 711              		.loc 1 259 34 is_stmt 0 view .LVU200
+ 712 0012 0293     		str	r3, [sp, #8]
+ 260:Core/Src/can.c ****   sFilterConfig.FilterMaskIdLow = 0x0000;
+ 713              		.loc 1 260 3 is_stmt 1 view .LVU201
+ 714              		.loc 1 260 33 is_stmt 0 view .LVU202
+ 715 0014 0393     		str	r3, [sp, #12]
+ 261:Core/Src/can.c ****   sFilterConfig.FilterActivation = ENABLE;
+ 716              		.loc 1 261 3 is_stmt 1 view .LVU203
+ 717              		.loc 1 261 34 is_stmt 0 view .LVU204
+ 718 0016 0892     		str	r2, [sp, #32]
+ 262:Core/Src/can.c ****   sFilterConfig.SlaveStartFilterBank = 14;
+ 719              		.loc 1 262 3 is_stmt 1 view .LVU205
+ 720              		.loc 1 262 38 is_stmt 0 view .LVU206
+ 721 0018 0E22     		movs	r2, #14
+ 722 001a 0992     		str	r2, [sp, #36]
+ 263:Core/Src/can.c ****   
+ 264:Core/Src/can.c ****   sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+ 723              		.loc 1 264 3 is_stmt 1 view .LVU207
+ 724              		.loc 1 264 38 is_stmt 0 view .LVU208
+ 725 001c 0493     		str	r3, [sp, #16]
+ 265:Core/Src/can.c ****   ret = HAL_CAN_ConfigFilter(&hcan1, &sFilterConfig);
+ 726              		.loc 1 265 3 is_stmt 1 view .LVU209
+ 727              		.loc 1 265 9 is_stmt 0 view .LVU210
+ 728 001e 6946     		mov	r1, sp
+ 729 0020 3B48     		ldr	r0, .L52
+ 730 0022 FFF7FEFF 		bl	HAL_CAN_ConfigFilter
+ 731              	.LVL46:
+ 266:Core/Src/can.c ****   if(ret != HAL_OK)
+ 732              		.loc 1 266 3 is_stmt 1 view .LVU211
+ 733              		.loc 1 266 5 is_stmt 0 view .LVU212
+ 734 0026 0028     		cmp	r0, #0
+ 735 0028 33D1     		bne	.L46
+ 267:Core/Src/can.c ****   {
+ 268:Core/Src/can.c ****     printf("CAN1 Filter failed\r\n");
+ 269:Core/Src/can.c ****     return ret;
+ 270:Core/Src/can.c ****   }
+ 271:Core/Src/can.c **** 
+ 272:Core/Src/can.c ****   /*##-3- Start the CAN peripheral ###########################################*/
+ 273:Core/Src/can.c ****   ret = HAL_CAN_Start(&hcan1);
+ 736              		.loc 1 273 3 is_stmt 1 view .LVU213
+ 737              		.loc 1 273 9 is_stmt 0 view .LVU214
+ 738 002a 3948     		ldr	r0, .L52
+ 739              	.LVL47:
+ 740              		.loc 1 273 9 view .LVU215
+ 741 002c FFF7FEFF 		bl	HAL_CAN_Start
+ 742              	.LVL48:
+ 274:Core/Src/can.c ****   if (ret != HAL_OK)
+ 743              		.loc 1 274 3 is_stmt 1 view .LVU216
+ARM GAS  /tmp/cczM9vCV.s 			page 21
+
+
+ 744              		.loc 1 274 6 is_stmt 0 view .LVU217
+ 745 0030 0446     		mov	r4, r0
+ 746 0032 0028     		cmp	r0, #0
+ 747 0034 34D1     		bne	.L47
+ 275:Core/Src/can.c ****   {
+ 276:Core/Src/can.c ****     printf("CAN1 Start failed\r\n");
+ 277:Core/Src/can.c ****     return ret;
+ 278:Core/Src/can.c ****   }
+ 279:Core/Src/can.c **** 
+ 280:Core/Src/can.c ****   ret = HAL_CAN_Start(&hcan2);
+ 748              		.loc 1 280 3 is_stmt 1 view .LVU218
+ 749              		.loc 1 280 9 is_stmt 0 view .LVU219
+ 750 0036 3748     		ldr	r0, .L52+4
+ 751              	.LVL49:
+ 752              		.loc 1 280 9 view .LVU220
+ 753 0038 FFF7FEFF 		bl	HAL_CAN_Start
+ 754              	.LVL50:
+ 281:Core/Src/can.c ****   if (ret != HAL_OK)
+ 755              		.loc 1 281 3 is_stmt 1 view .LVU221
+ 756              		.loc 1 281 6 is_stmt 0 view .LVU222
+ 757 003c 0446     		mov	r4, r0
+ 758 003e 0028     		cmp	r0, #0
+ 759 0040 32D1     		bne	.L48
+ 282:Core/Src/can.c ****   {
+ 283:Core/Src/can.c ****     printf("CAN2 Start failed\r\n");
+ 284:Core/Src/can.c ****     return ret;
+ 285:Core/Src/can.c ****   }
+ 286:Core/Src/can.c **** 
+ 287:Core/Src/can.c ****   /*##-4- Start the Transmission process #####################################*/
+ 288:Core/Src/can.c ****   TxHeader.StdId = 0x123;
+ 760              		.loc 1 288 3 is_stmt 1 view .LVU223
+ 761              		.loc 1 288 18 is_stmt 0 view .LVU224
+ 762 0042 40F22313 		movw	r3, #291
+ 763 0046 1693     		str	r3, [sp, #88]
+ 289:Core/Src/can.c ****   TxHeader.RTR = CAN_RTR_DATA;
+ 764              		.loc 1 289 3 is_stmt 1 view .LVU225
+ 765              		.loc 1 289 16 is_stmt 0 view .LVU226
+ 766 0048 0023     		movs	r3, #0
+ 767 004a 1993     		str	r3, [sp, #100]
+ 290:Core/Src/can.c ****   TxHeader.IDE = CAN_ID_STD;
+ 768              		.loc 1 290 3 is_stmt 1 view .LVU227
+ 769              		.loc 1 290 16 is_stmt 0 view .LVU228
+ 770 004c 1893     		str	r3, [sp, #96]
+ 291:Core/Src/can.c ****   TxHeader.DLC = 2;
+ 771              		.loc 1 291 3 is_stmt 1 view .LVU229
+ 772              		.loc 1 291 16 is_stmt 0 view .LVU230
+ 773 004e 0222     		movs	r2, #2
+ 774 0050 1A92     		str	r2, [sp, #104]
+ 292:Core/Src/can.c ****   TxHeader.TransmitGlobalTime = DISABLE;
+ 775              		.loc 1 292 3 is_stmt 1 view .LVU231
+ 776              		.loc 1 292 31 is_stmt 0 view .LVU232
+ 777 0052 8DF86C30 		strb	r3, [sp, #108]
+ 293:Core/Src/can.c ****   TxData[0] = 0xDE;
+ 778              		.loc 1 293 3 is_stmt 1 view .LVU233
+ 779              		.loc 1 293 13 is_stmt 0 view .LVU234
+ 780 0056 DE23     		movs	r3, #222
+ 781 0058 8DF83430 		strb	r3, [sp, #52]
+ARM GAS  /tmp/cczM9vCV.s 			page 22
+
+
+ 294:Core/Src/can.c ****   TxData[1] = 0xAD;
+ 782              		.loc 1 294 3 is_stmt 1 view .LVU235
+ 783              		.loc 1 294 13 is_stmt 0 view .LVU236
+ 784 005c AD23     		movs	r3, #173
+ 785 005e 8DF83530 		strb	r3, [sp, #53]
+ 295:Core/Src/can.c ****   
+ 296:Core/Src/can.c ****   /* Request transmission */
+ 297:Core/Src/can.c ****   ret = HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox);
+ 786              		.loc 1 297 3 is_stmt 1 view .LVU237
+ 787              		.loc 1 297 9 is_stmt 0 view .LVU238
+ 788 0062 0AAB     		add	r3, sp, #40
+ 789 0064 0DAA     		add	r2, sp, #52
+ 790 0066 16A9     		add	r1, sp, #88
+ 791 0068 2A48     		ldr	r0, .L52+4
+ 792              	.LVL51:
+ 793              		.loc 1 297 9 view .LVU239
+ 794 006a FFF7FEFF 		bl	HAL_CAN_AddTxMessage
+ 795              	.LVL52:
+ 298:Core/Src/can.c ****   if (ret != HAL_OK)
+ 796              		.loc 1 298 3 is_stmt 1 view .LVU240
+ 797              		.loc 1 298 6 is_stmt 0 view .LVU241
+ 798 006e 0446     		mov	r4, r0
+ 799 0070 F0B9     		cbnz	r0, .L49
+ 800              	.LVL53:
+ 801              	.L40:
+ 299:Core/Src/can.c ****   {
+ 300:Core/Src/can.c ****     printf("CAN2 Queue TX failed\r\n");
+ 301:Core/Src/can.c ****     return ret;
+ 302:Core/Src/can.c ****   }
+ 303:Core/Src/can.c ****   
+ 304:Core/Src/can.c ****   /* Wait transmission complete */
+ 305:Core/Src/can.c ****   while(HAL_CAN_GetTxMailboxesFreeLevel(&hcan2) != 3) {}
+ 802              		.loc 1 305 56 is_stmt 1 discriminator 1 view .LVU242
+ 803              		.loc 1 305 49 discriminator 1 view .LVU243
+ 804              		.loc 1 305 9 is_stmt 0 discriminator 1 view .LVU244
+ 805 0072 2848     		ldr	r0, .L52+4
+ 806 0074 FFF7FEFF 		bl	HAL_CAN_GetTxMailboxesFreeLevel
+ 807              	.LVL54:
+ 808              		.loc 1 305 49 discriminator 1 view .LVU245
+ 809 0078 0328     		cmp	r0, #3
+ 810 007a FAD1     		bne	.L40
+ 306:Core/Src/can.c **** 
+ 307:Core/Src/can.c ****   /* Check there's a message waiting */
+ 308:Core/Src/can.c ****   if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) != 1)
+ 811              		.loc 1 308 3 is_stmt 1 view .LVU246
+ 812              		.loc 1 308 7 is_stmt 0 view .LVU247
+ 813 007c 0021     		movs	r1, #0
+ 814 007e 2448     		ldr	r0, .L52
+ 815 0080 FFF7FEFF 		bl	HAL_CAN_GetRxFifoFillLevel
+ 816              	.LVL55:
+ 817              		.loc 1 308 6 discriminator 1 view .LVU248
+ 818 0084 0128     		cmp	r0, #1
+ 819 0086 17D0     		beq	.L41
+ 309:Core/Src/can.c ****   {
+ 310:Core/Src/can.c ****     printf("CAN1 RX FIFO failed\r\n");
+ 820              		.loc 1 310 5 is_stmt 1 view .LVU249
+ 821 0088 2348     		ldr	r0, .L52+8
+ARM GAS  /tmp/cczM9vCV.s 			page 23
+
+
+ 822 008a FFF7FEFF 		bl	puts
+ 823              	.LVL56:
+ 311:Core/Src/can.c ****     return HAL_ERROR;
+ 824              		.loc 1 311 5 view .LVU250
+ 825              		.loc 1 311 12 is_stmt 0 view .LVU251
+ 826 008e 0124     		movs	r4, #1
+ 827              	.LVL57:
+ 828              		.loc 1 311 12 view .LVU252
+ 829 0090 03E0     		b	.L37
+ 830              	.LVL58:
+ 831              	.L46:
+ 832              		.loc 1 311 12 view .LVU253
+ 833 0092 0446     		mov	r4, r0
+ 268:Core/Src/can.c ****     return ret;
+ 834              		.loc 1 268 5 is_stmt 1 view .LVU254
+ 835 0094 2148     		ldr	r0, .L52+12
+ 836              	.LVL59:
+ 268:Core/Src/can.c ****     return ret;
+ 837              		.loc 1 268 5 is_stmt 0 view .LVU255
+ 838 0096 FFF7FEFF 		bl	puts
+ 839              	.LVL60:
+ 269:Core/Src/can.c ****   }
+ 840              		.loc 1 269 5 is_stmt 1 view .LVU256
+ 841              	.L37:
+ 312:Core/Src/can.c ****   }
+ 313:Core/Src/can.c **** 
+ 314:Core/Src/can.c ****   /* Read the message */
+ 315:Core/Src/can.c ****   ret = HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData);
+ 316:Core/Src/can.c ****   if (ret != HAL_OK)
+ 317:Core/Src/can.c ****   {
+ 318:Core/Src/can.c ****     printf("CAN1 RX failed\r\n");
+ 319:Core/Src/can.c ****     return ret;
+ 320:Core/Src/can.c ****   }
+ 321:Core/Src/can.c **** 
+ 322:Core/Src/can.c ****   /* Check that it matches */
+ 323:Core/Src/can.c ****   if((RxHeader.StdId != 0x123)                     ||
+ 324:Core/Src/can.c ****      (RxHeader.RTR != CAN_RTR_DATA)               ||
+ 325:Core/Src/can.c ****      (RxHeader.IDE != CAN_ID_STD)                 ||
+ 326:Core/Src/can.c ****      (RxHeader.DLC != 2)                          ||
+ 327:Core/Src/can.c ****      ((RxData[0]<<8 | RxData[1]) != 0xDEAD))
+ 328:Core/Src/can.c ****   {
+ 329:Core/Src/can.c ****     /* Rx message Error */
+ 330:Core/Src/can.c ****     printf("CAN Validation failed\r\n");
+ 331:Core/Src/can.c ****     ret = HAL_ERROR;
+ 332:Core/Src/can.c ****   }
+ 333:Core/Src/can.c **** 
+ 334:Core/Src/can.c ****   printf("CAN Loopback Success!\r\n");
+ 335:Core/Src/can.c **** 
+ 336:Core/Src/can.c ****   return ret;
+ 337:Core/Src/can.c **** }
+ 842              		.loc 1 337 1 is_stmt 0 view .LVU257
+ 843 009a 2046     		mov	r0, r4
+ 844 009c 1CB0     		add	sp, sp, #112
+ 845              	.LCFI9:
+ 846              		.cfi_remember_state
+ 847              		.cfi_def_cfa_offset 8
+ 848              		@ sp needed
+ARM GAS  /tmp/cczM9vCV.s 			page 24
+
+
+ 849 009e 10BD     		pop	{r4, pc}
+ 850              	.LVL61:
+ 851              	.L47:
+ 852              	.LCFI10:
+ 853              		.cfi_restore_state
+ 276:Core/Src/can.c ****     return ret;
+ 854              		.loc 1 276 5 is_stmt 1 view .LVU258
+ 855 00a0 1F48     		ldr	r0, .L52+16
+ 856              	.LVL62:
+ 276:Core/Src/can.c ****     return ret;
+ 857              		.loc 1 276 5 is_stmt 0 view .LVU259
+ 858 00a2 FFF7FEFF 		bl	puts
+ 859              	.LVL63:
+ 277:Core/Src/can.c ****   }
+ 860              		.loc 1 277 5 is_stmt 1 view .LVU260
+ 277:Core/Src/can.c ****   }
+ 861              		.loc 1 277 12 is_stmt 0 view .LVU261
+ 862 00a6 F8E7     		b	.L37
+ 863              	.LVL64:
+ 864              	.L48:
+ 283:Core/Src/can.c ****     return ret;
+ 865              		.loc 1 283 5 is_stmt 1 view .LVU262
+ 866 00a8 1E48     		ldr	r0, .L52+20
+ 867              	.LVL65:
+ 283:Core/Src/can.c ****     return ret;
+ 868              		.loc 1 283 5 is_stmt 0 view .LVU263
+ 869 00aa FFF7FEFF 		bl	puts
+ 870              	.LVL66:
+ 284:Core/Src/can.c ****   }
+ 871              		.loc 1 284 5 is_stmt 1 view .LVU264
+ 284:Core/Src/can.c ****   }
+ 872              		.loc 1 284 12 is_stmt 0 view .LVU265
+ 873 00ae F4E7     		b	.L37
+ 874              	.LVL67:
+ 875              	.L49:
+ 300:Core/Src/can.c ****     return ret;
+ 876              		.loc 1 300 5 is_stmt 1 view .LVU266
+ 877 00b0 1D48     		ldr	r0, .L52+24
+ 878              	.LVL68:
+ 300:Core/Src/can.c ****     return ret;
+ 879              		.loc 1 300 5 is_stmt 0 view .LVU267
+ 880 00b2 FFF7FEFF 		bl	puts
+ 881              	.LVL69:
+ 301:Core/Src/can.c ****   }
+ 882              		.loc 1 301 5 is_stmt 1 view .LVU268
+ 301:Core/Src/can.c ****   }
+ 883              		.loc 1 301 12 is_stmt 0 view .LVU269
+ 884 00b6 F0E7     		b	.L37
+ 885              	.L41:
+ 315:Core/Src/can.c ****   if (ret != HAL_OK)
+ 886              		.loc 1 315 3 is_stmt 1 view .LVU270
+ 315:Core/Src/can.c ****   if (ret != HAL_OK)
+ 887              		.loc 1 315 9 is_stmt 0 view .LVU271
+ 888 00b8 0BAB     		add	r3, sp, #44
+ 889 00ba 0FAA     		add	r2, sp, #60
+ 890 00bc 0021     		movs	r1, #0
+ 891 00be 1448     		ldr	r0, .L52
+ARM GAS  /tmp/cczM9vCV.s 			page 25
+
+
+ 892 00c0 FFF7FEFF 		bl	HAL_CAN_GetRxMessage
+ 893              	.LVL70:
+ 316:Core/Src/can.c ****   {
+ 894              		.loc 1 316 3 is_stmt 1 view .LVU272
+ 316:Core/Src/can.c ****   {
+ 895              		.loc 1 316 6 is_stmt 0 view .LVU273
+ 896 00c4 0446     		mov	r4, r0
+ 897 00c6 98B9     		cbnz	r0, .L50
+ 323:Core/Src/can.c ****      (RxHeader.RTR != CAN_RTR_DATA)               ||
+ 898              		.loc 1 323 3 is_stmt 1 view .LVU274
+ 323:Core/Src/can.c ****      (RxHeader.RTR != CAN_RTR_DATA)               ||
+ 899              		.loc 1 323 5 is_stmt 0 view .LVU275
+ 900 00c8 0F9A     		ldr	r2, [sp, #60]
+ 901 00ca 40F22313 		movw	r3, #291
+ 902 00ce 9A42     		cmp	r2, r3
+ 903 00d0 06D1     		bne	.L43
+ 324:Core/Src/can.c ****      (RxHeader.IDE != CAN_ID_STD)                 ||
+ 904              		.loc 1 324 15 view .LVU276
+ 905 00d2 129B     		ldr	r3, [sp, #72]
+ 323:Core/Src/can.c ****      (RxHeader.RTR != CAN_RTR_DATA)               ||
+ 906              		.loc 1 323 52 discriminator 1 view .LVU277
+ 907 00d4 23B9     		cbnz	r3, .L43
+ 325:Core/Src/can.c ****      (RxHeader.DLC != 2)                          ||
+ 908              		.loc 1 325 15 view .LVU278
+ 909 00d6 119B     		ldr	r3, [sp, #68]
+ 324:Core/Src/can.c ****      (RxHeader.IDE != CAN_ID_STD)                 ||
+ 910              		.loc 1 324 51 view .LVU279
+ 911 00d8 13B9     		cbnz	r3, .L43
+ 326:Core/Src/can.c ****      ((RxData[0]<<8 | RxData[1]) != 0xDEAD))
+ 912              		.loc 1 326 15 view .LVU280
+ 913 00da 139B     		ldr	r3, [sp, #76]
+ 325:Core/Src/can.c ****      (RxHeader.DLC != 2)                          ||
+ 914              		.loc 1 325 51 view .LVU281
+ 915 00dc 022B     		cmp	r3, #2
+ 916 00de 0BD0     		beq	.L51
+ 917              	.L43:
+ 330:Core/Src/can.c ****     ret = HAL_ERROR;
+ 918              		.loc 1 330 5 is_stmt 1 view .LVU282
+ 919 00e0 1248     		ldr	r0, .L52+28
+ 920              	.LVL71:
+ 330:Core/Src/can.c ****     ret = HAL_ERROR;
+ 921              		.loc 1 330 5 is_stmt 0 view .LVU283
+ 922 00e2 FFF7FEFF 		bl	puts
+ 923              	.LVL72:
+ 331:Core/Src/can.c ****   }
+ 924              		.loc 1 331 5 is_stmt 1 view .LVU284
+ 331:Core/Src/can.c ****   }
+ 925              		.loc 1 331 9 is_stmt 0 view .LVU285
+ 926 00e6 0124     		movs	r4, #1
+ 927              	.LVL73:
+ 928              	.L44:
+ 334:Core/Src/can.c **** 
+ 929              		.loc 1 334 3 is_stmt 1 view .LVU286
+ 930 00e8 1148     		ldr	r0, .L52+32
+ 931 00ea FFF7FEFF 		bl	puts
+ 932              	.LVL74:
+ 336:Core/Src/can.c **** }
+ARM GAS  /tmp/cczM9vCV.s 			page 26
+
+
+ 933              		.loc 1 336 3 view .LVU287
+ 336:Core/Src/can.c **** }
+ 934              		.loc 1 336 10 is_stmt 0 view .LVU288
+ 935 00ee D4E7     		b	.L37
+ 936              	.LVL75:
+ 937              	.L50:
+ 318:Core/Src/can.c ****     return ret;
+ 938              		.loc 1 318 5 is_stmt 1 view .LVU289
+ 939 00f0 1048     		ldr	r0, .L52+36
+ 940              	.LVL76:
+ 318:Core/Src/can.c ****     return ret;
+ 941              		.loc 1 318 5 is_stmt 0 view .LVU290
+ 942 00f2 FFF7FEFF 		bl	puts
+ 943              	.LVL77:
+ 319:Core/Src/can.c ****   }
+ 944              		.loc 1 319 5 is_stmt 1 view .LVU291
+ 319:Core/Src/can.c ****   }
+ 945              		.loc 1 319 12 is_stmt 0 view .LVU292
+ 946 00f6 D0E7     		b	.L37
+ 947              	.LVL78:
+ 948              	.L51:
+ 327:Core/Src/can.c ****   {
+ 949              		.loc 1 327 14 view .LVU293
+ 950 00f8 9DF82C20 		ldrb	r2, [sp, #44]	@ zero_extendqisi2
+ 327:Core/Src/can.c ****   {
+ 951              		.loc 1 327 29 view .LVU294
+ 952 00fc 9DF82D30 		ldrb	r3, [sp, #45]	@ zero_extendqisi2
+ 327:Core/Src/can.c ****   {
+ 953              		.loc 1 327 21 view .LVU295
+ 954 0100 43EA0223 		orr	r3, r3, r2, lsl #8
+ 326:Core/Src/can.c ****      ((RxData[0]<<8 | RxData[1]) != 0xDEAD))
+ 955              		.loc 1 326 51 view .LVU296
+ 956 0104 4DF6AD62 		movw	r2, #57005
+ 957 0108 9342     		cmp	r3, r2
+ 958 010a E9D1     		bne	.L43
+ 959 010c ECE7     		b	.L44
+ 960              	.L53:
+ 961 010e 00BF     		.align	2
+ 962              	.L52:
+ 963 0110 00000000 		.word	hcan1
+ 964 0114 00000000 		.word	hcan2
+ 965 0118 54000000 		.word	.LC4
+ 966 011c 00000000 		.word	.LC0
+ 967 0120 14000000 		.word	.LC1
+ 968 0124 28000000 		.word	.LC2
+ 969 0128 3C000000 		.word	.LC3
+ 970 012c 7C000000 		.word	.LC6
+ 971 0130 94000000 		.word	.LC7
+ 972 0134 6C000000 		.word	.LC5
+ 973              		.cfi_endproc
+ 974              	.LFE137:
+ 976              		.section	.bss.HAL_RCC_CAN1_CLK_ENABLED,"aw",%nobits
+ 977              		.align	2
+ 980              	HAL_RCC_CAN1_CLK_ENABLED:
+ 981 0000 00000000 		.space	4
+ 982              		.global	hcan2
+ 983              		.section	.bss.hcan2,"aw",%nobits
+ARM GAS  /tmp/cczM9vCV.s 			page 27
+
+
+ 984              		.align	2
+ 987              	hcan2:
+ 988 0000 00000000 		.space	40
+ 988      00000000 
+ 988      00000000 
+ 988      00000000 
+ 988      00000000 
+ 989              		.global	hcan1
+ 990              		.section	.bss.hcan1,"aw",%nobits
+ 991              		.align	2
+ 994              	hcan1:
+ 995 0000 00000000 		.space	40
+ 995      00000000 
+ 995      00000000 
+ 995      00000000 
+ 995      00000000 
+ 996              		.text
+ 997              	.Letext0:
+ 998              		.file 2 "Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h"
+ 999              		.file 3 "/usr/lib/gcc/arm-none-eabi/14.2.1/include/stdint.h"
+ 1000              		.file 4 "Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f4xx.h"
+ 1001              		.file 5 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_def.h"
+ 1002              		.file 6 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_gpio.h"
+ 1003              		.file 7 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_can.h"
+ 1004              		.file 8 "Core/Inc/can.h"
+ 1005              		.file 9 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h"
+ 1006              		.file 10 "Core/Inc/main.h"
+ 1007              		.file 11 "<built-in>"
+ARM GAS  /tmp/cczM9vCV.s 			page 28
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 can.c
+     /tmp/cczM9vCV.s:21     .text.MX_CAN1_Init:00000000 $t
+     /tmp/cczM9vCV.s:27     .text.MX_CAN1_Init:00000000 MX_CAN1_Init
+     /tmp/cczM9vCV.s:98     .text.MX_CAN1_Init:00000038 $d
+     /tmp/cczM9vCV.s:994    .bss.hcan1:00000000 hcan1
+     /tmp/cczM9vCV.s:104    .text.MX_CAN2_Init:00000000 $t
+     /tmp/cczM9vCV.s:110    .text.MX_CAN2_Init:00000000 MX_CAN2_Init
+     /tmp/cczM9vCV.s:181    .text.MX_CAN2_Init:00000038 $d
+     /tmp/cczM9vCV.s:987    .bss.hcan2:00000000 hcan2
+     /tmp/cczM9vCV.s:187    .text.HAL_CAN_MspInit:00000000 $t
+     /tmp/cczM9vCV.s:193    .text.HAL_CAN_MspInit:00000000 HAL_CAN_MspInit
+     /tmp/cczM9vCV.s:493    .text.HAL_CAN_MspInit:00000168 $d
+     /tmp/cczM9vCV.s:980    .bss.HAL_RCC_CAN1_CLK_ENABLED:00000000 HAL_RCC_CAN1_CLK_ENABLED
+     /tmp/cczM9vCV.s:504    .text.HAL_CAN_MspDeInit:00000000 $t
+     /tmp/cczM9vCV.s:510    .text.HAL_CAN_MspDeInit:00000000 HAL_CAN_MspDeInit
+     /tmp/cczM9vCV.s:630    .text.HAL_CAN_MspDeInit:0000008c $d
+     /tmp/cczM9vCV.s:640    .rodata.MX_CAN_Loopback_Check.str1.4:00000000 $d
+     /tmp/cczM9vCV.s:665    .text.MX_CAN_Loopback_Check:00000000 $t
+     /tmp/cczM9vCV.s:671    .text.MX_CAN_Loopback_Check:00000000 MX_CAN_Loopback_Check
+     /tmp/cczM9vCV.s:963    .text.MX_CAN_Loopback_Check:00000110 $d
+     /tmp/cczM9vCV.s:977    .bss.HAL_RCC_CAN1_CLK_ENABLED:00000000 $d
+     /tmp/cczM9vCV.s:984    .bss.hcan2:00000000 $d
+     /tmp/cczM9vCV.s:991    .bss.hcan1:00000000 $d
+
+UNDEFINED SYMBOLS
+HAL_CAN_Init
+Error_Handler
+HAL_GPIO_Init
+HAL_NVIC_SetPriority
+HAL_NVIC_EnableIRQ
+HAL_GPIO_DeInit
+HAL_NVIC_DisableIRQ
+HAL_CAN_ConfigFilter
+HAL_CAN_Start
+HAL_CAN_AddTxMessage
+HAL_CAN_GetTxMailboxesFreeLevel
+HAL_CAN_GetRxFifoFillLevel
+puts
+HAL_CAN_GetRxMessage

@@ -1,0 +1,2998 @@
+ARM GAS  /tmp/ccyhlr5S.s 			page 1
+
+
+   1              		.cpu cortex-m4
+   2              		.arch armv7e-m
+   3              		.fpu fpv4-sp-d16
+   4              		.eabi_attribute 27, 1
+   5              		.eabi_attribute 28, 1
+   6              		.eabi_attribute 20, 1
+   7              		.eabi_attribute 21, 1
+   8              		.eabi_attribute 23, 3
+   9              		.eabi_attribute 24, 1
+  10              		.eabi_attribute 25, 1
+  11              		.eabi_attribute 26, 1
+  12              		.eabi_attribute 30, 1
+  13              		.eabi_attribute 34, 1
+  14              		.eabi_attribute 18, 4
+  15              		.file	"ethernetif.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.file 1 "LWIP/Target/ethernetif.c"
+  20              		.section	.text.ETH_PHY_IO_DeInit,"ax",%progbits
+  21              		.align	1
+  22              		.global	ETH_PHY_IO_DeInit
+  23              		.syntax unified
+  24              		.thumb
+  25              		.thumb_func
+  27              	ETH_PHY_IO_DeInit:
+  28              	.LFB166:
+   1:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN Header */
+   2:LWIP/Target/ethernetif.c **** /**
+   3:LWIP/Target/ethernetif.c ****   ******************************************************************************
+   4:LWIP/Target/ethernetif.c ****   * File Name          : ethernetif.c
+   5:LWIP/Target/ethernetif.c ****   * Description        : This file provides code for the configuration
+   6:LWIP/Target/ethernetif.c ****   *                      of the ethernetif.c MiddleWare.
+   7:LWIP/Target/ethernetif.c ****   ******************************************************************************
+   8:LWIP/Target/ethernetif.c ****   * @attention
+   9:LWIP/Target/ethernetif.c ****   *
+  10:LWIP/Target/ethernetif.c ****   * Copyright (c) 2023 STMicroelectronics.
+  11:LWIP/Target/ethernetif.c ****   * All rights reserved.
+  12:LWIP/Target/ethernetif.c ****   *
+  13:LWIP/Target/ethernetif.c ****   * This software is licensed under terms that can be found in the LICENSE file
+  14:LWIP/Target/ethernetif.c ****   * in the root directory of this software component.
+  15:LWIP/Target/ethernetif.c ****   * If no LICENSE file comes with this software, it is provided AS-IS.
+  16:LWIP/Target/ethernetif.c ****   *
+  17:LWIP/Target/ethernetif.c ****   ******************************************************************************
+  18:LWIP/Target/ethernetif.c ****   */
+  19:LWIP/Target/ethernetif.c **** /* USER CODE END Header */
+  20:LWIP/Target/ethernetif.c **** 
+  21:LWIP/Target/ethernetif.c **** /* Includes ------------------------------------------------------------------*/
+  22:LWIP/Target/ethernetif.c **** #include "main.h"
+  23:LWIP/Target/ethernetif.c **** #include "lwip/opt.h"
+  24:LWIP/Target/ethernetif.c **** #include "lwip/mem.h"
+  25:LWIP/Target/ethernetif.c **** #include "lwip/memp.h"
+  26:LWIP/Target/ethernetif.c **** #include "lwip/timeouts.h"
+  27:LWIP/Target/ethernetif.c **** #include "netif/ethernet.h"
+  28:LWIP/Target/ethernetif.c **** #include "netif/etharp.h"
+  29:LWIP/Target/ethernetif.c **** #include "lwip/ethip6.h"
+  30:LWIP/Target/ethernetif.c **** #include "ethernetif.h"
+ARM GAS  /tmp/ccyhlr5S.s 			page 2
+
+
+  31:LWIP/Target/ethernetif.c **** #include "dp83848.h"
+  32:LWIP/Target/ethernetif.c **** #include <string.h>
+  33:LWIP/Target/ethernetif.c **** 
+  34:LWIP/Target/ethernetif.c **** /* Within 'USER CODE' section, code will be kept by default at each generation */
+  35:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN 0 */
+  36:LWIP/Target/ethernetif.c **** 
+  37:LWIP/Target/ethernetif.c **** /* USER CODE END 0 */
+  38:LWIP/Target/ethernetif.c **** 
+  39:LWIP/Target/ethernetif.c **** /* Private define ------------------------------------------------------------*/
+  40:LWIP/Target/ethernetif.c **** 
+  41:LWIP/Target/ethernetif.c **** /* Network interface name */
+  42:LWIP/Target/ethernetif.c **** #define IFNAME0 's'
+  43:LWIP/Target/ethernetif.c **** #define IFNAME1 't'
+  44:LWIP/Target/ethernetif.c **** 
+  45:LWIP/Target/ethernetif.c **** /* ETH Setting  */
+  46:LWIP/Target/ethernetif.c **** #define ETH_DMA_TRANSMIT_TIMEOUT               ( 20U )
+  47:LWIP/Target/ethernetif.c **** #define ETH_TX_BUFFER_MAX             ((ETH_TX_DESC_CNT) * 2U)
+  48:LWIP/Target/ethernetif.c **** 
+  49:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN 1 */
+  50:LWIP/Target/ethernetif.c **** 
+  51:LWIP/Target/ethernetif.c **** /* USER CODE END 1 */
+  52:LWIP/Target/ethernetif.c **** 
+  53:LWIP/Target/ethernetif.c **** /* Private variables ---------------------------------------------------------*/
+  54:LWIP/Target/ethernetif.c **** /*
+  55:LWIP/Target/ethernetif.c **** @Note: This interface is implemented to operate in zero-copy mode only:
+  56:LWIP/Target/ethernetif.c ****         - Rx buffers will be allocated from LwIP stack memory heap,
+  57:LWIP/Target/ethernetif.c ****           then passed to ETH HAL driver.
+  58:LWIP/Target/ethernetif.c ****         - Tx buffers will be allocated from LwIP stack memory heap,
+  59:LWIP/Target/ethernetif.c ****           then passed to ETH HAL driver.
+  60:LWIP/Target/ethernetif.c **** 
+  61:LWIP/Target/ethernetif.c **** @Notes:
+  62:LWIP/Target/ethernetif.c ****   1.a. ETH DMA Rx descriptors must be contiguous, the default count is 4,
+  63:LWIP/Target/ethernetif.c ****        to customize it please redefine ETH_RX_DESC_CNT in ETH GUI (Rx Descriptor Length)
+  64:LWIP/Target/ethernetif.c ****        so that updated value will be generated in stm32xxxx_hal_conf.h
+  65:LWIP/Target/ethernetif.c ****   1.b. ETH DMA Tx descriptors must be contiguous, the default count is 4,
+  66:LWIP/Target/ethernetif.c ****        to customize it please redefine ETH_TX_DESC_CNT in ETH GUI (Tx Descriptor Length)
+  67:LWIP/Target/ethernetif.c ****        so that updated value will be generated in stm32xxxx_hal_conf.h
+  68:LWIP/Target/ethernetif.c **** 
+  69:LWIP/Target/ethernetif.c ****   2.a. Rx Buffers number must be between ETH_RX_DESC_CNT and 2*ETH_RX_DESC_CNT
+  70:LWIP/Target/ethernetif.c ****   2.b. Rx Buffers must have the same size: ETH_RX_BUF_SIZE, this value must
+  71:LWIP/Target/ethernetif.c ****        passed to ETH DMA in the init field (heth.Init.RxBuffLen)
+  72:LWIP/Target/ethernetif.c ****   2.c  The RX Ruffers addresses and sizes must be properly defined to be aligned
+  73:LWIP/Target/ethernetif.c ****        to L1-CACHE line size (32 bytes).
+  74:LWIP/Target/ethernetif.c **** */
+  75:LWIP/Target/ethernetif.c **** 
+  76:LWIP/Target/ethernetif.c **** /* Data Type Definitions */
+  77:LWIP/Target/ethernetif.c **** typedef enum
+  78:LWIP/Target/ethernetif.c **** {
+  79:LWIP/Target/ethernetif.c ****   RX_ALLOC_OK       = 0x00,
+  80:LWIP/Target/ethernetif.c ****   RX_ALLOC_ERROR    = 0x01
+  81:LWIP/Target/ethernetif.c **** } RxAllocStatusTypeDef;
+  82:LWIP/Target/ethernetif.c **** 
+  83:LWIP/Target/ethernetif.c **** typedef struct
+  84:LWIP/Target/ethernetif.c **** {
+  85:LWIP/Target/ethernetif.c ****   struct pbuf_custom pbuf_custom;
+  86:LWIP/Target/ethernetif.c ****   uint8_t buff[(ETH_RX_BUF_SIZE + 31) & ~31] __ALIGNED(32);
+  87:LWIP/Target/ethernetif.c **** } RxBuff_t;
+ARM GAS  /tmp/ccyhlr5S.s 			page 3
+
+
+  88:LWIP/Target/ethernetif.c **** 
+  89:LWIP/Target/ethernetif.c **** /* Memory Pool Declaration */
+  90:LWIP/Target/ethernetif.c **** #define ETH_RX_BUFFER_CNT             12U
+  91:LWIP/Target/ethernetif.c **** LWIP_MEMPOOL_DECLARE(RX_POOL, ETH_RX_BUFFER_CNT, sizeof(RxBuff_t), "Zero-copy RX PBUF pool");
+  92:LWIP/Target/ethernetif.c **** 
+  93:LWIP/Target/ethernetif.c **** /* Variable Definitions */
+  94:LWIP/Target/ethernetif.c **** static uint8_t RxAllocStatus;
+  95:LWIP/Target/ethernetif.c **** 
+  96:LWIP/Target/ethernetif.c **** ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
+  97:LWIP/Target/ethernetif.c **** ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
+  98:LWIP/Target/ethernetif.c **** 
+  99:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN 2 */
+ 100:LWIP/Target/ethernetif.c **** 
+ 101:LWIP/Target/ethernetif.c **** /* USER CODE END 2 */
+ 102:LWIP/Target/ethernetif.c **** 
+ 103:LWIP/Target/ethernetif.c **** /* Global Ethernet handle */
+ 104:LWIP/Target/ethernetif.c **** ETH_HandleTypeDef heth;
+ 105:LWIP/Target/ethernetif.c **** ETH_TxPacketConfig TxConfig;
+ 106:LWIP/Target/ethernetif.c **** 
+ 107:LWIP/Target/ethernetif.c **** /* Private function prototypes -----------------------------------------------*/
+ 108:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_Init(void);
+ 109:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_DeInit (void);
+ 110:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_ReadReg(uint32_t DevAddr, uint32_t RegAddr, uint32_t *pRegVal);
+ 111:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_WriteReg(uint32_t DevAddr, uint32_t RegAddr, uint32_t RegVal);
+ 112:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_GetTick(void);
+ 113:LWIP/Target/ethernetif.c **** 
+ 114:LWIP/Target/ethernetif.c **** dp83848_Object_t DP83848;
+ 115:LWIP/Target/ethernetif.c **** dp83848_IOCtx_t  DP83848_IOCtx = {ETH_PHY_IO_Init,
+ 116:LWIP/Target/ethernetif.c ****                                   ETH_PHY_IO_DeInit,
+ 117:LWIP/Target/ethernetif.c ****                                   ETH_PHY_IO_WriteReg,
+ 118:LWIP/Target/ethernetif.c ****                                   ETH_PHY_IO_ReadReg,
+ 119:LWIP/Target/ethernetif.c ****                                   ETH_PHY_IO_GetTick};
+ 120:LWIP/Target/ethernetif.c **** 
+ 121:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN 3 */
+ 122:LWIP/Target/ethernetif.c **** 
+ 123:LWIP/Target/ethernetif.c **** /* USER CODE END 3 */
+ 124:LWIP/Target/ethernetif.c **** 
+ 125:LWIP/Target/ethernetif.c **** /* Private functions ---------------------------------------------------------*/
+ 126:LWIP/Target/ethernetif.c **** void pbuf_free_custom(struct pbuf *p);
+ 127:LWIP/Target/ethernetif.c **** 
+ 128:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN 4 */
+ 129:LWIP/Target/ethernetif.c **** 
+ 130:LWIP/Target/ethernetif.c **** /* USER CODE END 4 */
+ 131:LWIP/Target/ethernetif.c **** 
+ 132:LWIP/Target/ethernetif.c **** /*******************************************************************************
+ 133:LWIP/Target/ethernetif.c ****                        LL Driver Interface ( LwIP stack --> ETH)
+ 134:LWIP/Target/ethernetif.c **** *******************************************************************************/
+ 135:LWIP/Target/ethernetif.c **** /**
+ 136:LWIP/Target/ethernetif.c ****  * @brief In this function, the hardware should be initialized.
+ 137:LWIP/Target/ethernetif.c ****  * Called from ethernetif_init().
+ 138:LWIP/Target/ethernetif.c ****  *
+ 139:LWIP/Target/ethernetif.c ****  * @param netif the already initialized lwip network interface structure
+ 140:LWIP/Target/ethernetif.c ****  *        for this ethernetif
+ 141:LWIP/Target/ethernetif.c ****  */
+ 142:LWIP/Target/ethernetif.c **** static void low_level_init(struct netif *netif)
+ 143:LWIP/Target/ethernetif.c **** {
+ 144:LWIP/Target/ethernetif.c ****   HAL_StatusTypeDef hal_eth_init_status = HAL_OK;
+ARM GAS  /tmp/ccyhlr5S.s 			page 4
+
+
+ 145:LWIP/Target/ethernetif.c ****   /* Start ETH HAL Init */
+ 146:LWIP/Target/ethernetif.c **** 
+ 147:LWIP/Target/ethernetif.c ****    uint8_t MACAddr[6] ;
+ 148:LWIP/Target/ethernetif.c ****   heth.Instance = ETH;
+ 149:LWIP/Target/ethernetif.c ****   MACAddr[0] = 0x00;
+ 150:LWIP/Target/ethernetif.c ****   MACAddr[1] = 0x80;
+ 151:LWIP/Target/ethernetif.c ****   MACAddr[2] = 0xE1;
+ 152:LWIP/Target/ethernetif.c ****   MACAddr[3] = 0x00;
+ 153:LWIP/Target/ethernetif.c ****   MACAddr[4] = 0x00;
+ 154:LWIP/Target/ethernetif.c ****   MACAddr[5] = 0x01;
+ 155:LWIP/Target/ethernetif.c ****   heth.Init.MACAddr = &MACAddr[0];
+ 156:LWIP/Target/ethernetif.c ****   heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
+ 157:LWIP/Target/ethernetif.c ****   heth.Init.TxDesc = DMATxDscrTab;
+ 158:LWIP/Target/ethernetif.c ****   heth.Init.RxDesc = DMARxDscrTab;
+ 159:LWIP/Target/ethernetif.c ****   heth.Init.RxBuffLen = 1536;
+ 160:LWIP/Target/ethernetif.c **** 
+ 161:LWIP/Target/ethernetif.c ****   /* USER CODE BEGIN MACADDRESS */
+ 162:LWIP/Target/ethernetif.c **** 
+ 163:LWIP/Target/ethernetif.c ****   /* USER CODE END MACADDRESS */
+ 164:LWIP/Target/ethernetif.c **** 
+ 165:LWIP/Target/ethernetif.c ****   hal_eth_init_status = HAL_ETH_Init(&heth);
+ 166:LWIP/Target/ethernetif.c **** 
+ 167:LWIP/Target/ethernetif.c ****   memset(&TxConfig, 0 , sizeof(ETH_TxPacketConfig));
+ 168:LWIP/Target/ethernetif.c ****   TxConfig.Attributes = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
+ 169:LWIP/Target/ethernetif.c ****   TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
+ 170:LWIP/Target/ethernetif.c ****   TxConfig.CRCPadCtrl = ETH_CRC_PAD_INSERT;
+ 171:LWIP/Target/ethernetif.c **** 
+ 172:LWIP/Target/ethernetif.c ****   /* End ETH HAL Init */
+ 173:LWIP/Target/ethernetif.c **** 
+ 174:LWIP/Target/ethernetif.c ****   /* Initialize the RX POOL */
+ 175:LWIP/Target/ethernetif.c ****   LWIP_MEMPOOL_INIT(RX_POOL);
+ 176:LWIP/Target/ethernetif.c **** 
+ 177:LWIP/Target/ethernetif.c **** #if LWIP_ARP || LWIP_ETHERNET
+ 178:LWIP/Target/ethernetif.c **** 
+ 179:LWIP/Target/ethernetif.c ****   /* set MAC hardware address length */
+ 180:LWIP/Target/ethernetif.c ****   netif->hwaddr_len = ETH_HWADDR_LEN;
+ 181:LWIP/Target/ethernetif.c **** 
+ 182:LWIP/Target/ethernetif.c ****   /* set MAC hardware address */
+ 183:LWIP/Target/ethernetif.c ****   netif->hwaddr[0] =  heth.Init.MACAddr[0];
+ 184:LWIP/Target/ethernetif.c ****   netif->hwaddr[1] =  heth.Init.MACAddr[1];
+ 185:LWIP/Target/ethernetif.c ****   netif->hwaddr[2] =  heth.Init.MACAddr[2];
+ 186:LWIP/Target/ethernetif.c ****   netif->hwaddr[3] =  heth.Init.MACAddr[3];
+ 187:LWIP/Target/ethernetif.c ****   netif->hwaddr[4] =  heth.Init.MACAddr[4];
+ 188:LWIP/Target/ethernetif.c ****   netif->hwaddr[5] =  heth.Init.MACAddr[5];
+ 189:LWIP/Target/ethernetif.c **** 
+ 190:LWIP/Target/ethernetif.c ****   /* maximum transfer unit */
+ 191:LWIP/Target/ethernetif.c ****   netif->mtu = ETH_MAX_PAYLOAD;
+ 192:LWIP/Target/ethernetif.c **** 
+ 193:LWIP/Target/ethernetif.c ****   /* Accept broadcast address and ARP traffic */
+ 194:LWIP/Target/ethernetif.c ****   /* don't set NETIF_FLAG_ETHARP if this device is not an ethernet one */
+ 195:LWIP/Target/ethernetif.c ****   #if LWIP_ARP
+ 196:LWIP/Target/ethernetif.c ****     netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP;
+ 197:LWIP/Target/ethernetif.c ****   #else
+ 198:LWIP/Target/ethernetif.c ****     netif->flags |= NETIF_FLAG_BROADCAST;
+ 199:LWIP/Target/ethernetif.c ****   #endif /* LWIP_ARP */
+ 200:LWIP/Target/ethernetif.c **** 
+ 201:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN PHY_PRE_CONFIG */
+ARM GAS  /tmp/ccyhlr5S.s 			page 5
+
+
+ 202:LWIP/Target/ethernetif.c **** 
+ 203:LWIP/Target/ethernetif.c **** /* USER CODE END PHY_PRE_CONFIG */
+ 204:LWIP/Target/ethernetif.c ****   /* Set PHY IO functions */
+ 205:LWIP/Target/ethernetif.c ****   DP83848_RegisterBusIO(&DP83848, &DP83848_IOCtx);
+ 206:LWIP/Target/ethernetif.c **** 
+ 207:LWIP/Target/ethernetif.c ****   /* Initialize the DP83848 ETH PHY */
+ 208:LWIP/Target/ethernetif.c ****   DP83848_Init(&DP83848);
+ 209:LWIP/Target/ethernetif.c **** 
+ 210:LWIP/Target/ethernetif.c ****   if (hal_eth_init_status == HAL_OK)
+ 211:LWIP/Target/ethernetif.c ****   {
+ 212:LWIP/Target/ethernetif.c ****   /* Get link state */
+ 213:LWIP/Target/ethernetif.c ****   ethernet_link_check_state(netif);
+ 214:LWIP/Target/ethernetif.c ****   }
+ 215:LWIP/Target/ethernetif.c ****   else
+ 216:LWIP/Target/ethernetif.c ****   {
+ 217:LWIP/Target/ethernetif.c ****     Error_Handler();
+ 218:LWIP/Target/ethernetif.c ****   }
+ 219:LWIP/Target/ethernetif.c **** #endif /* LWIP_ARP || LWIP_ETHERNET */
+ 220:LWIP/Target/ethernetif.c **** 
+ 221:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN LOW_LEVEL_INIT */
+ 222:LWIP/Target/ethernetif.c **** 
+ 223:LWIP/Target/ethernetif.c **** /* USER CODE END LOW_LEVEL_INIT */
+ 224:LWIP/Target/ethernetif.c **** }
+ 225:LWIP/Target/ethernetif.c **** 
+ 226:LWIP/Target/ethernetif.c **** /**
+ 227:LWIP/Target/ethernetif.c ****  * @brief This function should do the actual transmission of the packet. The packet is
+ 228:LWIP/Target/ethernetif.c ****  * contained in the pbuf that is passed to the function. This pbuf
+ 229:LWIP/Target/ethernetif.c ****  * might be chained.
+ 230:LWIP/Target/ethernetif.c ****  *
+ 231:LWIP/Target/ethernetif.c ****  * @param netif the lwip network interface structure for this ethernetif
+ 232:LWIP/Target/ethernetif.c ****  * @param p the MAC packet to send (e.g. IP packet including MAC addresses and type)
+ 233:LWIP/Target/ethernetif.c ****  * @return ERR_OK if the packet could be sent
+ 234:LWIP/Target/ethernetif.c ****  *         an err_t value if the packet couldn't be sent
+ 235:LWIP/Target/ethernetif.c ****  *
+ 236:LWIP/Target/ethernetif.c ****  * @note Returning ERR_MEM here if a DMA queue of your MAC is full can lead to
+ 237:LWIP/Target/ethernetif.c ****  *       strange results. You might consider waiting for space in the DMA queue
+ 238:LWIP/Target/ethernetif.c ****  *       to become available since the stack doesn't retry to send a packet
+ 239:LWIP/Target/ethernetif.c ****  *       dropped because of memory failure (except for the TCP timers).
+ 240:LWIP/Target/ethernetif.c ****  */
+ 241:LWIP/Target/ethernetif.c **** 
+ 242:LWIP/Target/ethernetif.c **** static err_t low_level_output(struct netif *netif, struct pbuf *p)
+ 243:LWIP/Target/ethernetif.c **** {
+ 244:LWIP/Target/ethernetif.c ****   uint32_t i = 0U;
+ 245:LWIP/Target/ethernetif.c ****   struct pbuf *q = NULL;
+ 246:LWIP/Target/ethernetif.c ****   err_t errval = ERR_OK;
+ 247:LWIP/Target/ethernetif.c ****   ETH_BufferTypeDef Txbuffer[ETH_TX_DESC_CNT] = {0};
+ 248:LWIP/Target/ethernetif.c **** 
+ 249:LWIP/Target/ethernetif.c ****   memset(Txbuffer, 0 , ETH_TX_DESC_CNT*sizeof(ETH_BufferTypeDef));
+ 250:LWIP/Target/ethernetif.c **** 
+ 251:LWIP/Target/ethernetif.c ****   for(q = p; q != NULL; q = q->next)
+ 252:LWIP/Target/ethernetif.c ****   {
+ 253:LWIP/Target/ethernetif.c ****     if(i >= ETH_TX_DESC_CNT)
+ 254:LWIP/Target/ethernetif.c ****       return ERR_IF;
+ 255:LWIP/Target/ethernetif.c **** 
+ 256:LWIP/Target/ethernetif.c ****     Txbuffer[i].buffer = q->payload;
+ 257:LWIP/Target/ethernetif.c ****     Txbuffer[i].len = q->len;
+ 258:LWIP/Target/ethernetif.c **** 
+ARM GAS  /tmp/ccyhlr5S.s 			page 6
+
+
+ 259:LWIP/Target/ethernetif.c ****     if(i>0)
+ 260:LWIP/Target/ethernetif.c ****     {
+ 261:LWIP/Target/ethernetif.c ****       Txbuffer[i-1].next = &Txbuffer[i];
+ 262:LWIP/Target/ethernetif.c ****     }
+ 263:LWIP/Target/ethernetif.c **** 
+ 264:LWIP/Target/ethernetif.c ****     if(q->next == NULL)
+ 265:LWIP/Target/ethernetif.c ****     {
+ 266:LWIP/Target/ethernetif.c ****       Txbuffer[i].next = NULL;
+ 267:LWIP/Target/ethernetif.c ****     }
+ 268:LWIP/Target/ethernetif.c **** 
+ 269:LWIP/Target/ethernetif.c ****     i++;
+ 270:LWIP/Target/ethernetif.c ****   }
+ 271:LWIP/Target/ethernetif.c **** 
+ 272:LWIP/Target/ethernetif.c ****   TxConfig.Length = p->tot_len;
+ 273:LWIP/Target/ethernetif.c ****   TxConfig.TxBuffer = Txbuffer;
+ 274:LWIP/Target/ethernetif.c ****   TxConfig.pData = p;
+ 275:LWIP/Target/ethernetif.c **** 
+ 276:LWIP/Target/ethernetif.c ****   HAL_ETH_Transmit(&heth, &TxConfig, ETH_DMA_TRANSMIT_TIMEOUT);
+ 277:LWIP/Target/ethernetif.c **** 
+ 278:LWIP/Target/ethernetif.c ****   return errval;
+ 279:LWIP/Target/ethernetif.c **** }
+ 280:LWIP/Target/ethernetif.c **** 
+ 281:LWIP/Target/ethernetif.c **** /**
+ 282:LWIP/Target/ethernetif.c ****  * @brief Should allocate a pbuf and transfer the bytes of the incoming
+ 283:LWIP/Target/ethernetif.c ****  * packet from the interface into the pbuf.
+ 284:LWIP/Target/ethernetif.c ****  *
+ 285:LWIP/Target/ethernetif.c ****  * @param netif the lwip network interface structure for this ethernetif
+ 286:LWIP/Target/ethernetif.c ****  * @return a pbuf filled with the received packet (including MAC header)
+ 287:LWIP/Target/ethernetif.c ****  *         NULL on memory error
+ 288:LWIP/Target/ethernetif.c ****    */
+ 289:LWIP/Target/ethernetif.c **** static struct pbuf * low_level_input(struct netif *netif)
+ 290:LWIP/Target/ethernetif.c **** {
+ 291:LWIP/Target/ethernetif.c ****   struct pbuf *p = NULL;
+ 292:LWIP/Target/ethernetif.c **** 
+ 293:LWIP/Target/ethernetif.c ****   if(RxAllocStatus == RX_ALLOC_OK)
+ 294:LWIP/Target/ethernetif.c ****   {
+ 295:LWIP/Target/ethernetif.c ****     HAL_ETH_ReadData(&heth, (void **)&p);
+ 296:LWIP/Target/ethernetif.c ****   }
+ 297:LWIP/Target/ethernetif.c **** 
+ 298:LWIP/Target/ethernetif.c ****   return p;
+ 299:LWIP/Target/ethernetif.c **** }
+ 300:LWIP/Target/ethernetif.c **** 
+ 301:LWIP/Target/ethernetif.c **** /**
+ 302:LWIP/Target/ethernetif.c ****  * @brief This function should be called when a packet is ready to be read
+ 303:LWIP/Target/ethernetif.c ****  * from the interface. It uses the function low_level_input() that
+ 304:LWIP/Target/ethernetif.c ****  * should handle the actual reception of bytes from the network
+ 305:LWIP/Target/ethernetif.c ****  * interface. Then the type of the received packet is determined and
+ 306:LWIP/Target/ethernetif.c ****  * the appropriate input function is called.
+ 307:LWIP/Target/ethernetif.c ****  *
+ 308:LWIP/Target/ethernetif.c ****  * @param netif the lwip network interface structure for this ethernetif
+ 309:LWIP/Target/ethernetif.c ****  */
+ 310:LWIP/Target/ethernetif.c **** void ethernetif_input(struct netif *netif)
+ 311:LWIP/Target/ethernetif.c **** {
+ 312:LWIP/Target/ethernetif.c ****   struct pbuf *p = NULL;
+ 313:LWIP/Target/ethernetif.c **** 
+ 314:LWIP/Target/ethernetif.c ****   do
+ 315:LWIP/Target/ethernetif.c ****   {
+ARM GAS  /tmp/ccyhlr5S.s 			page 7
+
+
+ 316:LWIP/Target/ethernetif.c ****     p = low_level_input( netif );
+ 317:LWIP/Target/ethernetif.c ****     if (p != NULL)
+ 318:LWIP/Target/ethernetif.c ****     {
+ 319:LWIP/Target/ethernetif.c ****       if (netif->input( p, netif) != ERR_OK )
+ 320:LWIP/Target/ethernetif.c ****       {
+ 321:LWIP/Target/ethernetif.c ****         pbuf_free(p);
+ 322:LWIP/Target/ethernetif.c ****       }
+ 323:LWIP/Target/ethernetif.c ****     }
+ 324:LWIP/Target/ethernetif.c ****   } while(p!=NULL);
+ 325:LWIP/Target/ethernetif.c **** }
+ 326:LWIP/Target/ethernetif.c **** 
+ 327:LWIP/Target/ethernetif.c **** #if !LWIP_ARP
+ 328:LWIP/Target/ethernetif.c **** /**
+ 329:LWIP/Target/ethernetif.c ****  * This function has to be completed by user in case of ARP OFF.
+ 330:LWIP/Target/ethernetif.c ****  *
+ 331:LWIP/Target/ethernetif.c ****  * @param netif the lwip network interface structure for this ethernetif
+ 332:LWIP/Target/ethernetif.c ****  * @return ERR_OK if ...
+ 333:LWIP/Target/ethernetif.c ****  */
+ 334:LWIP/Target/ethernetif.c **** static err_t low_level_output_arp_off(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr
+ 335:LWIP/Target/ethernetif.c **** {
+ 336:LWIP/Target/ethernetif.c ****   err_t errval;
+ 337:LWIP/Target/ethernetif.c ****   errval = ERR_OK;
+ 338:LWIP/Target/ethernetif.c **** 
+ 339:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN 5 */
+ 340:LWIP/Target/ethernetif.c **** 
+ 341:LWIP/Target/ethernetif.c **** /* USER CODE END 5 */
+ 342:LWIP/Target/ethernetif.c **** 
+ 343:LWIP/Target/ethernetif.c ****   return errval;
+ 344:LWIP/Target/ethernetif.c **** 
+ 345:LWIP/Target/ethernetif.c **** }
+ 346:LWIP/Target/ethernetif.c **** #endif /* LWIP_ARP */
+ 347:LWIP/Target/ethernetif.c **** 
+ 348:LWIP/Target/ethernetif.c **** /**
+ 349:LWIP/Target/ethernetif.c ****  * @brief Should be called at the beginning of the program to set up the
+ 350:LWIP/Target/ethernetif.c ****  * network interface. It calls the function low_level_init() to do the
+ 351:LWIP/Target/ethernetif.c ****  * actual setup of the hardware.
+ 352:LWIP/Target/ethernetif.c ****  *
+ 353:LWIP/Target/ethernetif.c ****  * This function should be passed as a parameter to netif_add().
+ 354:LWIP/Target/ethernetif.c ****  *
+ 355:LWIP/Target/ethernetif.c ****  * @param netif the lwip network interface structure for this ethernetif
+ 356:LWIP/Target/ethernetif.c ****  * @return ERR_OK if the loopif is initialized
+ 357:LWIP/Target/ethernetif.c ****  *         ERR_MEM if private data couldn't be allocated
+ 358:LWIP/Target/ethernetif.c ****  *         any other err_t on error
+ 359:LWIP/Target/ethernetif.c ****  */
+ 360:LWIP/Target/ethernetif.c **** err_t ethernetif_init(struct netif *netif)
+ 361:LWIP/Target/ethernetif.c **** {
+ 362:LWIP/Target/ethernetif.c ****   LWIP_ASSERT("netif != NULL", (netif != NULL));
+ 363:LWIP/Target/ethernetif.c **** 
+ 364:LWIP/Target/ethernetif.c **** #if LWIP_NETIF_HOSTNAME
+ 365:LWIP/Target/ethernetif.c ****   /* Initialize interface hostname */
+ 366:LWIP/Target/ethernetif.c ****   netif->hostname = "lwip";
+ 367:LWIP/Target/ethernetif.c **** #endif /* LWIP_NETIF_HOSTNAME */
+ 368:LWIP/Target/ethernetif.c **** 
+ 369:LWIP/Target/ethernetif.c ****   /*
+ 370:LWIP/Target/ethernetif.c ****    * Initialize the snmp variables and counters inside the struct netif.
+ 371:LWIP/Target/ethernetif.c ****    * The last argument should be replaced with your link speed, in units
+ 372:LWIP/Target/ethernetif.c ****    * of bits per second.
+ARM GAS  /tmp/ccyhlr5S.s 			page 8
+
+
+ 373:LWIP/Target/ethernetif.c ****    */
+ 374:LWIP/Target/ethernetif.c ****   // MIB2_INIT_NETIF(netif, snmp_ifType_ethernet_csmacd, LINK_SPEED_OF_YOUR_NETIF_IN_BPS);
+ 375:LWIP/Target/ethernetif.c **** 
+ 376:LWIP/Target/ethernetif.c ****   netif->name[0] = IFNAME0;
+ 377:LWIP/Target/ethernetif.c ****   netif->name[1] = IFNAME1;
+ 378:LWIP/Target/ethernetif.c ****   /* We directly use etharp_output() here to save a function call.
+ 379:LWIP/Target/ethernetif.c ****    * You can instead declare your own function an call etharp_output()
+ 380:LWIP/Target/ethernetif.c ****    * from it if you have to do some checks before sending (e.g. if link
+ 381:LWIP/Target/ethernetif.c ****    * is available...) */
+ 382:LWIP/Target/ethernetif.c **** 
+ 383:LWIP/Target/ethernetif.c **** #if LWIP_IPV4
+ 384:LWIP/Target/ethernetif.c **** #if LWIP_ARP || LWIP_ETHERNET
+ 385:LWIP/Target/ethernetif.c **** #if LWIP_ARP
+ 386:LWIP/Target/ethernetif.c ****   netif->output = etharp_output;
+ 387:LWIP/Target/ethernetif.c **** #else
+ 388:LWIP/Target/ethernetif.c ****   /* The user should write its own code in low_level_output_arp_off function */
+ 389:LWIP/Target/ethernetif.c ****   netif->output = low_level_output_arp_off;
+ 390:LWIP/Target/ethernetif.c **** #endif /* LWIP_ARP */
+ 391:LWIP/Target/ethernetif.c **** #endif /* LWIP_ARP || LWIP_ETHERNET */
+ 392:LWIP/Target/ethernetif.c **** #endif /* LWIP_IPV4 */
+ 393:LWIP/Target/ethernetif.c **** 
+ 394:LWIP/Target/ethernetif.c **** #if LWIP_IPV6
+ 395:LWIP/Target/ethernetif.c ****   netif->output_ip6 = ethip6_output;
+ 396:LWIP/Target/ethernetif.c **** #endif /* LWIP_IPV6 */
+ 397:LWIP/Target/ethernetif.c **** 
+ 398:LWIP/Target/ethernetif.c ****   netif->linkoutput = low_level_output;
+ 399:LWIP/Target/ethernetif.c **** 
+ 400:LWIP/Target/ethernetif.c ****   /* initialize the hardware */
+ 401:LWIP/Target/ethernetif.c ****   low_level_init(netif);
+ 402:LWIP/Target/ethernetif.c **** 
+ 403:LWIP/Target/ethernetif.c ****   return ERR_OK;
+ 404:LWIP/Target/ethernetif.c **** }
+ 405:LWIP/Target/ethernetif.c **** 
+ 406:LWIP/Target/ethernetif.c **** /**
+ 407:LWIP/Target/ethernetif.c ****   * @brief  Custom Rx pbuf free callback
+ 408:LWIP/Target/ethernetif.c ****   * @param  pbuf: pbuf to be freed
+ 409:LWIP/Target/ethernetif.c ****   * @retval None
+ 410:LWIP/Target/ethernetif.c ****   */
+ 411:LWIP/Target/ethernetif.c **** void pbuf_free_custom(struct pbuf *p)
+ 412:LWIP/Target/ethernetif.c **** {
+ 413:LWIP/Target/ethernetif.c ****   struct pbuf_custom* custom_pbuf = (struct pbuf_custom*)p;
+ 414:LWIP/Target/ethernetif.c ****   LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf);
+ 415:LWIP/Target/ethernetif.c **** 
+ 416:LWIP/Target/ethernetif.c ****   /* If the Rx Buffer Pool was exhausted, signal the ethernetif_input task to
+ 417:LWIP/Target/ethernetif.c ****    * call HAL_ETH_GetRxDataBuffer to rebuild the Rx descriptors. */
+ 418:LWIP/Target/ethernetif.c **** 
+ 419:LWIP/Target/ethernetif.c ****   if (RxAllocStatus == RX_ALLOC_ERROR)
+ 420:LWIP/Target/ethernetif.c ****   {
+ 421:LWIP/Target/ethernetif.c ****     RxAllocStatus = RX_ALLOC_OK;
+ 422:LWIP/Target/ethernetif.c ****   }
+ 423:LWIP/Target/ethernetif.c **** }
+ 424:LWIP/Target/ethernetif.c **** 
+ 425:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN 6 */
+ 426:LWIP/Target/ethernetif.c **** 
+ 427:LWIP/Target/ethernetif.c **** /**
+ 428:LWIP/Target/ethernetif.c **** * @brief  Returns the current time in milliseconds
+ 429:LWIP/Target/ethernetif.c **** *         when LWIP_TIMERS == 1 and NO_SYS == 1
+ARM GAS  /tmp/ccyhlr5S.s 			page 9
+
+
+ 430:LWIP/Target/ethernetif.c **** * @param  None
+ 431:LWIP/Target/ethernetif.c **** * @retval Current Time value
+ 432:LWIP/Target/ethernetif.c **** */
+ 433:LWIP/Target/ethernetif.c **** u32_t sys_now(void)
+ 434:LWIP/Target/ethernetif.c **** {
+ 435:LWIP/Target/ethernetif.c ****   return HAL_GetTick();
+ 436:LWIP/Target/ethernetif.c **** }
+ 437:LWIP/Target/ethernetif.c **** 
+ 438:LWIP/Target/ethernetif.c **** /* USER CODE END 6 */
+ 439:LWIP/Target/ethernetif.c **** 
+ 440:LWIP/Target/ethernetif.c **** /**
+ 441:LWIP/Target/ethernetif.c ****   * @brief  Initializes the ETH MSP.
+ 442:LWIP/Target/ethernetif.c ****   * @param  ethHandle: ETH handle
+ 443:LWIP/Target/ethernetif.c ****   * @retval None
+ 444:LWIP/Target/ethernetif.c ****   */
+ 445:LWIP/Target/ethernetif.c **** 
+ 446:LWIP/Target/ethernetif.c **** void HAL_ETH_MspInit(ETH_HandleTypeDef* ethHandle)
+ 447:LWIP/Target/ethernetif.c **** {
+ 448:LWIP/Target/ethernetif.c ****   GPIO_InitTypeDef GPIO_InitStruct = {0};
+ 449:LWIP/Target/ethernetif.c ****   if(ethHandle->Instance==ETH)
+ 450:LWIP/Target/ethernetif.c ****   {
+ 451:LWIP/Target/ethernetif.c ****   /* USER CODE BEGIN ETH_MspInit 0 */
+ 452:LWIP/Target/ethernetif.c **** 
+ 453:LWIP/Target/ethernetif.c ****   /* USER CODE END ETH_MspInit 0 */
+ 454:LWIP/Target/ethernetif.c ****     /* Enable Peripheral clock */
+ 455:LWIP/Target/ethernetif.c ****     __HAL_RCC_ETH_CLK_ENABLE();
+ 456:LWIP/Target/ethernetif.c **** 
+ 457:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOC_CLK_ENABLE();
+ 458:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOA_CLK_ENABLE();
+ 459:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOB_CLK_ENABLE();
+ 460:LWIP/Target/ethernetif.c ****     /**ETH GPIO Configuration
+ 461:LWIP/Target/ethernetif.c ****     PC1     ------> ETH_MDC
+ 462:LWIP/Target/ethernetif.c ****     PA1     ------> ETH_REF_CLK
+ 463:LWIP/Target/ethernetif.c ****     PA2     ------> ETH_MDIO
+ 464:LWIP/Target/ethernetif.c ****     PA7     ------> ETH_CRS_DV
+ 465:LWIP/Target/ethernetif.c ****     PC4     ------> ETH_RXD0
+ 466:LWIP/Target/ethernetif.c ****     PC5     ------> ETH_RXD1
+ 467:LWIP/Target/ethernetif.c ****     PB11     ------> ETH_TX_EN
+ 468:LWIP/Target/ethernetif.c ****     PB12     ------> ETH_TXD0
+ 469:LWIP/Target/ethernetif.c ****     PB13     ------> ETH_TXD1
+ 470:LWIP/Target/ethernetif.c ****     */
+ 471:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5;
+ 472:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 473:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 474:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 475:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 476:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+ 477:LWIP/Target/ethernetif.c **** 
+ 478:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_7;
+ 479:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 480:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 481:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 482:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 483:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+ 484:LWIP/Target/ethernetif.c **** 
+ 485:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13;
+ 486:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ARM GAS  /tmp/ccyhlr5S.s 			page 10
+
+
+ 487:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 488:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 489:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 490:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+ 491:LWIP/Target/ethernetif.c **** 
+ 492:LWIP/Target/ethernetif.c ****     /* Peripheral interrupt init */
+ 493:LWIP/Target/ethernetif.c ****     HAL_NVIC_SetPriority(ETH_IRQn, 0, 0);
+ 494:LWIP/Target/ethernetif.c ****     HAL_NVIC_EnableIRQ(ETH_IRQn);
+ 495:LWIP/Target/ethernetif.c ****     HAL_NVIC_SetPriority(ETH_WKUP_IRQn, 0, 0);
+ 496:LWIP/Target/ethernetif.c ****     HAL_NVIC_EnableIRQ(ETH_WKUP_IRQn);
+ 497:LWIP/Target/ethernetif.c ****   /* USER CODE BEGIN ETH_MspInit 1 */
+ 498:LWIP/Target/ethernetif.c **** 
+ 499:LWIP/Target/ethernetif.c ****   /* USER CODE END ETH_MspInit 1 */
+ 500:LWIP/Target/ethernetif.c ****   }
+ 501:LWIP/Target/ethernetif.c **** }
+ 502:LWIP/Target/ethernetif.c **** 
+ 503:LWIP/Target/ethernetif.c **** void HAL_ETH_MspDeInit(ETH_HandleTypeDef* ethHandle)
+ 504:LWIP/Target/ethernetif.c **** {
+ 505:LWIP/Target/ethernetif.c ****   if(ethHandle->Instance==ETH)
+ 506:LWIP/Target/ethernetif.c ****   {
+ 507:LWIP/Target/ethernetif.c ****   /* USER CODE BEGIN ETH_MspDeInit 0 */
+ 508:LWIP/Target/ethernetif.c **** 
+ 509:LWIP/Target/ethernetif.c ****   /* USER CODE END ETH_MspDeInit 0 */
+ 510:LWIP/Target/ethernetif.c ****     /* Peripheral clock disable */
+ 511:LWIP/Target/ethernetif.c ****     __HAL_RCC_ETH_CLK_DISABLE();
+ 512:LWIP/Target/ethernetif.c **** 
+ 513:LWIP/Target/ethernetif.c ****     /**ETH GPIO Configuration
+ 514:LWIP/Target/ethernetif.c ****     PC1     ------> ETH_MDC
+ 515:LWIP/Target/ethernetif.c ****     PA1     ------> ETH_REF_CLK
+ 516:LWIP/Target/ethernetif.c ****     PA2     ------> ETH_MDIO
+ 517:LWIP/Target/ethernetif.c ****     PA7     ------> ETH_CRS_DV
+ 518:LWIP/Target/ethernetif.c ****     PC4     ------> ETH_RXD0
+ 519:LWIP/Target/ethernetif.c ****     PC5     ------> ETH_RXD1
+ 520:LWIP/Target/ethernetif.c ****     PB11     ------> ETH_TX_EN
+ 521:LWIP/Target/ethernetif.c ****     PB12     ------> ETH_TXD0
+ 522:LWIP/Target/ethernetif.c ****     PB13     ------> ETH_TXD1
+ 523:LWIP/Target/ethernetif.c ****     */
+ 524:LWIP/Target/ethernetif.c ****     HAL_GPIO_DeInit(GPIOC, GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5);
+ 525:LWIP/Target/ethernetif.c **** 
+ 526:LWIP/Target/ethernetif.c ****     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_7);
+ 527:LWIP/Target/ethernetif.c **** 
+ 528:LWIP/Target/ethernetif.c ****     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13);
+ 529:LWIP/Target/ethernetif.c **** 
+ 530:LWIP/Target/ethernetif.c ****     /* Peripheral interrupt Deinit*/
+ 531:LWIP/Target/ethernetif.c ****     HAL_NVIC_DisableIRQ(ETH_IRQn);
+ 532:LWIP/Target/ethernetif.c **** 
+ 533:LWIP/Target/ethernetif.c ****     HAL_NVIC_DisableIRQ(ETH_WKUP_IRQn);
+ 534:LWIP/Target/ethernetif.c **** 
+ 535:LWIP/Target/ethernetif.c ****   /* USER CODE BEGIN ETH_MspDeInit 1 */
+ 536:LWIP/Target/ethernetif.c **** 
+ 537:LWIP/Target/ethernetif.c ****   /* USER CODE END ETH_MspDeInit 1 */
+ 538:LWIP/Target/ethernetif.c ****   }
+ 539:LWIP/Target/ethernetif.c **** }
+ 540:LWIP/Target/ethernetif.c **** 
+ 541:LWIP/Target/ethernetif.c **** /*******************************************************************************
+ 542:LWIP/Target/ethernetif.c ****                        PHI IO Functions
+ 543:LWIP/Target/ethernetif.c **** *******************************************************************************/
+ARM GAS  /tmp/ccyhlr5S.s 			page 11
+
+
+ 544:LWIP/Target/ethernetif.c **** /**
+ 545:LWIP/Target/ethernetif.c ****   * @brief  Initializes the MDIO interface GPIO and clocks.
+ 546:LWIP/Target/ethernetif.c ****   * @param  None
+ 547:LWIP/Target/ethernetif.c ****   * @retval 0 if OK, -1 if ERROR
+ 548:LWIP/Target/ethernetif.c ****   */
+ 549:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_Init(void)
+ 550:LWIP/Target/ethernetif.c **** {
+ 551:LWIP/Target/ethernetif.c ****   /* We assume that MDIO GPIO configuration is already done
+ 552:LWIP/Target/ethernetif.c ****      in the ETH_MspInit() else it should be done here
+ 553:LWIP/Target/ethernetif.c ****   */
+ 554:LWIP/Target/ethernetif.c **** 
+ 555:LWIP/Target/ethernetif.c ****   /* Configure the MDIO Clock */
+ 556:LWIP/Target/ethernetif.c ****   HAL_ETH_SetMDIOClockRange(&heth);
+ 557:LWIP/Target/ethernetif.c **** 
+ 558:LWIP/Target/ethernetif.c ****   return 0;
+ 559:LWIP/Target/ethernetif.c **** }
+ 560:LWIP/Target/ethernetif.c **** 
+ 561:LWIP/Target/ethernetif.c **** /**
+ 562:LWIP/Target/ethernetif.c ****   * @brief  De-Initializes the MDIO interface .
+ 563:LWIP/Target/ethernetif.c ****   * @param  None
+ 564:LWIP/Target/ethernetif.c ****   * @retval 0 if OK, -1 if ERROR
+ 565:LWIP/Target/ethernetif.c ****   */
+ 566:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_DeInit (void)
+ 567:LWIP/Target/ethernetif.c **** {
+  29              		.loc 1 567 1 view -0
+  30              		.cfi_startproc
+  31              		@ args = 0, pretend = 0, frame = 0
+  32              		@ frame_needed = 0, uses_anonymous_args = 0
+  33              		@ link register save eliminated.
+ 568:LWIP/Target/ethernetif.c ****   return 0;
+  34              		.loc 1 568 3 view .LVU1
+ 569:LWIP/Target/ethernetif.c **** }
+  35              		.loc 1 569 1 is_stmt 0 view .LVU2
+  36 0000 0020     		movs	r0, #0
+  37 0002 7047     		bx	lr
+  38              		.cfi_endproc
+  39              	.LFE166:
+  41              		.section	.text.low_level_input,"ax",%progbits
+  42              		.align	1
+  43              		.syntax unified
+  44              		.thumb
+  45              		.thumb_func
+  47              	low_level_input:
+  48              	.LVL0:
+  49              	.LFB158:
+ 290:LWIP/Target/ethernetif.c ****   struct pbuf *p = NULL;
+  50              		.loc 1 290 1 is_stmt 1 view -0
+  51              		.cfi_startproc
+  52              		@ args = 0, pretend = 0, frame = 8
+  53              		@ frame_needed = 0, uses_anonymous_args = 0
+ 290:LWIP/Target/ethernetif.c ****   struct pbuf *p = NULL;
+  54              		.loc 1 290 1 is_stmt 0 view .LVU4
+  55 0000 00B5     		push	{lr}
+  56              	.LCFI0:
+  57              		.cfi_def_cfa_offset 4
+  58              		.cfi_offset 14, -4
+  59 0002 83B0     		sub	sp, sp, #12
+ARM GAS  /tmp/ccyhlr5S.s 			page 12
+
+
+  60              	.LCFI1:
+  61              		.cfi_def_cfa_offset 16
+ 291:LWIP/Target/ethernetif.c **** 
+  62              		.loc 1 291 3 is_stmt 1 view .LVU5
+ 291:LWIP/Target/ethernetif.c **** 
+  63              		.loc 1 291 16 is_stmt 0 view .LVU6
+  64 0004 0023     		movs	r3, #0
+  65 0006 0193     		str	r3, [sp, #4]
+ 293:LWIP/Target/ethernetif.c ****   {
+  66              		.loc 1 293 3 is_stmt 1 view .LVU7
+ 293:LWIP/Target/ethernetif.c ****   {
+  67              		.loc 1 293 20 is_stmt 0 view .LVU8
+  68 0008 054B     		ldr	r3, .L6
+  69 000a 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 293:LWIP/Target/ethernetif.c ****   {
+  70              		.loc 1 293 5 view .LVU9
+  71 000c 1BB1     		cbz	r3, .L5
+  72              	.LVL1:
+  73              	.L3:
+ 298:LWIP/Target/ethernetif.c **** }
+  74              		.loc 1 298 3 is_stmt 1 view .LVU10
+ 299:LWIP/Target/ethernetif.c **** 
+  75              		.loc 1 299 1 is_stmt 0 view .LVU11
+  76 000e 0198     		ldr	r0, [sp, #4]
+  77 0010 03B0     		add	sp, sp, #12
+  78              	.LCFI2:
+  79              		.cfi_remember_state
+  80              		.cfi_def_cfa_offset 4
+  81              		@ sp needed
+  82 0012 5DF804FB 		ldr	pc, [sp], #4
+  83              	.LVL2:
+  84              	.L5:
+  85              	.LCFI3:
+  86              		.cfi_restore_state
+ 295:LWIP/Target/ethernetif.c ****   }
+  87              		.loc 1 295 5 is_stmt 1 view .LVU12
+  88 0016 01A9     		add	r1, sp, #4
+  89 0018 0248     		ldr	r0, .L6+4
+  90              	.LVL3:
+ 295:LWIP/Target/ethernetif.c ****   }
+  91              		.loc 1 295 5 is_stmt 0 view .LVU13
+  92 001a FFF7FEFF 		bl	HAL_ETH_ReadData
+  93              	.LVL4:
+  94 001e F6E7     		b	.L3
+  95              	.L7:
+  96              		.align	2
+  97              	.L6:
+  98 0020 00000000 		.word	RxAllocStatus
+  99 0024 00000000 		.word	heth
+ 100              		.cfi_endproc
+ 101              	.LFE158:
+ 103              		.section	.text.low_level_output,"ax",%progbits
+ 104              		.align	1
+ 105              		.syntax unified
+ 106              		.thumb
+ 107              		.thumb_func
+ 109              	low_level_output:
+ARM GAS  /tmp/ccyhlr5S.s 			page 13
+
+
+ 110              	.LVL5:
+ 111              	.LFB157:
+ 243:LWIP/Target/ethernetif.c ****   uint32_t i = 0U;
+ 112              		.loc 1 243 1 is_stmt 1 view -0
+ 113              		.cfi_startproc
+ 114              		@ args = 0, pretend = 0, frame = 48
+ 115              		@ frame_needed = 0, uses_anonymous_args = 0
+ 243:LWIP/Target/ethernetif.c ****   uint32_t i = 0U;
+ 116              		.loc 1 243 1 is_stmt 0 view .LVU15
+ 117 0000 70B5     		push	{r4, r5, r6, lr}
+ 118              	.LCFI4:
+ 119              		.cfi_def_cfa_offset 16
+ 120              		.cfi_offset 4, -16
+ 121              		.cfi_offset 5, -12
+ 122              		.cfi_offset 6, -8
+ 123              		.cfi_offset 14, -4
+ 124 0002 8CB0     		sub	sp, sp, #48
+ 125              	.LCFI5:
+ 126              		.cfi_def_cfa_offset 64
+ 127 0004 0C46     		mov	r4, r1
+ 244:LWIP/Target/ethernetif.c ****   struct pbuf *q = NULL;
+ 128              		.loc 1 244 3 is_stmt 1 view .LVU16
+ 129              	.LVL6:
+ 245:LWIP/Target/ethernetif.c ****   err_t errval = ERR_OK;
+ 130              		.loc 1 245 3 view .LVU17
+ 246:LWIP/Target/ethernetif.c ****   ETH_BufferTypeDef Txbuffer[ETH_TX_DESC_CNT] = {0};
+ 131              		.loc 1 246 3 view .LVU18
+ 247:LWIP/Target/ethernetif.c **** 
+ 132              		.loc 1 247 3 view .LVU19
+ 247:LWIP/Target/ethernetif.c **** 
+ 133              		.loc 1 247 21 is_stmt 0 view .LVU20
+ 134 0006 3026     		movs	r6, #48
+ 135 0008 3246     		mov	r2, r6
+ 136 000a 0021     		movs	r1, #0
+ 137              	.LVL7:
+ 247:LWIP/Target/ethernetif.c **** 
+ 138              		.loc 1 247 21 view .LVU21
+ 139 000c 6846     		mov	r0, sp
+ 140              	.LVL8:
+ 247:LWIP/Target/ethernetif.c **** 
+ 141              		.loc 1 247 21 view .LVU22
+ 142 000e FFF7FEFF 		bl	memset
+ 143              	.LVL9:
+ 249:LWIP/Target/ethernetif.c **** 
+ 144              		.loc 1 249 3 is_stmt 1 view .LVU23
+ 145 0012 3246     		mov	r2, r6
+ 146 0014 0021     		movs	r1, #0
+ 147 0016 6846     		mov	r0, sp
+ 148 0018 FFF7FEFF 		bl	memset
+ 149              	.LVL10:
+ 251:LWIP/Target/ethernetif.c ****   {
+ 150              		.loc 1 251 3 view .LVU24
+ 251:LWIP/Target/ethernetif.c ****   {
+ 151              		.loc 1 251 9 is_stmt 0 view .LVU25
+ 152 001c 2246     		mov	r2, r4
+ 244:LWIP/Target/ethernetif.c ****   struct pbuf *q = NULL;
+ 153              		.loc 1 244 12 view .LVU26
+ARM GAS  /tmp/ccyhlr5S.s 			page 14
+
+
+ 154 001e 0023     		movs	r3, #0
+ 251:LWIP/Target/ethernetif.c ****   {
+ 155              		.loc 1 251 3 view .LVU27
+ 156 0020 03E0     		b	.L9
+ 157              	.LVL11:
+ 158              	.L11:
+ 264:LWIP/Target/ethernetif.c ****     {
+ 159              		.loc 1 264 5 is_stmt 1 view .LVU28
+ 264:LWIP/Target/ethernetif.c ****     {
+ 160              		.loc 1 264 9 is_stmt 0 view .LVU29
+ 161 0022 1168     		ldr	r1, [r2]
+ 264:LWIP/Target/ethernetif.c ****     {
+ 162              		.loc 1 264 7 view .LVU30
+ 163 0024 E9B1     		cbz	r1, .L16
+ 164              	.L12:
+ 269:LWIP/Target/ethernetif.c ****   }
+ 165              		.loc 1 269 5 is_stmt 1 view .LVU31
+ 269:LWIP/Target/ethernetif.c ****   }
+ 166              		.loc 1 269 6 is_stmt 0 view .LVU32
+ 167 0026 0133     		adds	r3, r3, #1
+ 168              	.LVL12:
+ 251:LWIP/Target/ethernetif.c ****   {
+ 169              		.loc 1 251 27 is_stmt 1 discriminator 2 view .LVU33
+ 170 0028 1268     		ldr	r2, [r2]
+ 171              	.LVL13:
+ 172              	.L9:
+ 251:LWIP/Target/ethernetif.c ****   {
+ 173              		.loc 1 251 16 discriminator 1 view .LVU34
+ 174 002a 1AB3     		cbz	r2, .L17
+ 253:LWIP/Target/ethernetif.c ****       return ERR_IF;
+ 175              		.loc 1 253 5 view .LVU35
+ 253:LWIP/Target/ethernetif.c ****       return ERR_IF;
+ 176              		.loc 1 253 7 is_stmt 0 view .LVU36
+ 177 002c 032B     		cmp	r3, #3
+ 178 002e 2DD8     		bhi	.L14
+ 256:LWIP/Target/ethernetif.c ****     Txbuffer[i].len = q->len;
+ 179              		.loc 1 256 5 is_stmt 1 view .LVU37
+ 256:LWIP/Target/ethernetif.c ****     Txbuffer[i].len = q->len;
+ 180              		.loc 1 256 27 is_stmt 0 view .LVU38
+ 181 0030 5168     		ldr	r1, [r2, #4]
+ 256:LWIP/Target/ethernetif.c ****     Txbuffer[i].len = q->len;
+ 182              		.loc 1 256 24 view .LVU39
+ 183 0032 03EB4300 		add	r0, r3, r3, lsl #1
+ 184 0036 0CAD     		add	r5, sp, #48
+ 185 0038 05EB8000 		add	r0, r5, r0, lsl #2
+ 186 003c 40F8301C 		str	r1, [r0, #-48]
+ 257:LWIP/Target/ethernetif.c **** 
+ 187              		.loc 1 257 5 is_stmt 1 view .LVU40
+ 257:LWIP/Target/ethernetif.c **** 
+ 188              		.loc 1 257 24 is_stmt 0 view .LVU41
+ 189 0040 5189     		ldrh	r1, [r2, #10]
+ 257:LWIP/Target/ethernetif.c **** 
+ 190              		.loc 1 257 21 view .LVU42
+ 191 0042 40F82C1C 		str	r1, [r0, #-44]
+ 259:LWIP/Target/ethernetif.c ****     {
+ 192              		.loc 1 259 5 is_stmt 1 view .LVU43
+ 259:LWIP/Target/ethernetif.c ****     {
+ARM GAS  /tmp/ccyhlr5S.s 			page 15
+
+
+ 193              		.loc 1 259 7 is_stmt 0 view .LVU44
+ 194 0046 002B     		cmp	r3, #0
+ 195 0048 EBD0     		beq	.L11
+ 261:LWIP/Target/ethernetif.c ****     }
+ 196              		.loc 1 261 7 is_stmt 1 view .LVU45
+ 261:LWIP/Target/ethernetif.c ****     }
+ 197              		.loc 1 261 17 is_stmt 0 view .LVU46
+ 198 004a 581E     		subs	r0, r3, #1
+ 261:LWIP/Target/ethernetif.c ****     }
+ 199              		.loc 1 261 28 view .LVU47
+ 200 004c 03EB430C 		add	ip, r3, r3, lsl #1
+ 201 0050 0DEB8C01 		add	r1, sp, ip, lsl #2
+ 261:LWIP/Target/ethernetif.c ****     }
+ 202              		.loc 1 261 26 view .LVU48
+ 203 0054 00EB4000 		add	r0, r0, r0, lsl #1
+ 204 0058 05EB8000 		add	r0, r5, r0, lsl #2
+ 205 005c 40F8281C 		str	r1, [r0, #-40]
+ 206 0060 DFE7     		b	.L11
+ 207              	.L16:
+ 266:LWIP/Target/ethernetif.c ****     }
+ 208              		.loc 1 266 7 is_stmt 1 view .LVU49
+ 266:LWIP/Target/ethernetif.c ****     }
+ 209              		.loc 1 266 24 is_stmt 0 view .LVU50
+ 210 0062 03EB4301 		add	r1, r3, r3, lsl #1
+ 211 0066 0CA8     		add	r0, sp, #48
+ 212 0068 00EB8101 		add	r1, r0, r1, lsl #2
+ 213 006c 0020     		movs	r0, #0
+ 214 006e 41F8280C 		str	r0, [r1, #-40]
+ 215 0072 D8E7     		b	.L12
+ 216              	.L17:
+ 272:LWIP/Target/ethernetif.c ****   TxConfig.TxBuffer = Txbuffer;
+ 217              		.loc 1 272 3 is_stmt 1 view .LVU51
+ 272:LWIP/Target/ethernetif.c ****   TxConfig.TxBuffer = Txbuffer;
+ 218              		.loc 1 272 22 is_stmt 0 view .LVU52
+ 219 0074 2389     		ldrh	r3, [r4, #8]
+ 220              	.LVL14:
+ 272:LWIP/Target/ethernetif.c ****   TxConfig.TxBuffer = Txbuffer;
+ 221              		.loc 1 272 19 view .LVU53
+ 222 0076 0749     		ldr	r1, .L18
+ 223 0078 4B60     		str	r3, [r1, #4]
+ 273:LWIP/Target/ethernetif.c ****   TxConfig.pData = p;
+ 224              		.loc 1 273 3 is_stmt 1 view .LVU54
+ 273:LWIP/Target/ethernetif.c ****   TxConfig.pData = p;
+ 225              		.loc 1 273 21 is_stmt 0 view .LVU55
+ 226 007a C1F808D0 		str	sp, [r1, #8]
+ 274:LWIP/Target/ethernetif.c **** 
+ 227              		.loc 1 274 3 is_stmt 1 view .LVU56
+ 274:LWIP/Target/ethernetif.c **** 
+ 228              		.loc 1 274 18 is_stmt 0 view .LVU57
+ 229 007e 4C63     		str	r4, [r1, #52]
+ 276:LWIP/Target/ethernetif.c **** 
+ 230              		.loc 1 276 3 is_stmt 1 view .LVU58
+ 231 0080 1422     		movs	r2, #20
+ 232              	.LVL15:
+ 276:LWIP/Target/ethernetif.c **** 
+ 233              		.loc 1 276 3 is_stmt 0 view .LVU59
+ 234 0082 0548     		ldr	r0, .L18+4
+ARM GAS  /tmp/ccyhlr5S.s 			page 16
+
+
+ 235 0084 FFF7FEFF 		bl	HAL_ETH_Transmit
+ 236              	.LVL16:
+ 278:LWIP/Target/ethernetif.c **** }
+ 237              		.loc 1 278 3 is_stmt 1 view .LVU60
+ 278:LWIP/Target/ethernetif.c **** }
+ 238              		.loc 1 278 10 is_stmt 0 view .LVU61
+ 239 0088 0020     		movs	r0, #0
+ 240 008a 01E0     		b	.L10
+ 241              	.LVL17:
+ 242              	.L14:
+ 254:LWIP/Target/ethernetif.c **** 
+ 243              		.loc 1 254 14 view .LVU62
+ 244 008c 6FF00B00 		mvn	r0, #11
+ 245              	.LVL18:
+ 246              	.L10:
+ 279:LWIP/Target/ethernetif.c **** 
+ 247              		.loc 1 279 1 view .LVU63
+ 248 0090 0CB0     		add	sp, sp, #48
+ 249              	.LCFI6:
+ 250              		.cfi_def_cfa_offset 16
+ 251              		@ sp needed
+ 252 0092 70BD     		pop	{r4, r5, r6, pc}
+ 253              	.LVL19:
+ 254              	.L19:
+ 279:LWIP/Target/ethernetif.c **** 
+ 255              		.loc 1 279 1 view .LVU64
+ 256              		.align	2
+ 257              	.L18:
+ 258 0094 00000000 		.word	TxConfig
+ 259 0098 00000000 		.word	heth
+ 260              		.cfi_endproc
+ 261              	.LFE157:
+ 263              		.section	.text.pbuf_free_custom,"ax",%progbits
+ 264              		.align	1
+ 265              		.global	pbuf_free_custom
+ 266              		.syntax unified
+ 267              		.thumb
+ 268              		.thumb_func
+ 270              	pbuf_free_custom:
+ 271              	.LVL20:
+ 272              	.LFB161:
+ 412:LWIP/Target/ethernetif.c ****   struct pbuf_custom* custom_pbuf = (struct pbuf_custom*)p;
+ 273              		.loc 1 412 1 is_stmt 1 view -0
+ 274              		.cfi_startproc
+ 275              		@ args = 0, pretend = 0, frame = 0
+ 276              		@ frame_needed = 0, uses_anonymous_args = 0
+ 412:LWIP/Target/ethernetif.c ****   struct pbuf_custom* custom_pbuf = (struct pbuf_custom*)p;
+ 277              		.loc 1 412 1 is_stmt 0 view .LVU66
+ 278 0000 08B5     		push	{r3, lr}
+ 279              	.LCFI7:
+ 280              		.cfi_def_cfa_offset 8
+ 281              		.cfi_offset 3, -8
+ 282              		.cfi_offset 14, -4
+ 283 0002 0146     		mov	r1, r0
+ 413:LWIP/Target/ethernetif.c ****   LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf);
+ 284              		.loc 1 413 3 is_stmt 1 view .LVU67
+ 285              	.LVL21:
+ARM GAS  /tmp/ccyhlr5S.s 			page 17
+
+
+ 414:LWIP/Target/ethernetif.c **** 
+ 286              		.loc 1 414 3 view .LVU68
+ 287 0004 0548     		ldr	r0, .L24
+ 288              	.LVL22:
+ 414:LWIP/Target/ethernetif.c **** 
+ 289              		.loc 1 414 3 is_stmt 0 view .LVU69
+ 290 0006 FFF7FEFF 		bl	memp_free_pool
+ 291              	.LVL23:
+ 419:LWIP/Target/ethernetif.c ****   {
+ 292              		.loc 1 419 3 is_stmt 1 view .LVU70
+ 419:LWIP/Target/ethernetif.c ****   {
+ 293              		.loc 1 419 21 is_stmt 0 view .LVU71
+ 294 000a 054B     		ldr	r3, .L24+4
+ 295 000c 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 419:LWIP/Target/ethernetif.c ****   {
+ 296              		.loc 1 419 6 view .LVU72
+ 297 000e 012B     		cmp	r3, #1
+ 298 0010 00D0     		beq	.L23
+ 299              	.L20:
+ 423:LWIP/Target/ethernetif.c **** 
+ 300              		.loc 1 423 1 view .LVU73
+ 301 0012 08BD     		pop	{r3, pc}
+ 302              	.L23:
+ 421:LWIP/Target/ethernetif.c ****   }
+ 303              		.loc 1 421 5 is_stmt 1 view .LVU74
+ 421:LWIP/Target/ethernetif.c ****   }
+ 304              		.loc 1 421 19 is_stmt 0 view .LVU75
+ 305 0014 024B     		ldr	r3, .L24+4
+ 306 0016 0022     		movs	r2, #0
+ 307 0018 1A70     		strb	r2, [r3]
+ 423:LWIP/Target/ethernetif.c **** 
+ 308              		.loc 1 423 1 view .LVU76
+ 309 001a FAE7     		b	.L20
+ 310              	.L25:
+ 311              		.align	2
+ 312              	.L24:
+ 313 001c 00000000 		.word	memp_RX_POOL
+ 314 0020 00000000 		.word	RxAllocStatus
+ 315              		.cfi_endproc
+ 316              	.LFE161:
+ 318              		.section	.text.ETH_PHY_IO_GetTick,"ax",%progbits
+ 319              		.align	1
+ 320              		.global	ETH_PHY_IO_GetTick
+ 321              		.syntax unified
+ 322              		.thumb
+ 323              		.thumb_func
+ 325              	ETH_PHY_IO_GetTick:
+ 326              	.LFB169:
+ 570:LWIP/Target/ethernetif.c **** 
+ 571:LWIP/Target/ethernetif.c **** /**
+ 572:LWIP/Target/ethernetif.c ****   * @brief  Read a PHY register through the MDIO interface.
+ 573:LWIP/Target/ethernetif.c ****   * @param  DevAddr: PHY port address
+ 574:LWIP/Target/ethernetif.c ****   * @param  RegAddr: PHY register address
+ 575:LWIP/Target/ethernetif.c ****   * @param  pRegVal: pointer to hold the register value
+ 576:LWIP/Target/ethernetif.c ****   * @retval 0 if OK -1 if Error
+ 577:LWIP/Target/ethernetif.c ****   */
+ 578:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_ReadReg(uint32_t DevAddr, uint32_t RegAddr, uint32_t *pRegVal)
+ARM GAS  /tmp/ccyhlr5S.s 			page 18
+
+
+ 579:LWIP/Target/ethernetif.c **** {
+ 580:LWIP/Target/ethernetif.c ****   if(HAL_ETH_ReadPHYRegister(&heth, DevAddr, RegAddr, pRegVal) != HAL_OK)
+ 581:LWIP/Target/ethernetif.c ****   {
+ 582:LWIP/Target/ethernetif.c ****     return -1;
+ 583:LWIP/Target/ethernetif.c ****   }
+ 584:LWIP/Target/ethernetif.c **** 
+ 585:LWIP/Target/ethernetif.c ****   return 0;
+ 586:LWIP/Target/ethernetif.c **** }
+ 587:LWIP/Target/ethernetif.c **** 
+ 588:LWIP/Target/ethernetif.c **** /**
+ 589:LWIP/Target/ethernetif.c ****   * @brief  Write a value to a PHY register through the MDIO interface.
+ 590:LWIP/Target/ethernetif.c ****   * @param  DevAddr: PHY port address
+ 591:LWIP/Target/ethernetif.c ****   * @param  RegAddr: PHY register address
+ 592:LWIP/Target/ethernetif.c ****   * @param  RegVal: Value to be written
+ 593:LWIP/Target/ethernetif.c ****   * @retval 0 if OK -1 if Error
+ 594:LWIP/Target/ethernetif.c ****   */
+ 595:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_WriteReg(uint32_t DevAddr, uint32_t RegAddr, uint32_t RegVal)
+ 596:LWIP/Target/ethernetif.c **** {
+ 597:LWIP/Target/ethernetif.c ****   if(HAL_ETH_WritePHYRegister(&heth, DevAddr, RegAddr, RegVal) != HAL_OK)
+ 598:LWIP/Target/ethernetif.c ****   {
+ 599:LWIP/Target/ethernetif.c ****     return -1;
+ 600:LWIP/Target/ethernetif.c ****   }
+ 601:LWIP/Target/ethernetif.c **** 
+ 602:LWIP/Target/ethernetif.c ****   return 0;
+ 603:LWIP/Target/ethernetif.c **** }
+ 604:LWIP/Target/ethernetif.c **** 
+ 605:LWIP/Target/ethernetif.c **** /**
+ 606:LWIP/Target/ethernetif.c ****   * @brief  Get the time in millisecons used for internal PHY driver process.
+ 607:LWIP/Target/ethernetif.c ****   * @retval Time value
+ 608:LWIP/Target/ethernetif.c ****   */
+ 609:LWIP/Target/ethernetif.c **** int32_t ETH_PHY_IO_GetTick(void)
+ 610:LWIP/Target/ethernetif.c **** {
+ 327              		.loc 1 610 1 is_stmt 1 view -0
+ 328              		.cfi_startproc
+ 329              		@ args = 0, pretend = 0, frame = 0
+ 330              		@ frame_needed = 0, uses_anonymous_args = 0
+ 331 0000 08B5     		push	{r3, lr}
+ 332              	.LCFI8:
+ 333              		.cfi_def_cfa_offset 8
+ 334              		.cfi_offset 3, -8
+ 335              		.cfi_offset 14, -4
+ 611:LWIP/Target/ethernetif.c ****   return HAL_GetTick();
+ 336              		.loc 1 611 3 view .LVU78
+ 337              		.loc 1 611 10 is_stmt 0 view .LVU79
+ 338 0002 FFF7FEFF 		bl	HAL_GetTick
+ 339              	.LVL24:
+ 612:LWIP/Target/ethernetif.c **** }
+ 340              		.loc 1 612 1 view .LVU80
+ 341 0006 08BD     		pop	{r3, pc}
+ 342              		.cfi_endproc
+ 343              	.LFE169:
+ 345              		.section	.text.ETH_PHY_IO_Init,"ax",%progbits
+ 346              		.align	1
+ 347              		.global	ETH_PHY_IO_Init
+ 348              		.syntax unified
+ 349              		.thumb
+ 350              		.thumb_func
+ARM GAS  /tmp/ccyhlr5S.s 			page 19
+
+
+ 352              	ETH_PHY_IO_Init:
+ 353              	.LFB165:
+ 550:LWIP/Target/ethernetif.c ****   /* We assume that MDIO GPIO configuration is already done
+ 354              		.loc 1 550 1 is_stmt 1 view -0
+ 355              		.cfi_startproc
+ 356              		@ args = 0, pretend = 0, frame = 0
+ 357              		@ frame_needed = 0, uses_anonymous_args = 0
+ 358 0000 08B5     		push	{r3, lr}
+ 359              	.LCFI9:
+ 360              		.cfi_def_cfa_offset 8
+ 361              		.cfi_offset 3, -8
+ 362              		.cfi_offset 14, -4
+ 556:LWIP/Target/ethernetif.c **** 
+ 363              		.loc 1 556 3 view .LVU82
+ 364 0002 0248     		ldr	r0, .L30
+ 365 0004 FFF7FEFF 		bl	HAL_ETH_SetMDIOClockRange
+ 366              	.LVL25:
+ 558:LWIP/Target/ethernetif.c **** }
+ 367              		.loc 1 558 3 view .LVU83
+ 559:LWIP/Target/ethernetif.c **** 
+ 368              		.loc 1 559 1 is_stmt 0 view .LVU84
+ 369 0008 0020     		movs	r0, #0
+ 370 000a 08BD     		pop	{r3, pc}
+ 371              	.L31:
+ 372              		.align	2
+ 373              	.L30:
+ 374 000c 00000000 		.word	heth
+ 375              		.cfi_endproc
+ 376              	.LFE165:
+ 378              		.section	.text.ETH_PHY_IO_ReadReg,"ax",%progbits
+ 379              		.align	1
+ 380              		.global	ETH_PHY_IO_ReadReg
+ 381              		.syntax unified
+ 382              		.thumb
+ 383              		.thumb_func
+ 385              	ETH_PHY_IO_ReadReg:
+ 386              	.LVL26:
+ 387              	.LFB167:
+ 579:LWIP/Target/ethernetif.c ****   if(HAL_ETH_ReadPHYRegister(&heth, DevAddr, RegAddr, pRegVal) != HAL_OK)
+ 388              		.loc 1 579 1 is_stmt 1 view -0
+ 389              		.cfi_startproc
+ 390              		@ args = 0, pretend = 0, frame = 0
+ 391              		@ frame_needed = 0, uses_anonymous_args = 0
+ 579:LWIP/Target/ethernetif.c ****   if(HAL_ETH_ReadPHYRegister(&heth, DevAddr, RegAddr, pRegVal) != HAL_OK)
+ 392              		.loc 1 579 1 is_stmt 0 view .LVU86
+ 393 0000 08B5     		push	{r3, lr}
+ 394              	.LCFI10:
+ 395              		.cfi_def_cfa_offset 8
+ 396              		.cfi_offset 3, -8
+ 397              		.cfi_offset 14, -4
+ 398 0002 1346     		mov	r3, r2
+ 580:LWIP/Target/ethernetif.c ****   {
+ 399              		.loc 1 580 3 is_stmt 1 view .LVU87
+ 580:LWIP/Target/ethernetif.c ****   {
+ 400              		.loc 1 580 6 is_stmt 0 view .LVU88
+ 401 0004 0A46     		mov	r2, r1
+ 402              	.LVL27:
+ARM GAS  /tmp/ccyhlr5S.s 			page 20
+
+
+ 580:LWIP/Target/ethernetif.c ****   {
+ 403              		.loc 1 580 6 view .LVU89
+ 404 0006 0146     		mov	r1, r0
+ 405              	.LVL28:
+ 580:LWIP/Target/ethernetif.c ****   {
+ 406              		.loc 1 580 6 view .LVU90
+ 407 0008 0348     		ldr	r0, .L37
+ 408              	.LVL29:
+ 580:LWIP/Target/ethernetif.c ****   {
+ 409              		.loc 1 580 6 view .LVU91
+ 410 000a FFF7FEFF 		bl	HAL_ETH_ReadPHYRegister
+ 411              	.LVL30:
+ 580:LWIP/Target/ethernetif.c ****   {
+ 412              		.loc 1 580 5 discriminator 1 view .LVU92
+ 413 000e 00B9     		cbnz	r0, .L36
+ 414              	.L32:
+ 586:LWIP/Target/ethernetif.c **** 
+ 415              		.loc 1 586 1 view .LVU93
+ 416 0010 08BD     		pop	{r3, pc}
+ 417              	.L36:
+ 582:LWIP/Target/ethernetif.c ****   }
+ 418              		.loc 1 582 12 view .LVU94
+ 419 0012 4FF0FF30 		mov	r0, #-1
+ 420 0016 FBE7     		b	.L32
+ 421              	.L38:
+ 422              		.align	2
+ 423              	.L37:
+ 424 0018 00000000 		.word	heth
+ 425              		.cfi_endproc
+ 426              	.LFE167:
+ 428              		.section	.text.ETH_PHY_IO_WriteReg,"ax",%progbits
+ 429              		.align	1
+ 430              		.global	ETH_PHY_IO_WriteReg
+ 431              		.syntax unified
+ 432              		.thumb
+ 433              		.thumb_func
+ 435              	ETH_PHY_IO_WriteReg:
+ 436              	.LVL31:
+ 437              	.LFB168:
+ 596:LWIP/Target/ethernetif.c ****   if(HAL_ETH_WritePHYRegister(&heth, DevAddr, RegAddr, RegVal) != HAL_OK)
+ 438              		.loc 1 596 1 is_stmt 1 view -0
+ 439              		.cfi_startproc
+ 440              		@ args = 0, pretend = 0, frame = 0
+ 441              		@ frame_needed = 0, uses_anonymous_args = 0
+ 596:LWIP/Target/ethernetif.c ****   if(HAL_ETH_WritePHYRegister(&heth, DevAddr, RegAddr, RegVal) != HAL_OK)
+ 442              		.loc 1 596 1 is_stmt 0 view .LVU96
+ 443 0000 08B5     		push	{r3, lr}
+ 444              	.LCFI11:
+ 445              		.cfi_def_cfa_offset 8
+ 446              		.cfi_offset 3, -8
+ 447              		.cfi_offset 14, -4
+ 448 0002 1346     		mov	r3, r2
+ 597:LWIP/Target/ethernetif.c ****   {
+ 449              		.loc 1 597 3 is_stmt 1 view .LVU97
+ 597:LWIP/Target/ethernetif.c ****   {
+ 450              		.loc 1 597 6 is_stmt 0 view .LVU98
+ 451 0004 0A46     		mov	r2, r1
+ARM GAS  /tmp/ccyhlr5S.s 			page 21
+
+
+ 452              	.LVL32:
+ 597:LWIP/Target/ethernetif.c ****   {
+ 453              		.loc 1 597 6 view .LVU99
+ 454 0006 0146     		mov	r1, r0
+ 455              	.LVL33:
+ 597:LWIP/Target/ethernetif.c ****   {
+ 456              		.loc 1 597 6 view .LVU100
+ 457 0008 0348     		ldr	r0, .L44
+ 458              	.LVL34:
+ 597:LWIP/Target/ethernetif.c ****   {
+ 459              		.loc 1 597 6 view .LVU101
+ 460 000a FFF7FEFF 		bl	HAL_ETH_WritePHYRegister
+ 461              	.LVL35:
+ 597:LWIP/Target/ethernetif.c ****   {
+ 462              		.loc 1 597 5 discriminator 1 view .LVU102
+ 463 000e 00B9     		cbnz	r0, .L43
+ 464              	.L39:
+ 603:LWIP/Target/ethernetif.c **** 
+ 465              		.loc 1 603 1 view .LVU103
+ 466 0010 08BD     		pop	{r3, pc}
+ 467              	.L43:
+ 599:LWIP/Target/ethernetif.c ****   }
+ 468              		.loc 1 599 12 view .LVU104
+ 469 0012 4FF0FF30 		mov	r0, #-1
+ 470 0016 FBE7     		b	.L39
+ 471              	.L45:
+ 472              		.align	2
+ 473              	.L44:
+ 474 0018 00000000 		.word	heth
+ 475              		.cfi_endproc
+ 476              	.LFE168:
+ 478              		.section	.text.ethernetif_input,"ax",%progbits
+ 479              		.align	1
+ 480              		.global	ethernetif_input
+ 481              		.syntax unified
+ 482              		.thumb
+ 483              		.thumb_func
+ 485              	ethernetif_input:
+ 486              	.LVL36:
+ 487              	.LFB159:
+ 311:LWIP/Target/ethernetif.c ****   struct pbuf *p = NULL;
+ 488              		.loc 1 311 1 is_stmt 1 view -0
+ 489              		.cfi_startproc
+ 490              		@ args = 0, pretend = 0, frame = 0
+ 491              		@ frame_needed = 0, uses_anonymous_args = 0
+ 311:LWIP/Target/ethernetif.c ****   struct pbuf *p = NULL;
+ 492              		.loc 1 311 1 is_stmt 0 view .LVU106
+ 493 0000 38B5     		push	{r3, r4, r5, lr}
+ 494              	.LCFI12:
+ 495              		.cfi_def_cfa_offset 16
+ 496              		.cfi_offset 3, -16
+ 497              		.cfi_offset 4, -12
+ 498              		.cfi_offset 5, -8
+ 499              		.cfi_offset 14, -4
+ 500 0002 0546     		mov	r5, r0
+ 312:LWIP/Target/ethernetif.c **** 
+ 501              		.loc 1 312 3 is_stmt 1 view .LVU107
+ARM GAS  /tmp/ccyhlr5S.s 			page 22
+
+
+ 502              	.LVL37:
+ 312:LWIP/Target/ethernetif.c **** 
+ 503              		.loc 1 312 3 is_stmt 0 view .LVU108
+ 504 0004 00E0     		b	.L48
+ 505              	.LVL38:
+ 506              	.L47:
+ 324:LWIP/Target/ethernetif.c **** }
+ 507              		.loc 1 324 12 is_stmt 1 view .LVU109
+ 508 0006 74B1     		cbz	r4, .L50
+ 509              	.LVL39:
+ 510              	.L48:
+ 314:LWIP/Target/ethernetif.c ****   {
+ 511              		.loc 1 314 3 view .LVU110
+ 316:LWIP/Target/ethernetif.c ****     if (p != NULL)
+ 512              		.loc 1 316 5 view .LVU111
+ 316:LWIP/Target/ethernetif.c ****     if (p != NULL)
+ 513              		.loc 1 316 9 is_stmt 0 view .LVU112
+ 514 0008 2846     		mov	r0, r5
+ 515 000a FFF7FEFF 		bl	low_level_input
+ 516              	.LVL40:
+ 317:LWIP/Target/ethernetif.c ****     {
+ 517              		.loc 1 317 5 is_stmt 1 view .LVU113
+ 317:LWIP/Target/ethernetif.c ****     {
+ 518              		.loc 1 317 8 is_stmt 0 view .LVU114
+ 519 000e 0446     		mov	r4, r0
+ 520 0010 0028     		cmp	r0, #0
+ 521 0012 F8D0     		beq	.L47
+ 319:LWIP/Target/ethernetif.c ****       {
+ 522              		.loc 1 319 7 is_stmt 1 view .LVU115
+ 319:LWIP/Target/ethernetif.c ****       {
+ 523              		.loc 1 319 16 is_stmt 0 view .LVU116
+ 524 0014 2B69     		ldr	r3, [r5, #16]
+ 319:LWIP/Target/ethernetif.c ****       {
+ 525              		.loc 1 319 11 view .LVU117
+ 526 0016 2946     		mov	r1, r5
+ 527 0018 9847     		blx	r3
+ 528              	.LVL41:
+ 319:LWIP/Target/ethernetif.c ****       {
+ 529              		.loc 1 319 10 discriminator 1 view .LVU118
+ 530 001a 0028     		cmp	r0, #0
+ 531 001c F3D0     		beq	.L47
+ 321:LWIP/Target/ethernetif.c ****       }
+ 532              		.loc 1 321 9 is_stmt 1 view .LVU119
+ 533 001e 2046     		mov	r0, r4
+ 534 0020 FFF7FEFF 		bl	pbuf_free
+ 535              	.LVL42:
+ 536 0024 EFE7     		b	.L47
+ 537              	.L50:
+ 325:LWIP/Target/ethernetif.c **** 
+ 538              		.loc 1 325 1 is_stmt 0 view .LVU120
+ 539 0026 38BD     		pop	{r3, r4, r5, pc}
+ 325:LWIP/Target/ethernetif.c **** 
+ 540              		.loc 1 325 1 view .LVU121
+ 541              		.cfi_endproc
+ 542              	.LFE159:
+ 544              		.section	.text.sys_now,"ax",%progbits
+ 545              		.align	1
+ARM GAS  /tmp/ccyhlr5S.s 			page 23
+
+
+ 546              		.global	sys_now
+ 547              		.syntax unified
+ 548              		.thumb
+ 549              		.thumb_func
+ 551              	sys_now:
+ 552              	.LFB162:
+ 434:LWIP/Target/ethernetif.c ****   return HAL_GetTick();
+ 553              		.loc 1 434 1 is_stmt 1 view -0
+ 554              		.cfi_startproc
+ 555              		@ args = 0, pretend = 0, frame = 0
+ 556              		@ frame_needed = 0, uses_anonymous_args = 0
+ 557 0000 08B5     		push	{r3, lr}
+ 558              	.LCFI13:
+ 559              		.cfi_def_cfa_offset 8
+ 560              		.cfi_offset 3, -8
+ 561              		.cfi_offset 14, -4
+ 435:LWIP/Target/ethernetif.c **** }
+ 562              		.loc 1 435 3 view .LVU123
+ 435:LWIP/Target/ethernetif.c **** }
+ 563              		.loc 1 435 10 is_stmt 0 view .LVU124
+ 564 0002 FFF7FEFF 		bl	HAL_GetTick
+ 565              	.LVL43:
+ 436:LWIP/Target/ethernetif.c **** 
+ 566              		.loc 1 436 1 view .LVU125
+ 567 0006 08BD     		pop	{r3, pc}
+ 568              		.cfi_endproc
+ 569              	.LFE162:
+ 571              		.section	.text.HAL_ETH_MspInit,"ax",%progbits
+ 572              		.align	1
+ 573              		.global	HAL_ETH_MspInit
+ 574              		.syntax unified
+ 575              		.thumb
+ 576              		.thumb_func
+ 578              	HAL_ETH_MspInit:
+ 579              	.LVL44:
+ 580              	.LFB163:
+ 447:LWIP/Target/ethernetif.c ****   GPIO_InitTypeDef GPIO_InitStruct = {0};
+ 581              		.loc 1 447 1 is_stmt 1 view -0
+ 582              		.cfi_startproc
+ 583              		@ args = 0, pretend = 0, frame = 48
+ 584              		@ frame_needed = 0, uses_anonymous_args = 0
+ 447:LWIP/Target/ethernetif.c ****   GPIO_InitTypeDef GPIO_InitStruct = {0};
+ 585              		.loc 1 447 1 is_stmt 0 view .LVU127
+ 586 0000 2DE9F041 		push	{r4, r5, r6, r7, r8, lr}
+ 587              	.LCFI14:
+ 588              		.cfi_def_cfa_offset 24
+ 589              		.cfi_offset 4, -24
+ 590              		.cfi_offset 5, -20
+ 591              		.cfi_offset 6, -16
+ 592              		.cfi_offset 7, -12
+ 593              		.cfi_offset 8, -8
+ 594              		.cfi_offset 14, -4
+ 595 0004 8CB0     		sub	sp, sp, #48
+ 596              	.LCFI15:
+ 597              		.cfi_def_cfa_offset 72
+ 448:LWIP/Target/ethernetif.c ****   if(ethHandle->Instance==ETH)
+ 598              		.loc 1 448 3 is_stmt 1 view .LVU128
+ARM GAS  /tmp/ccyhlr5S.s 			page 24
+
+
+ 448:LWIP/Target/ethernetif.c ****   if(ethHandle->Instance==ETH)
+ 599              		.loc 1 448 20 is_stmt 0 view .LVU129
+ 600 0006 0023     		movs	r3, #0
+ 601 0008 0793     		str	r3, [sp, #28]
+ 602 000a 0893     		str	r3, [sp, #32]
+ 603 000c 0993     		str	r3, [sp, #36]
+ 604 000e 0A93     		str	r3, [sp, #40]
+ 605 0010 0B93     		str	r3, [sp, #44]
+ 449:LWIP/Target/ethernetif.c ****   {
+ 606              		.loc 1 449 3 is_stmt 1 view .LVU130
+ 449:LWIP/Target/ethernetif.c ****   {
+ 607              		.loc 1 449 15 is_stmt 0 view .LVU131
+ 608 0012 0268     		ldr	r2, [r0]
+ 449:LWIP/Target/ethernetif.c ****   {
+ 609              		.loc 1 449 5 view .LVU132
+ 610 0014 3D4B     		ldr	r3, .L57
+ 611 0016 9A42     		cmp	r2, r3
+ 612 0018 02D0     		beq	.L56
+ 613              	.LVL45:
+ 614              	.L53:
+ 501:LWIP/Target/ethernetif.c **** 
+ 615              		.loc 1 501 1 view .LVU133
+ 616 001a 0CB0     		add	sp, sp, #48
+ 617              	.LCFI16:
+ 618              		.cfi_remember_state
+ 619              		.cfi_def_cfa_offset 24
+ 620              		@ sp needed
+ 621 001c BDE8F081 		pop	{r4, r5, r6, r7, r8, pc}
+ 622              	.LVL46:
+ 623              	.L56:
+ 624              	.LCFI17:
+ 625              		.cfi_restore_state
+ 455:LWIP/Target/ethernetif.c **** 
+ 626              		.loc 1 455 5 is_stmt 1 view .LVU134
+ 455:LWIP/Target/ethernetif.c **** 
+ 627              		.loc 1 455 5 view .LVU135
+ 628              	.LBB2:
+ 455:LWIP/Target/ethernetif.c **** 
+ 629              		.loc 1 455 5 view .LVU136
+ 630 0020 0024     		movs	r4, #0
+ 631 0022 0194     		str	r4, [sp, #4]
+ 455:LWIP/Target/ethernetif.c **** 
+ 632              		.loc 1 455 5 view .LVU137
+ 633 0024 A3F59043 		sub	r3, r3, #18432
+ 634 0028 1A6B     		ldr	r2, [r3, #48]
+ 635 002a 42F00072 		orr	r2, r2, #33554432
+ 636 002e 1A63     		str	r2, [r3, #48]
+ 455:LWIP/Target/ethernetif.c **** 
+ 637              		.loc 1 455 5 view .LVU138
+ 638 0030 1A6B     		ldr	r2, [r3, #48]
+ 639 0032 02F00072 		and	r2, r2, #33554432
+ 640 0036 0192     		str	r2, [sp, #4]
+ 455:LWIP/Target/ethernetif.c **** 
+ 641              		.loc 1 455 5 view .LVU139
+ 642 0038 019A     		ldr	r2, [sp, #4]
+ 643              	.LBE2:
+ 455:LWIP/Target/ethernetif.c **** 
+ARM GAS  /tmp/ccyhlr5S.s 			page 25
+
+
+ 644              		.loc 1 455 5 view .LVU140
+ 455:LWIP/Target/ethernetif.c **** 
+ 645              		.loc 1 455 5 view .LVU141
+ 646              	.LBB3:
+ 455:LWIP/Target/ethernetif.c **** 
+ 647              		.loc 1 455 5 view .LVU142
+ 648 003a 0294     		str	r4, [sp, #8]
+ 455:LWIP/Target/ethernetif.c **** 
+ 649              		.loc 1 455 5 view .LVU143
+ 650 003c 1A6B     		ldr	r2, [r3, #48]
+ 651 003e 42F08062 		orr	r2, r2, #67108864
+ 652 0042 1A63     		str	r2, [r3, #48]
+ 455:LWIP/Target/ethernetif.c **** 
+ 653              		.loc 1 455 5 view .LVU144
+ 654 0044 1A6B     		ldr	r2, [r3, #48]
+ 655 0046 02F08062 		and	r2, r2, #67108864
+ 656 004a 0292     		str	r2, [sp, #8]
+ 455:LWIP/Target/ethernetif.c **** 
+ 657              		.loc 1 455 5 view .LVU145
+ 658 004c 029A     		ldr	r2, [sp, #8]
+ 659              	.LBE3:
+ 455:LWIP/Target/ethernetif.c **** 
+ 660              		.loc 1 455 5 view .LVU146
+ 455:LWIP/Target/ethernetif.c **** 
+ 661              		.loc 1 455 5 view .LVU147
+ 662              	.LBB4:
+ 455:LWIP/Target/ethernetif.c **** 
+ 663              		.loc 1 455 5 view .LVU148
+ 664 004e 0394     		str	r4, [sp, #12]
+ 455:LWIP/Target/ethernetif.c **** 
+ 665              		.loc 1 455 5 view .LVU149
+ 666 0050 1A6B     		ldr	r2, [r3, #48]
+ 667 0052 42F00062 		orr	r2, r2, #134217728
+ 668 0056 1A63     		str	r2, [r3, #48]
+ 455:LWIP/Target/ethernetif.c **** 
+ 669              		.loc 1 455 5 view .LVU150
+ 670 0058 1A6B     		ldr	r2, [r3, #48]
+ 671 005a 02F00062 		and	r2, r2, #134217728
+ 672 005e 0392     		str	r2, [sp, #12]
+ 455:LWIP/Target/ethernetif.c **** 
+ 673              		.loc 1 455 5 view .LVU151
+ 674 0060 039A     		ldr	r2, [sp, #12]
+ 675              	.LBE4:
+ 455:LWIP/Target/ethernetif.c **** 
+ 676              		.loc 1 455 5 view .LVU152
+ 455:LWIP/Target/ethernetif.c **** 
+ 677              		.loc 1 455 5 view .LVU153
+ 457:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOA_CLK_ENABLE();
+ 678              		.loc 1 457 5 view .LVU154
+ 679              	.LBB5:
+ 457:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOA_CLK_ENABLE();
+ 680              		.loc 1 457 5 view .LVU155
+ 681 0062 0494     		str	r4, [sp, #16]
+ 457:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOA_CLK_ENABLE();
+ 682              		.loc 1 457 5 view .LVU156
+ 683 0064 1A6B     		ldr	r2, [r3, #48]
+ 684 0066 42F00402 		orr	r2, r2, #4
+ARM GAS  /tmp/ccyhlr5S.s 			page 26
+
+
+ 685 006a 1A63     		str	r2, [r3, #48]
+ 457:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOA_CLK_ENABLE();
+ 686              		.loc 1 457 5 view .LVU157
+ 687 006c 1A6B     		ldr	r2, [r3, #48]
+ 688 006e 02F00402 		and	r2, r2, #4
+ 689 0072 0492     		str	r2, [sp, #16]
+ 457:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOA_CLK_ENABLE();
+ 690              		.loc 1 457 5 view .LVU158
+ 691 0074 049A     		ldr	r2, [sp, #16]
+ 692              	.LBE5:
+ 457:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOA_CLK_ENABLE();
+ 693              		.loc 1 457 5 view .LVU159
+ 458:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOB_CLK_ENABLE();
+ 694              		.loc 1 458 5 view .LVU160
+ 695              	.LBB6:
+ 458:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOB_CLK_ENABLE();
+ 696              		.loc 1 458 5 view .LVU161
+ 697 0076 0594     		str	r4, [sp, #20]
+ 458:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOB_CLK_ENABLE();
+ 698              		.loc 1 458 5 view .LVU162
+ 699 0078 1A6B     		ldr	r2, [r3, #48]
+ 700 007a 42F00102 		orr	r2, r2, #1
+ 701 007e 1A63     		str	r2, [r3, #48]
+ 458:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOB_CLK_ENABLE();
+ 702              		.loc 1 458 5 view .LVU163
+ 703 0080 1A6B     		ldr	r2, [r3, #48]
+ 704 0082 02F00102 		and	r2, r2, #1
+ 705 0086 0592     		str	r2, [sp, #20]
+ 458:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOB_CLK_ENABLE();
+ 706              		.loc 1 458 5 view .LVU164
+ 707 0088 059A     		ldr	r2, [sp, #20]
+ 708              	.LBE6:
+ 458:LWIP/Target/ethernetif.c ****     __HAL_RCC_GPIOB_CLK_ENABLE();
+ 709              		.loc 1 458 5 view .LVU165
+ 459:LWIP/Target/ethernetif.c ****     /**ETH GPIO Configuration
+ 710              		.loc 1 459 5 view .LVU166
+ 711              	.LBB7:
+ 459:LWIP/Target/ethernetif.c ****     /**ETH GPIO Configuration
+ 712              		.loc 1 459 5 view .LVU167
+ 713 008a 0694     		str	r4, [sp, #24]
+ 459:LWIP/Target/ethernetif.c ****     /**ETH GPIO Configuration
+ 714              		.loc 1 459 5 view .LVU168
+ 715 008c 1A6B     		ldr	r2, [r3, #48]
+ 716 008e 42F00202 		orr	r2, r2, #2
+ 717 0092 1A63     		str	r2, [r3, #48]
+ 459:LWIP/Target/ethernetif.c ****     /**ETH GPIO Configuration
+ 718              		.loc 1 459 5 view .LVU169
+ 719 0094 1B6B     		ldr	r3, [r3, #48]
+ 720 0096 03F00203 		and	r3, r3, #2
+ 721 009a 0693     		str	r3, [sp, #24]
+ 459:LWIP/Target/ethernetif.c ****     /**ETH GPIO Configuration
+ 722              		.loc 1 459 5 view .LVU170
+ 723 009c 069B     		ldr	r3, [sp, #24]
+ 724              	.LBE7:
+ 459:LWIP/Target/ethernetif.c ****     /**ETH GPIO Configuration
+ 725              		.loc 1 459 5 view .LVU171
+ 471:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ARM GAS  /tmp/ccyhlr5S.s 			page 27
+
+
+ 726              		.loc 1 471 5 view .LVU172
+ 471:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 727              		.loc 1 471 25 is_stmt 0 view .LVU173
+ 728 009e 3223     		movs	r3, #50
+ 729 00a0 0793     		str	r3, [sp, #28]
+ 472:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 730              		.loc 1 472 5 is_stmt 1 view .LVU174
+ 472:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 731              		.loc 1 472 26 is_stmt 0 view .LVU175
+ 732 00a2 4FF00208 		mov	r8, #2
+ 733 00a6 CDF82080 		str	r8, [sp, #32]
+ 473:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 734              		.loc 1 473 5 is_stmt 1 view .LVU176
+ 474:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 735              		.loc 1 474 5 view .LVU177
+ 474:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 736              		.loc 1 474 27 is_stmt 0 view .LVU178
+ 737 00aa 0327     		movs	r7, #3
+ 738 00ac 0A97     		str	r7, [sp, #40]
+ 475:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+ 739              		.loc 1 475 5 is_stmt 1 view .LVU179
+ 475:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+ 740              		.loc 1 475 31 is_stmt 0 view .LVU180
+ 741 00ae 0B26     		movs	r6, #11
+ 742 00b0 0B96     		str	r6, [sp, #44]
+ 476:LWIP/Target/ethernetif.c **** 
+ 743              		.loc 1 476 5 is_stmt 1 view .LVU181
+ 744 00b2 07AD     		add	r5, sp, #28
+ 745 00b4 2946     		mov	r1, r5
+ 746 00b6 1648     		ldr	r0, .L57+4
+ 747              	.LVL47:
+ 476:LWIP/Target/ethernetif.c **** 
+ 748              		.loc 1 476 5 is_stmt 0 view .LVU182
+ 749 00b8 FFF7FEFF 		bl	HAL_GPIO_Init
+ 750              	.LVL48:
+ 478:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 751              		.loc 1 478 5 is_stmt 1 view .LVU183
+ 478:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 752              		.loc 1 478 25 is_stmt 0 view .LVU184
+ 753 00bc 8623     		movs	r3, #134
+ 754 00be 0793     		str	r3, [sp, #28]
+ 479:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 755              		.loc 1 479 5 is_stmt 1 view .LVU185
+ 479:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 756              		.loc 1 479 26 is_stmt 0 view .LVU186
+ 757 00c0 CDF82080 		str	r8, [sp, #32]
+ 480:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 758              		.loc 1 480 5 is_stmt 1 view .LVU187
+ 480:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 759              		.loc 1 480 26 is_stmt 0 view .LVU188
+ 760 00c4 0994     		str	r4, [sp, #36]
+ 481:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 761              		.loc 1 481 5 is_stmt 1 view .LVU189
+ 481:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 762              		.loc 1 481 27 is_stmt 0 view .LVU190
+ 763 00c6 0A97     		str	r7, [sp, #40]
+ 482:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+ARM GAS  /tmp/ccyhlr5S.s 			page 28
+
+
+ 764              		.loc 1 482 5 is_stmt 1 view .LVU191
+ 482:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+ 765              		.loc 1 482 31 is_stmt 0 view .LVU192
+ 766 00c8 0B96     		str	r6, [sp, #44]
+ 483:LWIP/Target/ethernetif.c **** 
+ 767              		.loc 1 483 5 is_stmt 1 view .LVU193
+ 768 00ca 2946     		mov	r1, r5
+ 769 00cc 1148     		ldr	r0, .L57+8
+ 770 00ce FFF7FEFF 		bl	HAL_GPIO_Init
+ 771              	.LVL49:
+ 485:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 772              		.loc 1 485 5 view .LVU194
+ 485:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+ 773              		.loc 1 485 25 is_stmt 0 view .LVU195
+ 774 00d2 4FF46053 		mov	r3, #14336
+ 775 00d6 0793     		str	r3, [sp, #28]
+ 486:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 776              		.loc 1 486 5 is_stmt 1 view .LVU196
+ 486:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ 777              		.loc 1 486 26 is_stmt 0 view .LVU197
+ 778 00d8 CDF82080 		str	r8, [sp, #32]
+ 487:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 779              		.loc 1 487 5 is_stmt 1 view .LVU198
+ 487:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+ 780              		.loc 1 487 26 is_stmt 0 view .LVU199
+ 781 00dc 0994     		str	r4, [sp, #36]
+ 488:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 782              		.loc 1 488 5 is_stmt 1 view .LVU200
+ 488:LWIP/Target/ethernetif.c ****     GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+ 783              		.loc 1 488 27 is_stmt 0 view .LVU201
+ 784 00de 0A97     		str	r7, [sp, #40]
+ 489:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+ 785              		.loc 1 489 5 is_stmt 1 view .LVU202
+ 489:LWIP/Target/ethernetif.c ****     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+ 786              		.loc 1 489 31 is_stmt 0 view .LVU203
+ 787 00e0 0B96     		str	r6, [sp, #44]
+ 490:LWIP/Target/ethernetif.c **** 
+ 788              		.loc 1 490 5 is_stmt 1 view .LVU204
+ 789 00e2 2946     		mov	r1, r5
+ 790 00e4 0C48     		ldr	r0, .L57+12
+ 791 00e6 FFF7FEFF 		bl	HAL_GPIO_Init
+ 792              	.LVL50:
+ 493:LWIP/Target/ethernetif.c ****     HAL_NVIC_EnableIRQ(ETH_IRQn);
+ 793              		.loc 1 493 5 view .LVU205
+ 794 00ea 2246     		mov	r2, r4
+ 795 00ec 2146     		mov	r1, r4
+ 796 00ee 3D20     		movs	r0, #61
+ 797 00f0 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 798              	.LVL51:
+ 494:LWIP/Target/ethernetif.c ****     HAL_NVIC_SetPriority(ETH_WKUP_IRQn, 0, 0);
+ 799              		.loc 1 494 5 view .LVU206
+ 800 00f4 3D20     		movs	r0, #61
+ 801 00f6 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 802              	.LVL52:
+ 495:LWIP/Target/ethernetif.c ****     HAL_NVIC_EnableIRQ(ETH_WKUP_IRQn);
+ 803              		.loc 1 495 5 view .LVU207
+ 804 00fa 2246     		mov	r2, r4
+ARM GAS  /tmp/ccyhlr5S.s 			page 29
+
+
+ 805 00fc 2146     		mov	r1, r4
+ 806 00fe 3E20     		movs	r0, #62
+ 807 0100 FFF7FEFF 		bl	HAL_NVIC_SetPriority
+ 808              	.LVL53:
+ 496:LWIP/Target/ethernetif.c ****   /* USER CODE BEGIN ETH_MspInit 1 */
+ 809              		.loc 1 496 5 view .LVU208
+ 810 0104 3E20     		movs	r0, #62
+ 811 0106 FFF7FEFF 		bl	HAL_NVIC_EnableIRQ
+ 812              	.LVL54:
+ 501:LWIP/Target/ethernetif.c **** 
+ 813              		.loc 1 501 1 is_stmt 0 view .LVU209
+ 814 010a 86E7     		b	.L53
+ 815              	.L58:
+ 816              		.align	2
+ 817              	.L57:
+ 818 010c 00800240 		.word	1073905664
+ 819 0110 00080240 		.word	1073874944
+ 820 0114 00000240 		.word	1073872896
+ 821 0118 00040240 		.word	1073873920
+ 822              		.cfi_endproc
+ 823              	.LFE163:
+ 825              		.section	.text.HAL_ETH_MspDeInit,"ax",%progbits
+ 826              		.align	1
+ 827              		.global	HAL_ETH_MspDeInit
+ 828              		.syntax unified
+ 829              		.thumb
+ 830              		.thumb_func
+ 832              	HAL_ETH_MspDeInit:
+ 833              	.LVL55:
+ 834              	.LFB164:
+ 504:LWIP/Target/ethernetif.c ****   if(ethHandle->Instance==ETH)
+ 835              		.loc 1 504 1 is_stmt 1 view -0
+ 836              		.cfi_startproc
+ 837              		@ args = 0, pretend = 0, frame = 0
+ 838              		@ frame_needed = 0, uses_anonymous_args = 0
+ 504:LWIP/Target/ethernetif.c ****   if(ethHandle->Instance==ETH)
+ 839              		.loc 1 504 1 is_stmt 0 view .LVU211
+ 840 0000 08B5     		push	{r3, lr}
+ 841              	.LCFI18:
+ 842              		.cfi_def_cfa_offset 8
+ 843              		.cfi_offset 3, -8
+ 844              		.cfi_offset 14, -4
+ 505:LWIP/Target/ethernetif.c ****   {
+ 845              		.loc 1 505 3 is_stmt 1 view .LVU212
+ 505:LWIP/Target/ethernetif.c ****   {
+ 846              		.loc 1 505 15 is_stmt 0 view .LVU213
+ 847 0002 0268     		ldr	r2, [r0]
+ 505:LWIP/Target/ethernetif.c ****   {
+ 848              		.loc 1 505 5 view .LVU214
+ 849 0004 124B     		ldr	r3, .L63
+ 850 0006 9A42     		cmp	r2, r3
+ 851 0008 00D0     		beq	.L62
+ 852              	.LVL56:
+ 853              	.L59:
+ 539:LWIP/Target/ethernetif.c **** 
+ 854              		.loc 1 539 1 view .LVU215
+ 855 000a 08BD     		pop	{r3, pc}
+ARM GAS  /tmp/ccyhlr5S.s 			page 30
+
+
+ 856              	.LVL57:
+ 857              	.L62:
+ 511:LWIP/Target/ethernetif.c **** 
+ 858              		.loc 1 511 5 is_stmt 1 view .LVU216
+ 511:LWIP/Target/ethernetif.c **** 
+ 859              		.loc 1 511 5 view .LVU217
+ 860 000c A3F59043 		sub	r3, r3, #18432
+ 861 0010 1A6B     		ldr	r2, [r3, #48]
+ 862 0012 22F08062 		bic	r2, r2, #67108864
+ 863 0016 1A63     		str	r2, [r3, #48]
+ 511:LWIP/Target/ethernetif.c **** 
+ 864              		.loc 1 511 5 view .LVU218
+ 865 0018 1A6B     		ldr	r2, [r3, #48]
+ 866 001a 22F00062 		bic	r2, r2, #134217728
+ 867 001e 1A63     		str	r2, [r3, #48]
+ 511:LWIP/Target/ethernetif.c **** 
+ 868              		.loc 1 511 5 view .LVU219
+ 869 0020 1A6B     		ldr	r2, [r3, #48]
+ 870 0022 22F00072 		bic	r2, r2, #33554432
+ 871 0026 1A63     		str	r2, [r3, #48]
+ 511:LWIP/Target/ethernetif.c **** 
+ 872              		.loc 1 511 5 view .LVU220
+ 524:LWIP/Target/ethernetif.c **** 
+ 873              		.loc 1 524 5 view .LVU221
+ 874 0028 3221     		movs	r1, #50
+ 875 002a 0A48     		ldr	r0, .L63+4
+ 876              	.LVL58:
+ 524:LWIP/Target/ethernetif.c **** 
+ 877              		.loc 1 524 5 is_stmt 0 view .LVU222
+ 878 002c FFF7FEFF 		bl	HAL_GPIO_DeInit
+ 879              	.LVL59:
+ 526:LWIP/Target/ethernetif.c **** 
+ 880              		.loc 1 526 5 is_stmt 1 view .LVU223
+ 881 0030 8621     		movs	r1, #134
+ 882 0032 0948     		ldr	r0, .L63+8
+ 883 0034 FFF7FEFF 		bl	HAL_GPIO_DeInit
+ 884              	.LVL60:
+ 528:LWIP/Target/ethernetif.c **** 
+ 885              		.loc 1 528 5 view .LVU224
+ 886 0038 4FF46051 		mov	r1, #14336
+ 887 003c 0748     		ldr	r0, .L63+12
+ 888 003e FFF7FEFF 		bl	HAL_GPIO_DeInit
+ 889              	.LVL61:
+ 531:LWIP/Target/ethernetif.c **** 
+ 890              		.loc 1 531 5 view .LVU225
+ 891 0042 3D20     		movs	r0, #61
+ 892 0044 FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 893              	.LVL62:
+ 533:LWIP/Target/ethernetif.c **** 
+ 894              		.loc 1 533 5 view .LVU226
+ 895 0048 3E20     		movs	r0, #62
+ 896 004a FFF7FEFF 		bl	HAL_NVIC_DisableIRQ
+ 897              	.LVL63:
+ 539:LWIP/Target/ethernetif.c **** 
+ 898              		.loc 1 539 1 is_stmt 0 view .LVU227
+ 899 004e DCE7     		b	.L59
+ 900              	.L64:
+ARM GAS  /tmp/ccyhlr5S.s 			page 31
+
+
+ 901              		.align	2
+ 902              	.L63:
+ 903 0050 00800240 		.word	1073905664
+ 904 0054 00080240 		.word	1073874944
+ 905 0058 00000240 		.word	1073872896
+ 906 005c 00040240 		.word	1073873920
+ 907              		.cfi_endproc
+ 908              	.LFE164:
+ 910              		.section	.text.ethernet_link_check_state,"ax",%progbits
+ 911              		.align	1
+ 912              		.global	ethernet_link_check_state
+ 913              		.syntax unified
+ 914              		.thumb
+ 915              		.thumb_func
+ 917              	ethernet_link_check_state:
+ 918              	.LVL64:
+ 919              	.LFB170:
+ 613:LWIP/Target/ethernetif.c **** 
+ 614:LWIP/Target/ethernetif.c **** /**
+ 615:LWIP/Target/ethernetif.c ****   * @brief  Check the ETH link state then update ETH driver and netif link accordingly.
+ 616:LWIP/Target/ethernetif.c ****   * @retval None
+ 617:LWIP/Target/ethernetif.c ****   */
+ 618:LWIP/Target/ethernetif.c **** void ethernet_link_check_state(struct netif *netif)
+ 619:LWIP/Target/ethernetif.c **** {
+ 920              		.loc 1 619 1 is_stmt 1 view -0
+ 921              		.cfi_startproc
+ 922              		@ args = 0, pretend = 0, frame = 104
+ 923              		@ frame_needed = 0, uses_anonymous_args = 0
+ 924              		.loc 1 619 1 is_stmt 0 view .LVU229
+ 925 0000 2DE9F041 		push	{r4, r5, r6, r7, r8, lr}
+ 926              	.LCFI19:
+ 927              		.cfi_def_cfa_offset 24
+ 928              		.cfi_offset 4, -24
+ 929              		.cfi_offset 5, -20
+ 930              		.cfi_offset 6, -16
+ 931              		.cfi_offset 7, -12
+ 932              		.cfi_offset 8, -8
+ 933              		.cfi_offset 14, -4
+ 934 0004 9AB0     		sub	sp, sp, #104
+ 935              	.LCFI20:
+ 936              		.cfi_def_cfa_offset 128
+ 937 0006 0446     		mov	r4, r0
+ 620:LWIP/Target/ethernetif.c ****   ETH_MACConfigTypeDef MACConf = {0};
+ 938              		.loc 1 620 3 is_stmt 1 view .LVU230
+ 939              		.loc 1 620 24 is_stmt 0 view .LVU231
+ 940 0008 6422     		movs	r2, #100
+ 941 000a 0021     		movs	r1, #0
+ 942 000c 01A8     		add	r0, sp, #4
+ 943              	.LVL65:
+ 944              		.loc 1 620 24 view .LVU232
+ 945 000e FFF7FEFF 		bl	memset
+ 946              	.LVL66:
+ 621:LWIP/Target/ethernetif.c ****   int32_t PHYLinkState = 0;
+ 947              		.loc 1 621 3 is_stmt 1 view .LVU233
+ 622:LWIP/Target/ethernetif.c ****   uint32_t linkchanged = 0U, speed = 0U, duplex = 0U;
+ 948              		.loc 1 622 3 view .LVU234
+ 623:LWIP/Target/ethernetif.c **** 
+ARM GAS  /tmp/ccyhlr5S.s 			page 32
+
+
+ 624:LWIP/Target/ethernetif.c ****   PHYLinkState = DP83848_GetLinkState(&DP83848);
+ 949              		.loc 1 624 3 view .LVU235
+ 950              		.loc 1 624 18 is_stmt 0 view .LVU236
+ 951 0012 2448     		ldr	r0, .L77
+ 952 0014 FFF7FEFF 		bl	DP83848_GetLinkState
+ 953              	.LVL67:
+ 625:LWIP/Target/ethernetif.c **** 
+ 626:LWIP/Target/ethernetif.c ****   if(netif_is_link_up(netif) && (PHYLinkState <= DP83848_STATUS_LINK_DOWN))
+ 954              		.loc 1 626 3 is_stmt 1 view .LVU237
+ 955              		.loc 1 626 6 is_stmt 0 view .LVU238
+ 956 0018 94F83530 		ldrb	r3, [r4, #53]	@ zero_extendqisi2
+ 957              		.loc 1 626 5 view .LVU239
+ 958 001c 13F0040F 		tst	r3, #4
+ 959 0020 01D0     		beq	.L66
+ 960              		.loc 1 626 30 discriminator 1 view .LVU240
+ 961 0022 0128     		cmp	r0, #1
+ 962 0024 0BDD     		ble	.L76
+ 963              	.L66:
+ 627:LWIP/Target/ethernetif.c ****   {
+ 628:LWIP/Target/ethernetif.c ****     HAL_ETH_Stop(&heth);
+ 629:LWIP/Target/ethernetif.c ****     netif_set_down(netif);
+ 630:LWIP/Target/ethernetif.c ****     netif_set_link_down(netif);
+ 631:LWIP/Target/ethernetif.c ****   }
+ 632:LWIP/Target/ethernetif.c ****   else if(!netif_is_link_up(netif) && (PHYLinkState > DP83848_STATUS_LINK_DOWN))
+ 964              		.loc 1 632 8 is_stmt 1 view .LVU241
+ 965              		.loc 1 632 10 is_stmt 0 view .LVU242
+ 966 0026 13F0040F 		tst	r3, #4
+ 967 002a 2CD1     		bne	.L65
+ 968              		.loc 1 632 36 discriminator 1 view .LVU243
+ 969 002c 0128     		cmp	r0, #1
+ 970 002e 2ADD     		ble	.L65
+ 633:LWIP/Target/ethernetif.c ****   {
+ 634:LWIP/Target/ethernetif.c ****     switch (PHYLinkState)
+ 971              		.loc 1 634 5 is_stmt 1 view .LVU244
+ 972 0030 831E     		subs	r3, r0, #2
+ 973 0032 032B     		cmp	r3, #3
+ 974 0034 27D8     		bhi	.L65
+ 975 0036 DFE803F0 		tbb	[pc, r3]
+ 976              	.L69:
+ 977 003a 0C       		.byte	(.L72-.L69)/2
+ 978 003b 2E       		.byte	(.L71-.L69)/2
+ 979 003c 29       		.byte	(.L70-.L69)/2
+ 980 003d 32       		.byte	(.L73-.L69)/2
+ 981              		.p2align 1
+ 982              	.L76:
+ 628:LWIP/Target/ethernetif.c ****     netif_set_down(netif);
+ 983              		.loc 1 628 5 view .LVU245
+ 984 003e 1A48     		ldr	r0, .L77+4
+ 985              	.LVL68:
+ 628:LWIP/Target/ethernetif.c ****     netif_set_down(netif);
+ 986              		.loc 1 628 5 is_stmt 0 view .LVU246
+ 987 0040 FFF7FEFF 		bl	HAL_ETH_Stop
+ 988              	.LVL69:
+ 629:LWIP/Target/ethernetif.c ****     netif_set_link_down(netif);
+ 989              		.loc 1 629 5 is_stmt 1 view .LVU247
+ 990 0044 2046     		mov	r0, r4
+ 991 0046 FFF7FEFF 		bl	netif_set_down
+ARM GAS  /tmp/ccyhlr5S.s 			page 33
+
+
+ 992              	.LVL70:
+ 630:LWIP/Target/ethernetif.c ****   }
+ 993              		.loc 1 630 5 view .LVU248
+ 994 004a 2046     		mov	r0, r4
+ 995 004c FFF7FEFF 		bl	netif_set_link_down
+ 996              	.LVL71:
+ 997 0050 19E0     		b	.L65
+ 998              	.LVL72:
+ 999              	.L72:
+ 1000              		.loc 1 634 5 is_stmt 0 view .LVU249
+ 1001 0052 4FF40067 		mov	r7, #2048
+ 1002 0056 4FF48048 		mov	r8, #16384
+ 1003              	.LVL73:
+ 1004              	.L68:
+ 635:LWIP/Target/ethernetif.c ****     {
+ 636:LWIP/Target/ethernetif.c ****     case DP83848_STATUS_100MBITS_FULLDUPLEX:
+ 637:LWIP/Target/ethernetif.c ****       duplex = ETH_FULLDUPLEX_MODE;
+ 638:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_100M;
+ 639:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 640:LWIP/Target/ethernetif.c ****       break;
+ 641:LWIP/Target/ethernetif.c ****     case DP83848_STATUS_100MBITS_HALFDUPLEX:
+ 642:LWIP/Target/ethernetif.c ****       duplex = ETH_HALFDUPLEX_MODE;
+ 643:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_100M;
+ 644:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 645:LWIP/Target/ethernetif.c ****       break;
+ 646:LWIP/Target/ethernetif.c ****     case DP83848_STATUS_10MBITS_FULLDUPLEX:
+ 647:LWIP/Target/ethernetif.c ****       duplex = ETH_FULLDUPLEX_MODE;
+ 648:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_10M;
+ 649:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 650:LWIP/Target/ethernetif.c ****       break;
+ 651:LWIP/Target/ethernetif.c ****     case DP83848_STATUS_10MBITS_HALFDUPLEX:
+ 652:LWIP/Target/ethernetif.c ****       duplex = ETH_HALFDUPLEX_MODE;
+ 653:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_10M;
+ 654:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 655:LWIP/Target/ethernetif.c ****       break;
+ 656:LWIP/Target/ethernetif.c ****     default:
+ 657:LWIP/Target/ethernetif.c ****       break;
+ 658:LWIP/Target/ethernetif.c ****     }
+ 659:LWIP/Target/ethernetif.c **** 
+ 660:LWIP/Target/ethernetif.c ****     if(linkchanged)
+ 661:LWIP/Target/ethernetif.c ****     {
+ 662:LWIP/Target/ethernetif.c ****       /* Get MAC Config MAC */
+ 663:LWIP/Target/ethernetif.c ****       HAL_ETH_GetMACConfig(&heth, &MACConf);
+ 1005              		.loc 1 663 7 is_stmt 1 view .LVU250
+ 1006 005a 01AE     		add	r6, sp, #4
+ 1007 005c 124D     		ldr	r5, .L77+4
+ 1008 005e 3146     		mov	r1, r6
+ 1009 0060 2846     		mov	r0, r5
+ 1010              	.LVL74:
+ 1011              		.loc 1 663 7 is_stmt 0 view .LVU251
+ 1012 0062 FFF7FEFF 		bl	HAL_ETH_GetMACConfig
+ 1013              	.LVL75:
+ 664:LWIP/Target/ethernetif.c ****       MACConf.DuplexMode = duplex;
+ 1014              		.loc 1 664 7 is_stmt 1 view .LVU252
+ 1015              		.loc 1 664 26 is_stmt 0 view .LVU253
+ 1016 0066 0797     		str	r7, [sp, #28]
+ 665:LWIP/Target/ethernetif.c ****       MACConf.Speed = speed;
+ARM GAS  /tmp/ccyhlr5S.s 			page 34
+
+
+ 1017              		.loc 1 665 7 is_stmt 1 view .LVU254
+ 1018              		.loc 1 665 21 is_stmt 0 view .LVU255
+ 1019 0068 CDF81880 		str	r8, [sp, #24]
+ 666:LWIP/Target/ethernetif.c ****       HAL_ETH_SetMACConfig(&heth, &MACConf);
+ 1020              		.loc 1 666 7 is_stmt 1 view .LVU256
+ 1021 006c 3146     		mov	r1, r6
+ 1022 006e 2846     		mov	r0, r5
+ 1023 0070 FFF7FEFF 		bl	HAL_ETH_SetMACConfig
+ 1024              	.LVL76:
+ 667:LWIP/Target/ethernetif.c ****       HAL_ETH_Start(&heth);
+ 1025              		.loc 1 667 7 view .LVU257
+ 1026 0074 2846     		mov	r0, r5
+ 1027 0076 FFF7FEFF 		bl	HAL_ETH_Start
+ 1028              	.LVL77:
+ 668:LWIP/Target/ethernetif.c ****       netif_set_up(netif);
+ 1029              		.loc 1 668 7 view .LVU258
+ 1030 007a 2046     		mov	r0, r4
+ 1031 007c FFF7FEFF 		bl	netif_set_up
+ 1032              	.LVL78:
+ 669:LWIP/Target/ethernetif.c ****       netif_set_link_up(netif);
+ 1033              		.loc 1 669 7 view .LVU259
+ 1034 0080 2046     		mov	r0, r4
+ 1035 0082 FFF7FEFF 		bl	netif_set_link_up
+ 1036              	.LVL79:
+ 1037              	.L65:
+ 670:LWIP/Target/ethernetif.c ****     }
+ 671:LWIP/Target/ethernetif.c ****   }
+ 672:LWIP/Target/ethernetif.c **** 
+ 673:LWIP/Target/ethernetif.c **** }
+ 1038              		.loc 1 673 1 is_stmt 0 view .LVU260
+ 1039 0086 1AB0     		add	sp, sp, #104
+ 1040              	.LCFI21:
+ 1041              		.cfi_remember_state
+ 1042              		.cfi_def_cfa_offset 24
+ 1043              		@ sp needed
+ 1044 0088 BDE8F081 		pop	{r4, r5, r6, r7, r8, pc}
+ 1045              	.LVL80:
+ 1046              	.L70:
+ 1047              	.LCFI22:
+ 1048              		.cfi_restore_state
+ 647:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_10M;
+ 1049              		.loc 1 647 7 is_stmt 1 view .LVU261
+ 648:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 1050              		.loc 1 648 7 view .LVU262
+ 649:LWIP/Target/ethernetif.c ****       break;
+ 1051              		.loc 1 649 7 view .LVU263
+ 650:LWIP/Target/ethernetif.c ****     case DP83848_STATUS_10MBITS_HALFDUPLEX:
+ 1052              		.loc 1 650 7 view .LVU264
+ 660:LWIP/Target/ethernetif.c ****     {
+ 1053              		.loc 1 660 5 view .LVU265
+ 647:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_10M;
+ 1054              		.loc 1 647 14 is_stmt 0 view .LVU266
+ 1055 008c 4FF40067 		mov	r7, #2048
+ 648:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 1056              		.loc 1 648 13 view .LVU267
+ 1057 0090 4FF00008 		mov	r8, #0
+ 1058 0094 E1E7     		b	.L68
+ARM GAS  /tmp/ccyhlr5S.s 			page 35
+
+
+ 1059              	.LVL81:
+ 1060              	.L71:
+ 642:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_100M;
+ 1061              		.loc 1 642 7 is_stmt 1 view .LVU268
+ 643:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 1062              		.loc 1 643 7 view .LVU269
+ 644:LWIP/Target/ethernetif.c ****       break;
+ 1063              		.loc 1 644 7 view .LVU270
+ 645:LWIP/Target/ethernetif.c ****     case DP83848_STATUS_10MBITS_FULLDUPLEX:
+ 1064              		.loc 1 645 7 view .LVU271
+ 660:LWIP/Target/ethernetif.c ****     {
+ 1065              		.loc 1 660 5 view .LVU272
+ 642:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_100M;
+ 1066              		.loc 1 642 14 is_stmt 0 view .LVU273
+ 1067 0096 0027     		movs	r7, #0
+ 643:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 1068              		.loc 1 643 13 view .LVU274
+ 1069 0098 4FF48048 		mov	r8, #16384
+ 1070 009c DDE7     		b	.L68
+ 1071              	.LVL82:
+ 1072              	.L73:
+ 652:LWIP/Target/ethernetif.c ****       speed = ETH_SPEED_10M;
+ 1073              		.loc 1 652 14 view .LVU275
+ 1074 009e 0027     		movs	r7, #0
+ 653:LWIP/Target/ethernetif.c ****       linkchanged = 1;
+ 1075              		.loc 1 653 13 view .LVU276
+ 1076 00a0 B846     		mov	r8, r7
+ 1077 00a2 DAE7     		b	.L68
+ 1078              	.L78:
+ 1079              		.align	2
+ 1080              	.L77:
+ 1081 00a4 00000000 		.word	DP83848
+ 1082 00a8 00000000 		.word	heth
+ 1083              		.cfi_endproc
+ 1084              	.LFE170:
+ 1086              		.section	.text.low_level_init,"ax",%progbits
+ 1087              		.align	1
+ 1088              		.syntax unified
+ 1089              		.thumb
+ 1090              		.thumb_func
+ 1092              	low_level_init:
+ 1093              	.LVL83:
+ 1094              	.LFB156:
+ 143:LWIP/Target/ethernetif.c ****   HAL_StatusTypeDef hal_eth_init_status = HAL_OK;
+ 1095              		.loc 1 143 1 is_stmt 1 view -0
+ 1096              		.cfi_startproc
+ 1097              		@ args = 0, pretend = 0, frame = 8
+ 1098              		@ frame_needed = 0, uses_anonymous_args = 0
+ 143:LWIP/Target/ethernetif.c ****   HAL_StatusTypeDef hal_eth_init_status = HAL_OK;
+ 1099              		.loc 1 143 1 is_stmt 0 view .LVU278
+ 1100 0000 2DE9F041 		push	{r4, r5, r6, r7, r8, lr}
+ 1101              	.LCFI23:
+ 1102              		.cfi_def_cfa_offset 24
+ 1103              		.cfi_offset 4, -24
+ 1104              		.cfi_offset 5, -20
+ 1105              		.cfi_offset 6, -16
+ 1106              		.cfi_offset 7, -12
+ARM GAS  /tmp/ccyhlr5S.s 			page 36
+
+
+ 1107              		.cfi_offset 8, -8
+ 1108              		.cfi_offset 14, -4
+ 1109 0004 82B0     		sub	sp, sp, #8
+ 1110              	.LCFI24:
+ 1111              		.cfi_def_cfa_offset 32
+ 1112 0006 0446     		mov	r4, r0
+ 144:LWIP/Target/ethernetif.c ****   /* Start ETH HAL Init */
+ 1113              		.loc 1 144 3 is_stmt 1 view .LVU279
+ 1114              	.LVL84:
+ 147:LWIP/Target/ethernetif.c ****   heth.Instance = ETH;
+ 1115              		.loc 1 147 4 view .LVU280
+ 148:LWIP/Target/ethernetif.c ****   MACAddr[0] = 0x00;
+ 1116              		.loc 1 148 3 view .LVU281
+ 148:LWIP/Target/ethernetif.c ****   MACAddr[0] = 0x00;
+ 1117              		.loc 1 148 17 is_stmt 0 view .LVU282
+ 1118 0008 324D     		ldr	r5, .L83
+ 1119 000a 334B     		ldr	r3, .L83+4
+ 1120 000c 2B60     		str	r3, [r5]
+ 149:LWIP/Target/ethernetif.c ****   MACAddr[1] = 0x80;
+ 1121              		.loc 1 149 3 is_stmt 1 view .LVU283
+ 149:LWIP/Target/ethernetif.c ****   MACAddr[1] = 0x80;
+ 1122              		.loc 1 149 14 is_stmt 0 view .LVU284
+ 1123 000e 0026     		movs	r6, #0
+ 1124 0010 8DF80060 		strb	r6, [sp]
+ 150:LWIP/Target/ethernetif.c ****   MACAddr[2] = 0xE1;
+ 1125              		.loc 1 150 3 is_stmt 1 view .LVU285
+ 150:LWIP/Target/ethernetif.c ****   MACAddr[2] = 0xE1;
+ 1126              		.loc 1 150 14 is_stmt 0 view .LVU286
+ 1127 0014 8023     		movs	r3, #128
+ 1128 0016 8DF80130 		strb	r3, [sp, #1]
+ 151:LWIP/Target/ethernetif.c ****   MACAddr[3] = 0x00;
+ 1129              		.loc 1 151 3 is_stmt 1 view .LVU287
+ 151:LWIP/Target/ethernetif.c ****   MACAddr[3] = 0x00;
+ 1130              		.loc 1 151 14 is_stmt 0 view .LVU288
+ 1131 001a E123     		movs	r3, #225
+ 1132 001c 8DF80230 		strb	r3, [sp, #2]
+ 152:LWIP/Target/ethernetif.c ****   MACAddr[4] = 0x00;
+ 1133              		.loc 1 152 3 is_stmt 1 view .LVU289
+ 152:LWIP/Target/ethernetif.c ****   MACAddr[4] = 0x00;
+ 1134              		.loc 1 152 14 is_stmt 0 view .LVU290
+ 1135 0020 8DF80360 		strb	r6, [sp, #3]
+ 153:LWIP/Target/ethernetif.c ****   MACAddr[5] = 0x01;
+ 1136              		.loc 1 153 3 is_stmt 1 view .LVU291
+ 153:LWIP/Target/ethernetif.c ****   MACAddr[5] = 0x01;
+ 1137              		.loc 1 153 14 is_stmt 0 view .LVU292
+ 1138 0024 8DF80460 		strb	r6, [sp, #4]
+ 154:LWIP/Target/ethernetif.c ****   heth.Init.MACAddr = &MACAddr[0];
+ 1139              		.loc 1 154 3 is_stmt 1 view .LVU293
+ 154:LWIP/Target/ethernetif.c ****   heth.Init.MACAddr = &MACAddr[0];
+ 1140              		.loc 1 154 14 is_stmt 0 view .LVU294
+ 1141 0028 0123     		movs	r3, #1
+ 1142 002a 8DF80530 		strb	r3, [sp, #5]
+ 155:LWIP/Target/ethernetif.c ****   heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
+ 1143              		.loc 1 155 3 is_stmt 1 view .LVU295
+ 155:LWIP/Target/ethernetif.c ****   heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
+ 1144              		.loc 1 155 21 is_stmt 0 view .LVU296
+ 1145 002e C5F804D0 		str	sp, [r5, #4]
+ARM GAS  /tmp/ccyhlr5S.s 			page 37
+
+
+ 156:LWIP/Target/ethernetif.c ****   heth.Init.TxDesc = DMATxDscrTab;
+ 1146              		.loc 1 156 3 is_stmt 1 view .LVU297
+ 156:LWIP/Target/ethernetif.c ****   heth.Init.TxDesc = DMATxDscrTab;
+ 1147              		.loc 1 156 28 is_stmt 0 view .LVU298
+ 1148 0032 4FF40003 		mov	r3, #8388608
+ 1149 0036 AB60     		str	r3, [r5, #8]
+ 157:LWIP/Target/ethernetif.c ****   heth.Init.RxDesc = DMARxDscrTab;
+ 1150              		.loc 1 157 3 is_stmt 1 view .LVU299
+ 157:LWIP/Target/ethernetif.c ****   heth.Init.RxDesc = DMARxDscrTab;
+ 1151              		.loc 1 157 20 is_stmt 0 view .LVU300
+ 1152 0038 284B     		ldr	r3, .L83+8
+ 1153 003a EB60     		str	r3, [r5, #12]
+ 158:LWIP/Target/ethernetif.c ****   heth.Init.RxBuffLen = 1536;
+ 1154              		.loc 1 158 3 is_stmt 1 view .LVU301
+ 158:LWIP/Target/ethernetif.c ****   heth.Init.RxBuffLen = 1536;
+ 1155              		.loc 1 158 20 is_stmt 0 view .LVU302
+ 1156 003c 284B     		ldr	r3, .L83+12
+ 1157 003e 2B61     		str	r3, [r5, #16]
+ 159:LWIP/Target/ethernetif.c **** 
+ 1158              		.loc 1 159 3 is_stmt 1 view .LVU303
+ 159:LWIP/Target/ethernetif.c **** 
+ 1159              		.loc 1 159 23 is_stmt 0 view .LVU304
+ 1160 0040 4FF4C063 		mov	r3, #1536
+ 1161 0044 6B61     		str	r3, [r5, #20]
+ 165:LWIP/Target/ethernetif.c **** 
+ 1162              		.loc 1 165 3 is_stmt 1 view .LVU305
+ 165:LWIP/Target/ethernetif.c **** 
+ 1163              		.loc 1 165 25 is_stmt 0 view .LVU306
+ 1164 0046 2846     		mov	r0, r5
+ 1165              	.LVL85:
+ 165:LWIP/Target/ethernetif.c **** 
+ 1166              		.loc 1 165 25 view .LVU307
+ 1167 0048 FFF7FEFF 		bl	HAL_ETH_Init
+ 1168              	.LVL86:
+ 1169 004c 0746     		mov	r7, r0
+ 1170              	.LVL87:
+ 167:LWIP/Target/ethernetif.c ****   TxConfig.Attributes = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
+ 1171              		.loc 1 167 3 is_stmt 1 view .LVU308
+ 1172 004e DFF8A080 		ldr	r8, .L83+28
+ 1173 0052 3822     		movs	r2, #56
+ 1174 0054 3146     		mov	r1, r6
+ 1175 0056 4046     		mov	r0, r8
+ 1176 0058 FFF7FEFF 		bl	memset
+ 1177              	.LVL88:
+ 168:LWIP/Target/ethernetif.c ****   TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
+ 1178              		.loc 1 168 3 view .LVU309
+ 168:LWIP/Target/ethernetif.c ****   TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
+ 1179              		.loc 1 168 23 is_stmt 0 view .LVU310
+ 1180 005c 2123     		movs	r3, #33
+ 1181 005e C8F80030 		str	r3, [r8]
+ 169:LWIP/Target/ethernetif.c ****   TxConfig.CRCPadCtrl = ETH_CRC_PAD_INSERT;
+ 1182              		.loc 1 169 3 is_stmt 1 view .LVU311
+ 169:LWIP/Target/ethernetif.c ****   TxConfig.CRCPadCtrl = ETH_CRC_PAD_INSERT;
+ 1183              		.loc 1 169 25 is_stmt 0 view .LVU312
+ 1184 0062 4FF44003 		mov	r3, #12582912
+ 1185 0066 C8F81430 		str	r3, [r8, #20]
+ 170:LWIP/Target/ethernetif.c **** 
+ARM GAS  /tmp/ccyhlr5S.s 			page 38
+
+
+ 1186              		.loc 1 170 3 is_stmt 1 view .LVU313
+ 175:LWIP/Target/ethernetif.c **** 
+ 1187              		.loc 1 175 3 view .LVU314
+ 1188 006a 1E48     		ldr	r0, .L83+16
+ 1189 006c FFF7FEFF 		bl	memp_init_pool
+ 1190              	.LVL89:
+ 180:LWIP/Target/ethernetif.c **** 
+ 1191              		.loc 1 180 3 view .LVU315
+ 180:LWIP/Target/ethernetif.c **** 
+ 1192              		.loc 1 180 21 is_stmt 0 view .LVU316
+ 1193 0070 0623     		movs	r3, #6
+ 1194 0072 84F83430 		strb	r3, [r4, #52]
+ 183:LWIP/Target/ethernetif.c ****   netif->hwaddr[1] =  heth.Init.MACAddr[1];
+ 1195              		.loc 1 183 3 is_stmt 1 view .LVU317
+ 183:LWIP/Target/ethernetif.c ****   netif->hwaddr[1] =  heth.Init.MACAddr[1];
+ 1196              		.loc 1 183 32 is_stmt 0 view .LVU318
+ 1197 0076 6B68     		ldr	r3, [r5, #4]
+ 183:LWIP/Target/ethernetif.c ****   netif->hwaddr[1] =  heth.Init.MACAddr[1];
+ 1198              		.loc 1 183 40 view .LVU319
+ 1199 0078 1A78     		ldrb	r2, [r3]	@ zero_extendqisi2
+ 183:LWIP/Target/ethernetif.c ****   netif->hwaddr[1] =  heth.Init.MACAddr[1];
+ 1200              		.loc 1 183 20 view .LVU320
+ 1201 007a 84F82E20 		strb	r2, [r4, #46]
+ 184:LWIP/Target/ethernetif.c ****   netif->hwaddr[2] =  heth.Init.MACAddr[2];
+ 1202              		.loc 1 184 3 is_stmt 1 view .LVU321
+ 184:LWIP/Target/ethernetif.c ****   netif->hwaddr[2] =  heth.Init.MACAddr[2];
+ 1203              		.loc 1 184 20 is_stmt 0 view .LVU322
+ 1204 007e 5A78     		ldrb	r2, [r3, #1]	@ zero_extendqisi2
+ 1205 0080 84F82F20 		strb	r2, [r4, #47]
+ 185:LWIP/Target/ethernetif.c ****   netif->hwaddr[3] =  heth.Init.MACAddr[3];
+ 1206              		.loc 1 185 3 is_stmt 1 view .LVU323
+ 185:LWIP/Target/ethernetif.c ****   netif->hwaddr[3] =  heth.Init.MACAddr[3];
+ 1207              		.loc 1 185 20 is_stmt 0 view .LVU324
+ 1208 0084 9A78     		ldrb	r2, [r3, #2]	@ zero_extendqisi2
+ 1209 0086 84F83020 		strb	r2, [r4, #48]
+ 186:LWIP/Target/ethernetif.c ****   netif->hwaddr[4] =  heth.Init.MACAddr[4];
+ 1210              		.loc 1 186 3 is_stmt 1 view .LVU325
+ 186:LWIP/Target/ethernetif.c ****   netif->hwaddr[4] =  heth.Init.MACAddr[4];
+ 1211              		.loc 1 186 20 is_stmt 0 view .LVU326
+ 1212 008a DA78     		ldrb	r2, [r3, #3]	@ zero_extendqisi2
+ 1213 008c 84F83120 		strb	r2, [r4, #49]
+ 187:LWIP/Target/ethernetif.c ****   netif->hwaddr[5] =  heth.Init.MACAddr[5];
+ 1214              		.loc 1 187 3 is_stmt 1 view .LVU327
+ 187:LWIP/Target/ethernetif.c ****   netif->hwaddr[5] =  heth.Init.MACAddr[5];
+ 1215              		.loc 1 187 20 is_stmt 0 view .LVU328
+ 1216 0090 1A79     		ldrb	r2, [r3, #4]	@ zero_extendqisi2
+ 1217 0092 84F83220 		strb	r2, [r4, #50]
+ 188:LWIP/Target/ethernetif.c **** 
+ 1218              		.loc 1 188 3 is_stmt 1 view .LVU329
+ 188:LWIP/Target/ethernetif.c **** 
+ 1219              		.loc 1 188 20 is_stmt 0 view .LVU330
+ 1220 0096 5B79     		ldrb	r3, [r3, #5]	@ zero_extendqisi2
+ 1221 0098 84F83330 		strb	r3, [r4, #51]
+ 191:LWIP/Target/ethernetif.c **** 
+ 1222              		.loc 1 191 3 is_stmt 1 view .LVU331
+ 191:LWIP/Target/ethernetif.c **** 
+ 1223              		.loc 1 191 14 is_stmt 0 view .LVU332
+ARM GAS  /tmp/ccyhlr5S.s 			page 39
+
+
+ 1224 009c 40F2DC53 		movw	r3, #1500
+ 1225 00a0 A385     		strh	r3, [r4, #44]	@ movhi
+ 196:LWIP/Target/ethernetif.c ****   #else
+ 1226              		.loc 1 196 5 is_stmt 1 view .LVU333
+ 196:LWIP/Target/ethernetif.c ****   #else
+ 1227              		.loc 1 196 10 is_stmt 0 view .LVU334
+ 1228 00a2 94F83530 		ldrb	r3, [r4, #53]	@ zero_extendqisi2
+ 196:LWIP/Target/ethernetif.c ****   #else
+ 1229              		.loc 1 196 18 view .LVU335
+ 1230 00a6 43F00A03 		orr	r3, r3, #10
+ 1231 00aa 84F83530 		strb	r3, [r4, #53]
+ 205:LWIP/Target/ethernetif.c **** 
+ 1232              		.loc 1 205 3 is_stmt 1 view .LVU336
+ 1233 00ae 0E4D     		ldr	r5, .L83+20
+ 1234 00b0 0E49     		ldr	r1, .L83+24
+ 1235 00b2 2846     		mov	r0, r5
+ 1236 00b4 FFF7FEFF 		bl	DP83848_RegisterBusIO
+ 1237              	.LVL90:
+ 208:LWIP/Target/ethernetif.c **** 
+ 1238              		.loc 1 208 3 view .LVU337
+ 1239 00b8 2846     		mov	r0, r5
+ 1240 00ba FFF7FEFF 		bl	DP83848_Init
+ 1241              	.LVL91:
+ 210:LWIP/Target/ethernetif.c ****   {
+ 1242              		.loc 1 210 3 view .LVU338
+ 210:LWIP/Target/ethernetif.c ****   {
+ 1243              		.loc 1 210 6 is_stmt 0 view .LVU339
+ 1244 00be 2FB9     		cbnz	r7, .L80
+ 213:LWIP/Target/ethernetif.c ****   }
+ 1245              		.loc 1 213 3 is_stmt 1 view .LVU340
+ 1246 00c0 2046     		mov	r0, r4
+ 1247 00c2 FFF7FEFF 		bl	ethernet_link_check_state
+ 1248              	.LVL92:
+ 1249              	.L79:
+ 224:LWIP/Target/ethernetif.c **** 
+ 1250              		.loc 1 224 1 is_stmt 0 view .LVU341
+ 1251 00c6 02B0     		add	sp, sp, #8
+ 1252              	.LCFI25:
+ 1253              		.cfi_remember_state
+ 1254              		.cfi_def_cfa_offset 24
+ 1255              		@ sp needed
+ 1256 00c8 BDE8F081 		pop	{r4, r5, r6, r7, r8, pc}
+ 1257              	.LVL93:
+ 1258              	.L80:
+ 1259              	.LCFI26:
+ 1260              		.cfi_restore_state
+ 217:LWIP/Target/ethernetif.c ****   }
+ 1261              		.loc 1 217 5 is_stmt 1 view .LVU342
+ 1262 00cc FFF7FEFF 		bl	Error_Handler
+ 1263              	.LVL94:
+ 224:LWIP/Target/ethernetif.c **** 
+ 1264              		.loc 1 224 1 is_stmt 0 view .LVU343
+ 1265 00d0 F9E7     		b	.L79
+ 1266              	.L84:
+ 1267 00d2 00BF     		.align	2
+ 1268              	.L83:
+ 1269 00d4 00000000 		.word	heth
+ARM GAS  /tmp/ccyhlr5S.s 			page 40
+
+
+ 1270 00d8 00800240 		.word	1073905664
+ 1271 00dc 00000000 		.word	DMATxDscrTab
+ 1272 00e0 00000000 		.word	DMARxDscrTab
+ 1273 00e4 00000000 		.word	memp_RX_POOL
+ 1274 00e8 00000000 		.word	DP83848
+ 1275 00ec 00000000 		.word	DP83848_IOCtx
+ 1276 00f0 00000000 		.word	TxConfig
+ 1277              		.cfi_endproc
+ 1278              	.LFE156:
+ 1280              		.section	.rodata.ethernetif_init.str1.4,"aMS",%progbits,1
+ 1281              		.align	2
+ 1282              	.LC0:
+ 1283 0000 4C574950 		.ascii	"LWIP/Target/ethernetif.c\000"
+ 1283      2F546172 
+ 1283      6765742F 
+ 1283      65746865 
+ 1283      726E6574 
+ 1284 0019 000000   		.align	2
+ 1285              	.LC1:
+ 1286 001c 6E657469 		.ascii	"netif != NULL\000"
+ 1286      6620213D 
+ 1286      204E554C 
+ 1286      4C00
+ 1287 002a 0000     		.align	2
+ 1288              	.LC2:
+ 1289 002c 41737365 		.ascii	"Assertion \"%s\" failed at line %d in %s\012\000"
+ 1289      7274696F 
+ 1289      6E202225 
+ 1289      73222066 
+ 1289      61696C65 
+ 1290              		.section	.text.ethernetif_init,"ax",%progbits
+ 1291              		.align	1
+ 1292              		.global	ethernetif_init
+ 1293              		.syntax unified
+ 1294              		.thumb
+ 1295              		.thumb_func
+ 1297              	ethernetif_init:
+ 1298              	.LVL95:
+ 1299              	.LFB160:
+ 361:LWIP/Target/ethernetif.c ****   LWIP_ASSERT("netif != NULL", (netif != NULL));
+ 1300              		.loc 1 361 1 is_stmt 1 view -0
+ 1301              		.cfi_startproc
+ 1302              		@ args = 0, pretend = 0, frame = 0
+ 1303              		@ frame_needed = 0, uses_anonymous_args = 0
+ 361:LWIP/Target/ethernetif.c ****   LWIP_ASSERT("netif != NULL", (netif != NULL));
+ 1304              		.loc 1 361 1 is_stmt 0 view .LVU345
+ 1305 0000 10B5     		push	{r4, lr}
+ 1306              	.LCFI27:
+ 1307              		.cfi_def_cfa_offset 8
+ 1308              		.cfi_offset 4, -8
+ 1309              		.cfi_offset 14, -4
+ 362:LWIP/Target/ethernetif.c **** 
+ 1310              		.loc 1 362 3 is_stmt 1 view .LVU346
+ 362:LWIP/Target/ethernetif.c **** 
+ 1311              		.loc 1 362 3 view .LVU347
+ 1312 0002 0446     		mov	r4, r0
+ 1313 0004 70B1     		cbz	r0, .L88
+ARM GAS  /tmp/ccyhlr5S.s 			page 41
+
+
+ 1314              	.LVL96:
+ 1315              	.L86:
+ 362:LWIP/Target/ethernetif.c **** 
+ 1316              		.loc 1 362 3 discriminator 3 view .LVU348
+ 362:LWIP/Target/ethernetif.c **** 
+ 1317              		.loc 1 362 3 discriminator 3 view .LVU349
+ 376:LWIP/Target/ethernetif.c ****   netif->name[1] = IFNAME1;
+ 1318              		.loc 1 376 3 view .LVU350
+ 376:LWIP/Target/ethernetif.c ****   netif->name[1] = IFNAME1;
+ 1319              		.loc 1 376 18 is_stmt 0 view .LVU351
+ 1320 0006 7323     		movs	r3, #115
+ 1321 0008 84F83630 		strb	r3, [r4, #54]
+ 377:LWIP/Target/ethernetif.c ****   /* We directly use etharp_output() here to save a function call.
+ 1322              		.loc 1 377 3 is_stmt 1 view .LVU352
+ 377:LWIP/Target/ethernetif.c ****   /* We directly use etharp_output() here to save a function call.
+ 1323              		.loc 1 377 18 is_stmt 0 view .LVU353
+ 1324 000c 7423     		movs	r3, #116
+ 1325 000e 84F83730 		strb	r3, [r4, #55]
+ 386:LWIP/Target/ethernetif.c **** #else
+ 1326              		.loc 1 386 3 is_stmt 1 view .LVU354
+ 386:LWIP/Target/ethernetif.c **** #else
+ 1327              		.loc 1 386 17 is_stmt 0 view .LVU355
+ 1328 0012 084B     		ldr	r3, .L89
+ 1329 0014 6361     		str	r3, [r4, #20]
+ 398:LWIP/Target/ethernetif.c **** 
+ 1330              		.loc 1 398 3 is_stmt 1 view .LVU356
+ 398:LWIP/Target/ethernetif.c **** 
+ 1331              		.loc 1 398 21 is_stmt 0 view .LVU357
+ 1332 0016 084B     		ldr	r3, .L89+4
+ 1333 0018 A361     		str	r3, [r4, #24]
+ 401:LWIP/Target/ethernetif.c **** 
+ 1334              		.loc 1 401 3 is_stmt 1 view .LVU358
+ 1335 001a 2046     		mov	r0, r4
+ 1336 001c FFF7FEFF 		bl	low_level_init
+ 1337              	.LVL97:
+ 403:LWIP/Target/ethernetif.c **** }
+ 1338              		.loc 1 403 3 view .LVU359
+ 404:LWIP/Target/ethernetif.c **** 
+ 1339              		.loc 1 404 1 is_stmt 0 view .LVU360
+ 1340 0020 0020     		movs	r0, #0
+ 1341 0022 10BD     		pop	{r4, pc}
+ 1342              	.LVL98:
+ 1343              	.L88:
+ 362:LWIP/Target/ethernetif.c **** 
+ 1344              		.loc 1 362 3 is_stmt 1 discriminator 1 view .LVU361
+ 362:LWIP/Target/ethernetif.c **** 
+ 1345              		.loc 1 362 3 discriminator 1 view .LVU362
+ 1346 0024 054B     		ldr	r3, .L89+8
+ 1347 0026 4FF4B572 		mov	r2, #362
+ 1348 002a 0549     		ldr	r1, .L89+12
+ 1349 002c 0548     		ldr	r0, .L89+16
+ 1350              	.LVL99:
+ 362:LWIP/Target/ethernetif.c **** 
+ 1351              		.loc 1 362 3 is_stmt 0 discriminator 1 view .LVU363
+ 1352 002e FFF7FEFF 		bl	printf
+ 1353              	.LVL100:
+ 1354 0032 E8E7     		b	.L86
+ARM GAS  /tmp/ccyhlr5S.s 			page 42
+
+
+ 1355              	.L90:
+ 1356              		.align	2
+ 1357              	.L89:
+ 1358 0034 00000000 		.word	etharp_output
+ 1359 0038 00000000 		.word	low_level_output
+ 1360 003c 00000000 		.word	.LC0
+ 1361 0040 1C000000 		.word	.LC1
+ 1362 0044 2C000000 		.word	.LC2
+ 1363              		.cfi_endproc
+ 1364              	.LFE160:
+ 1366              		.section	.text.HAL_ETH_RxAllocateCallback,"ax",%progbits
+ 1367              		.align	1
+ 1368              		.global	HAL_ETH_RxAllocateCallback
+ 1369              		.syntax unified
+ 1370              		.thumb
+ 1371              		.thumb_func
+ 1373              	HAL_ETH_RxAllocateCallback:
+ 1374              	.LVL101:
+ 1375              	.LFB171:
+ 674:LWIP/Target/ethernetif.c **** 
+ 675:LWIP/Target/ethernetif.c **** void HAL_ETH_RxAllocateCallback(uint8_t **buff)
+ 676:LWIP/Target/ethernetif.c **** {
+ 1376              		.loc 1 676 1 is_stmt 1 view -0
+ 1377              		.cfi_startproc
+ 1378              		@ args = 0, pretend = 0, frame = 0
+ 1379              		@ frame_needed = 0, uses_anonymous_args = 0
+ 1380              		.loc 1 676 1 is_stmt 0 view .LVU365
+ 1381 0000 10B5     		push	{r4, lr}
+ 1382              	.LCFI28:
+ 1383              		.cfi_def_cfa_offset 8
+ 1384              		.cfi_offset 4, -8
+ 1385              		.cfi_offset 14, -4
+ 1386 0002 82B0     		sub	sp, sp, #8
+ 1387              	.LCFI29:
+ 1388              		.cfi_def_cfa_offset 16
+ 1389 0004 0446     		mov	r4, r0
+ 677:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN HAL ETH RxAllocateCallback */
+ 678:LWIP/Target/ethernetif.c ****   struct pbuf_custom *p = LWIP_MEMPOOL_ALLOC(RX_POOL);
+ 1390              		.loc 1 678 3 is_stmt 1 view .LVU366
+ 1391              		.loc 1 678 27 is_stmt 0 view .LVU367
+ 1392 0006 0E48     		ldr	r0, .L95
+ 1393              	.LVL102:
+ 1394              		.loc 1 678 27 view .LVU368
+ 1395 0008 FFF7FEFF 		bl	memp_malloc_pool
+ 1396              	.LVL103:
+ 679:LWIP/Target/ethernetif.c ****   if (p)
+ 1397              		.loc 1 679 3 is_stmt 1 view .LVU369
+ 1398              		.loc 1 679 6 is_stmt 0 view .LVU370
+ 1399 000c 88B1     		cbz	r0, .L92
+ 1400 000e 0346     		mov	r3, r0
+ 680:LWIP/Target/ethernetif.c ****   {
+ 681:LWIP/Target/ethernetif.c ****     /* Get the buff from the struct pbuf address. */
+ 682:LWIP/Target/ethernetif.c ****     *buff = (uint8_t *)p + offsetof(RxBuff_t, buff);
+ 1401              		.loc 1 682 5 is_stmt 1 view .LVU371
+ 1402              		.loc 1 682 26 is_stmt 0 view .LVU372
+ 1403 0010 00F12002 		add	r2, r0, #32
+ 1404              		.loc 1 682 11 view .LVU373
+ARM GAS  /tmp/ccyhlr5S.s 			page 43
+
+
+ 1405 0014 2260     		str	r2, [r4]
+ 683:LWIP/Target/ethernetif.c ****     p->custom_free_function = pbuf_free_custom;
+ 1406              		.loc 1 683 5 is_stmt 1 view .LVU374
+ 1407              		.loc 1 683 29 is_stmt 0 view .LVU375
+ 1408 0016 0B4A     		ldr	r2, .L95+4
+ 1409 0018 0261     		str	r2, [r0, #16]
+ 684:LWIP/Target/ethernetif.c ****     /* Initialize the struct pbuf.
+ 685:LWIP/Target/ethernetif.c ****     * This must be performed whenever a buffer's allocated because it may be
+ 686:LWIP/Target/ethernetif.c ****     * changed by lwIP or the app, e.g., pbuf_free decrements ref. */
+ 687:LWIP/Target/ethernetif.c ****     pbuf_alloced_custom(PBUF_RAW, 0, PBUF_REF, p, *buff, ETH_RX_BUF_SIZE);
+ 1410              		.loc 1 687 5 is_stmt 1 view .LVU376
+ 1411 001a 4FF4C062 		mov	r2, #1536
+ 1412 001e 0192     		str	r2, [sp, #4]
+ 1413 0020 2268     		ldr	r2, [r4]
+ 1414 0022 0092     		str	r2, [sp]
+ 1415 0024 4122     		movs	r2, #65
+ 1416 0026 0021     		movs	r1, #0
+ 1417 0028 0846     		mov	r0, r1
+ 1418              	.LVL104:
+ 1419              		.loc 1 687 5 is_stmt 0 view .LVU377
+ 1420 002a FFF7FEFF 		bl	pbuf_alloced_custom
+ 1421              	.LVL105:
+ 1422              	.L91:
+ 688:LWIP/Target/ethernetif.c ****   }
+ 689:LWIP/Target/ethernetif.c ****   else
+ 690:LWIP/Target/ethernetif.c ****   {
+ 691:LWIP/Target/ethernetif.c ****     RxAllocStatus = RX_ALLOC_ERROR;
+ 692:LWIP/Target/ethernetif.c ****     *buff = NULL;
+ 693:LWIP/Target/ethernetif.c ****   }
+ 694:LWIP/Target/ethernetif.c **** /* USER CODE END HAL ETH RxAllocateCallback */
+ 695:LWIP/Target/ethernetif.c **** }
+ 1423              		.loc 1 695 1 view .LVU378
+ 1424 002e 02B0     		add	sp, sp, #8
+ 1425              	.LCFI30:
+ 1426              		.cfi_remember_state
+ 1427              		.cfi_def_cfa_offset 8
+ 1428              		@ sp needed
+ 1429 0030 10BD     		pop	{r4, pc}
+ 1430              	.LVL106:
+ 1431              	.L92:
+ 1432              	.LCFI31:
+ 1433              		.cfi_restore_state
+ 691:LWIP/Target/ethernetif.c ****     *buff = NULL;
+ 1434              		.loc 1 691 5 is_stmt 1 view .LVU379
+ 691:LWIP/Target/ethernetif.c ****     *buff = NULL;
+ 1435              		.loc 1 691 19 is_stmt 0 view .LVU380
+ 1436 0032 054B     		ldr	r3, .L95+8
+ 1437 0034 0122     		movs	r2, #1
+ 1438 0036 1A70     		strb	r2, [r3]
+ 692:LWIP/Target/ethernetif.c ****   }
+ 1439              		.loc 1 692 5 is_stmt 1 view .LVU381
+ 692:LWIP/Target/ethernetif.c ****   }
+ 1440              		.loc 1 692 11 is_stmt 0 view .LVU382
+ 1441 0038 0023     		movs	r3, #0
+ 1442 003a 2360     		str	r3, [r4]
+ 1443              		.loc 1 695 1 view .LVU383
+ 1444 003c F7E7     		b	.L91
+ARM GAS  /tmp/ccyhlr5S.s 			page 44
+
+
+ 1445              	.L96:
+ 1446 003e 00BF     		.align	2
+ 1447              	.L95:
+ 1448 0040 00000000 		.word	memp_RX_POOL
+ 1449 0044 00000000 		.word	pbuf_free_custom
+ 1450 0048 00000000 		.word	RxAllocStatus
+ 1451              		.cfi_endproc
+ 1452              	.LFE171:
+ 1454              		.section	.text.HAL_ETH_RxLinkCallback,"ax",%progbits
+ 1455              		.align	1
+ 1456              		.global	HAL_ETH_RxLinkCallback
+ 1457              		.syntax unified
+ 1458              		.thumb
+ 1459              		.thumb_func
+ 1461              	HAL_ETH_RxLinkCallback:
+ 1462              	.LVL107:
+ 1463              	.LFB172:
+ 696:LWIP/Target/ethernetif.c **** 
+ 697:LWIP/Target/ethernetif.c **** void HAL_ETH_RxLinkCallback(void **pStart, void **pEnd, uint8_t *buff, uint16_t Length)
+ 698:LWIP/Target/ethernetif.c **** {
+ 1464              		.loc 1 698 1 is_stmt 1 view -0
+ 1465              		.cfi_startproc
+ 1466              		@ args = 0, pretend = 0, frame = 0
+ 1467              		@ frame_needed = 0, uses_anonymous_args = 0
+ 1468              		@ link register save eliminated.
+ 1469              		.loc 1 698 1 is_stmt 0 view .LVU385
+ 1470 0000 30B4     		push	{r4, r5}
+ 1471              	.LCFI32:
+ 1472              		.cfi_def_cfa_offset 8
+ 1473              		.cfi_offset 4, -8
+ 1474              		.cfi_offset 5, -4
+ 699:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN HAL ETH RxLinkCallback */
+ 700:LWIP/Target/ethernetif.c **** 
+ 701:LWIP/Target/ethernetif.c ****   struct pbuf **ppStart = (struct pbuf **)pStart;
+ 1475              		.loc 1 701 3 is_stmt 1 view .LVU386
+ 1476              	.LVL108:
+ 702:LWIP/Target/ethernetif.c ****   struct pbuf **ppEnd = (struct pbuf **)pEnd;
+ 1477              		.loc 1 702 3 view .LVU387
+ 703:LWIP/Target/ethernetif.c ****   struct pbuf *p = NULL;
+ 1478              		.loc 1 703 3 view .LVU388
+ 704:LWIP/Target/ethernetif.c **** 
+ 705:LWIP/Target/ethernetif.c ****   /* Get the struct pbuf from the buff address. */
+ 706:LWIP/Target/ethernetif.c ****   p = (struct pbuf *)(buff - offsetof(RxBuff_t, buff));
+ 1479              		.loc 1 706 3 view .LVU389
+ 1480              		.loc 1 706 5 is_stmt 0 view .LVU390
+ 1481 0002 A2F12004 		sub	r4, r2, #32
+ 1482              	.LVL109:
+ 707:LWIP/Target/ethernetif.c ****   p->next = NULL;
+ 1483              		.loc 1 707 3 is_stmt 1 view .LVU391
+ 1484              		.loc 1 707 11 is_stmt 0 view .LVU392
+ 1485 0006 0025     		movs	r5, #0
+ 1486 0008 42F8205C 		str	r5, [r2, #-32]
+ 708:LWIP/Target/ethernetif.c ****   p->tot_len = 0;
+ 1487              		.loc 1 708 3 is_stmt 1 view .LVU393
+ 1488              		.loc 1 708 14 is_stmt 0 view .LVU394
+ 1489 000c 22F8185C 		strh	r5, [r2, #-24]	@ movhi
+ 709:LWIP/Target/ethernetif.c ****   p->len = Length;
+ARM GAS  /tmp/ccyhlr5S.s 			page 45
+
+
+ 1490              		.loc 1 709 3 is_stmt 1 view .LVU395
+ 1491              		.loc 1 709 10 is_stmt 0 view .LVU396
+ 1492 0010 22F8163C 		strh	r3, [r2, #-22]	@ movhi
+ 710:LWIP/Target/ethernetif.c **** 
+ 711:LWIP/Target/ethernetif.c ****   /* Chain the buffer. */
+ 712:LWIP/Target/ethernetif.c ****   if (!*ppStart)
+ 1493              		.loc 1 712 3 is_stmt 1 view .LVU397
+ 1494              		.loc 1 712 8 is_stmt 0 view .LVU398
+ 1495 0014 0268     		ldr	r2, [r0]
+ 1496              	.LVL110:
+ 1497              		.loc 1 712 6 view .LVU399
+ 1498 0016 22B1     		cbz	r2, .L103
+ 713:LWIP/Target/ethernetif.c ****   {
+ 714:LWIP/Target/ethernetif.c ****     /* The first buffer of the packet. */
+ 715:LWIP/Target/ethernetif.c ****     *ppStart = p;
+ 716:LWIP/Target/ethernetif.c ****   }
+ 717:LWIP/Target/ethernetif.c ****   else
+ 718:LWIP/Target/ethernetif.c ****   {
+ 719:LWIP/Target/ethernetif.c ****     /* Chain the buffer to the end of the packet. */
+ 720:LWIP/Target/ethernetif.c ****     (*ppEnd)->next = p;
+ 1499              		.loc 1 720 5 is_stmt 1 view .LVU400
+ 1500              		.loc 1 720 6 is_stmt 0 view .LVU401
+ 1501 0018 0A68     		ldr	r2, [r1]
+ 1502              		.loc 1 720 20 view .LVU402
+ 1503 001a 1460     		str	r4, [r2]
+ 1504              	.L99:
+ 721:LWIP/Target/ethernetif.c ****   }
+ 722:LWIP/Target/ethernetif.c ****   *ppEnd  = p;
+ 1505              		.loc 1 722 3 is_stmt 1 view .LVU403
+ 1506              		.loc 1 722 11 is_stmt 0 view .LVU404
+ 1507 001c 0C60     		str	r4, [r1]
+ 723:LWIP/Target/ethernetif.c **** 
+ 724:LWIP/Target/ethernetif.c ****   /* Update the total length of all the buffers of the chain. Each pbuf in the chain should have it
+ 725:LWIP/Target/ethernetif.c ****    * set to its own length, plus the length of all the following pbufs in the chain. */
+ 726:LWIP/Target/ethernetif.c ****   for (p = *ppStart; p != NULL; p = p->next)
+ 1508              		.loc 1 726 3 is_stmt 1 view .LVU405
+ 1509              		.loc 1 726 10 is_stmt 0 view .LVU406
+ 1510 001e 0268     		ldr	r2, [r0]
+ 1511              	.LVL111:
+ 1512              		.loc 1 726 3 view .LVU407
+ 1513 0020 05E0     		b	.L100
+ 1514              	.LVL112:
+ 1515              	.L103:
+ 715:LWIP/Target/ethernetif.c ****   }
+ 1516              		.loc 1 715 5 is_stmt 1 view .LVU408
+ 715:LWIP/Target/ethernetif.c ****   }
+ 1517              		.loc 1 715 14 is_stmt 0 view .LVU409
+ 1518 0022 0460     		str	r4, [r0]
+ 1519 0024 FAE7     		b	.L99
+ 1520              	.LVL113:
+ 1521              	.L101:
+ 727:LWIP/Target/ethernetif.c ****   {
+ 728:LWIP/Target/ethernetif.c ****     p->tot_len += Length;
+ 1522              		.loc 1 728 5 is_stmt 1 view .LVU410
+ 1523              		.loc 1 728 6 is_stmt 0 view .LVU411
+ 1524 0026 1189     		ldrh	r1, [r2, #8]
+ 1525              		.loc 1 728 16 view .LVU412
+ARM GAS  /tmp/ccyhlr5S.s 			page 46
+
+
+ 1526 0028 1944     		add	r1, r1, r3
+ 1527 002a 1181     		strh	r1, [r2, #8]	@ movhi
+ 726:LWIP/Target/ethernetif.c ****   {
+ 1528              		.loc 1 726 35 is_stmt 1 discriminator 3 view .LVU413
+ 1529 002c 1268     		ldr	r2, [r2]
+ 1530              	.LVL114:
+ 1531              	.L100:
+ 726:LWIP/Target/ethernetif.c ****   {
+ 1532              		.loc 1 726 24 discriminator 1 view .LVU414
+ 1533 002e 002A     		cmp	r2, #0
+ 1534 0030 F9D1     		bne	.L101
+ 729:LWIP/Target/ethernetif.c ****   }
+ 730:LWIP/Target/ethernetif.c **** 
+ 731:LWIP/Target/ethernetif.c **** /* USER CODE END HAL ETH RxLinkCallback */
+ 732:LWIP/Target/ethernetif.c **** }
+ 1535              		.loc 1 732 1 is_stmt 0 view .LVU415
+ 1536 0032 30BC     		pop	{r4, r5}
+ 1537              	.LCFI33:
+ 1538              		.cfi_restore 5
+ 1539              		.cfi_restore 4
+ 1540              		.cfi_def_cfa_offset 0
+ 1541              	.LVL115:
+ 1542              		.loc 1 732 1 view .LVU416
+ 1543 0034 7047     		bx	lr
+ 1544              		.cfi_endproc
+ 1545              	.LFE172:
+ 1547              		.section	.text.HAL_ETH_TxFreeCallback,"ax",%progbits
+ 1548              		.align	1
+ 1549              		.global	HAL_ETH_TxFreeCallback
+ 1550              		.syntax unified
+ 1551              		.thumb
+ 1552              		.thumb_func
+ 1554              	HAL_ETH_TxFreeCallback:
+ 1555              	.LVL116:
+ 1556              	.LFB173:
+ 733:LWIP/Target/ethernetif.c **** 
+ 734:LWIP/Target/ethernetif.c **** void HAL_ETH_TxFreeCallback(uint32_t * buff)
+ 735:LWIP/Target/ethernetif.c **** {
+ 1557              		.loc 1 735 1 is_stmt 1 view -0
+ 1558              		.cfi_startproc
+ 1559              		@ args = 0, pretend = 0, frame = 0
+ 1560              		@ frame_needed = 0, uses_anonymous_args = 0
+ 1561              		.loc 1 735 1 is_stmt 0 view .LVU418
+ 1562 0000 08B5     		push	{r3, lr}
+ 1563              	.LCFI34:
+ 1564              		.cfi_def_cfa_offset 8
+ 1565              		.cfi_offset 3, -8
+ 1566              		.cfi_offset 14, -4
+ 736:LWIP/Target/ethernetif.c **** /* USER CODE BEGIN HAL ETH TxFreeCallback */
+ 737:LWIP/Target/ethernetif.c **** 
+ 738:LWIP/Target/ethernetif.c ****   pbuf_free((struct pbuf *)buff);
+ 1567              		.loc 1 738 3 is_stmt 1 view .LVU419
+ 1568 0002 FFF7FEFF 		bl	pbuf_free
+ 1569              	.LVL117:
+ 739:LWIP/Target/ethernetif.c **** 
+ 740:LWIP/Target/ethernetif.c **** /* USER CODE END HAL ETH TxFreeCallback */
+ 741:LWIP/Target/ethernetif.c **** }
+ARM GAS  /tmp/ccyhlr5S.s 			page 47
+
+
+ 1570              		.loc 1 741 1 is_stmt 0 view .LVU420
+ 1571 0006 08BD     		pop	{r3, pc}
+ 1572              		.cfi_endproc
+ 1573              	.LFE173:
+ 1575              		.global	DP83848_IOCtx
+ 1576              		.section	.data.DP83848_IOCtx,"aw"
+ 1577              		.align	2
+ 1580              	DP83848_IOCtx:
+ 1581 0000 00000000 		.word	ETH_PHY_IO_Init
+ 1582 0004 00000000 		.word	ETH_PHY_IO_DeInit
+ 1583 0008 00000000 		.word	ETH_PHY_IO_WriteReg
+ 1584 000c 00000000 		.word	ETH_PHY_IO_ReadReg
+ 1585 0010 00000000 		.word	ETH_PHY_IO_GetTick
+ 1586              		.global	DP83848
+ 1587              		.section	.bss.DP83848,"aw",%nobits
+ 1588              		.align	2
+ 1591              	DP83848:
+ 1592 0000 00000000 		.space	32
+ 1592      00000000 
+ 1592      00000000 
+ 1592      00000000 
+ 1592      00000000 
+ 1593              		.global	TxConfig
+ 1594              		.section	.bss.TxConfig,"aw",%nobits
+ 1595              		.align	2
+ 1598              	TxConfig:
+ 1599 0000 00000000 		.space	56
+ 1599      00000000 
+ 1599      00000000 
+ 1599      00000000 
+ 1599      00000000 
+ 1600              		.global	heth
+ 1601              		.section	.bss.heth,"aw",%nobits
+ 1602              		.align	2
+ 1605              	heth:
+ 1606 0000 00000000 		.space	176
+ 1606      00000000 
+ 1606      00000000 
+ 1606      00000000 
+ 1606      00000000 
+ 1607              		.global	DMATxDscrTab
+ 1608              		.section	.bss.DMATxDscrTab,"aw",%nobits
+ 1609              		.align	2
+ 1612              	DMATxDscrTab:
+ 1613 0000 00000000 		.space	160
+ 1613      00000000 
+ 1613      00000000 
+ 1613      00000000 
+ 1613      00000000 
+ 1614              		.global	DMARxDscrTab
+ 1615              		.section	.bss.DMARxDscrTab,"aw",%nobits
+ 1616              		.align	2
+ 1619              	DMARxDscrTab:
+ 1620 0000 00000000 		.space	160
+ 1620      00000000 
+ 1620      00000000 
+ 1620      00000000 
+ARM GAS  /tmp/ccyhlr5S.s 			page 48
+
+
+ 1620      00000000 
+ 1621              		.section	.bss.RxAllocStatus,"aw",%nobits
+ 1624              	RxAllocStatus:
+ 1625 0000 00       		.space	1
+ 1626              		.global	memp_RX_POOL
+ 1627              		.section	.rodata.str1.4,"aMS",%progbits,1
+ 1628              		.align	2
+ 1629              	.LC3:
+ 1630 0000 5A65726F 		.ascii	"Zero-copy RX PBUF pool\000"
+ 1630      2D636F70 
+ 1630      79205258 
+ 1630      20504255 
+ 1630      4620706F 
+ 1631              		.section	.rodata.memp_RX_POOL,"a"
+ 1632              		.align	2
+ 1635              	memp_RX_POOL:
+ 1636 0000 00000000 		.word	.LC3
+ 1637 0004 2006     		.short	1568
+ 1638 0006 0C00     		.short	12
+ 1639 0008 00000000 		.word	memp_memory_RX_POOL_base
+ 1640 000c 00000000 		.word	memp_tab_RX_POOL
+ 1641              		.section	.bss.memp_tab_RX_POOL,"aw",%nobits
+ 1642              		.align	2
+ 1645              	memp_tab_RX_POOL:
+ 1646 0000 00000000 		.space	4
+ 1647              		.global	memp_memory_RX_POOL_base
+ 1648              		.section	.bss.memp_memory_RX_POOL_base,"aw",%nobits
+ 1649              		.align	2
+ 1652              	memp_memory_RX_POOL_base:
+ 1653 0000 00000000 		.space	18819
+ 1653      00000000 
+ 1653      00000000 
+ 1653      00000000 
+ 1653      00000000 
+ 1654              		.text
+ 1655              	.Letext0:
+ 1656              		.file 2 "Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h"
+ 1657              		.file 3 "/usr/lib/gcc/arm-none-eabi/14.2.1/include/stdint.h"
+ 1658              		.file 4 "Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f4xx.h"
+ 1659              		.file 5 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_def.h"
+ 1660              		.file 6 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_gpio.h"
+ 1661              		.file 7 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_eth.h"
+ 1662              		.file 8 "Middlewares/Third_Party/LwIP/src/include/lwip/arch.h"
+ 1663              		.file 9 "Middlewares/Third_Party/LwIP/src/include/lwip/memp.h"
+ 1664              		.file 10 "Middlewares/Third_Party/LwIP/src/include/lwip/priv/memp_priv.h"
+ 1665              		.file 11 "Middlewares/Third_Party/LwIP/src/include/lwip/err.h"
+ 1666              		.file 12 "Middlewares/Third_Party/LwIP/src/include/lwip/pbuf.h"
+ 1667              		.file 13 "Middlewares/Third_Party/LwIP/src/include/lwip/ip4_addr.h"
+ 1668              		.file 14 "Middlewares/Third_Party/LwIP/src/include/lwip/ip_addr.h"
+ 1669              		.file 15 "Middlewares/Third_Party/LwIP/src/include/lwip/netif.h"
+ 1670              		.file 16 "Drivers/BSP/Components/dp83848/dp83848.h"
+ 1671              		.file 17 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h"
+ 1672              		.file 18 "/usr/include/newlib/string.h"
+ 1673              		.file 19 "Middlewares/Third_Party/LwIP/src/include/lwip/etharp.h"
+ 1674              		.file 20 "/usr/include/newlib/stdio.h"
+ 1675              		.file 21 "Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h"
+ 1676              		.file 22 "LWIP/Target/ethernetif.h"
+ARM GAS  /tmp/ccyhlr5S.s 			page 49
+
+
+ 1677              		.file 23 "<built-in>"
+ARM GAS  /tmp/ccyhlr5S.s 			page 50
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 ethernetif.c
+     /tmp/ccyhlr5S.s:21     .text.ETH_PHY_IO_DeInit:00000000 $t
+     /tmp/ccyhlr5S.s:27     .text.ETH_PHY_IO_DeInit:00000000 ETH_PHY_IO_DeInit
+     /tmp/ccyhlr5S.s:42     .text.low_level_input:00000000 $t
+     /tmp/ccyhlr5S.s:47     .text.low_level_input:00000000 low_level_input
+     /tmp/ccyhlr5S.s:98     .text.low_level_input:00000020 $d
+     /tmp/ccyhlr5S.s:1624   .bss.RxAllocStatus:00000000 RxAllocStatus
+     /tmp/ccyhlr5S.s:1605   .bss.heth:00000000 heth
+     /tmp/ccyhlr5S.s:104    .text.low_level_output:00000000 $t
+     /tmp/ccyhlr5S.s:109    .text.low_level_output:00000000 low_level_output
+     /tmp/ccyhlr5S.s:258    .text.low_level_output:00000094 $d
+     /tmp/ccyhlr5S.s:1598   .bss.TxConfig:00000000 TxConfig
+     /tmp/ccyhlr5S.s:264    .text.pbuf_free_custom:00000000 $t
+     /tmp/ccyhlr5S.s:270    .text.pbuf_free_custom:00000000 pbuf_free_custom
+     /tmp/ccyhlr5S.s:313    .text.pbuf_free_custom:0000001c $d
+     /tmp/ccyhlr5S.s:1635   .rodata.memp_RX_POOL:00000000 memp_RX_POOL
+     /tmp/ccyhlr5S.s:319    .text.ETH_PHY_IO_GetTick:00000000 $t
+     /tmp/ccyhlr5S.s:325    .text.ETH_PHY_IO_GetTick:00000000 ETH_PHY_IO_GetTick
+     /tmp/ccyhlr5S.s:346    .text.ETH_PHY_IO_Init:00000000 $t
+     /tmp/ccyhlr5S.s:352    .text.ETH_PHY_IO_Init:00000000 ETH_PHY_IO_Init
+     /tmp/ccyhlr5S.s:374    .text.ETH_PHY_IO_Init:0000000c $d
+     /tmp/ccyhlr5S.s:379    .text.ETH_PHY_IO_ReadReg:00000000 $t
+     /tmp/ccyhlr5S.s:385    .text.ETH_PHY_IO_ReadReg:00000000 ETH_PHY_IO_ReadReg
+     /tmp/ccyhlr5S.s:424    .text.ETH_PHY_IO_ReadReg:00000018 $d
+     /tmp/ccyhlr5S.s:429    .text.ETH_PHY_IO_WriteReg:00000000 $t
+     /tmp/ccyhlr5S.s:435    .text.ETH_PHY_IO_WriteReg:00000000 ETH_PHY_IO_WriteReg
+     /tmp/ccyhlr5S.s:474    .text.ETH_PHY_IO_WriteReg:00000018 $d
+     /tmp/ccyhlr5S.s:479    .text.ethernetif_input:00000000 $t
+     /tmp/ccyhlr5S.s:485    .text.ethernetif_input:00000000 ethernetif_input
+     /tmp/ccyhlr5S.s:545    .text.sys_now:00000000 $t
+     /tmp/ccyhlr5S.s:551    .text.sys_now:00000000 sys_now
+     /tmp/ccyhlr5S.s:572    .text.HAL_ETH_MspInit:00000000 $t
+     /tmp/ccyhlr5S.s:578    .text.HAL_ETH_MspInit:00000000 HAL_ETH_MspInit
+     /tmp/ccyhlr5S.s:818    .text.HAL_ETH_MspInit:0000010c $d
+     /tmp/ccyhlr5S.s:826    .text.HAL_ETH_MspDeInit:00000000 $t
+     /tmp/ccyhlr5S.s:832    .text.HAL_ETH_MspDeInit:00000000 HAL_ETH_MspDeInit
+     /tmp/ccyhlr5S.s:903    .text.HAL_ETH_MspDeInit:00000050 $d
+     /tmp/ccyhlr5S.s:911    .text.ethernet_link_check_state:00000000 $t
+     /tmp/ccyhlr5S.s:917    .text.ethernet_link_check_state:00000000 ethernet_link_check_state
+     /tmp/ccyhlr5S.s:977    .text.ethernet_link_check_state:0000003a $d
+     /tmp/ccyhlr5S.s:981    .text.ethernet_link_check_state:0000003e $t
+     /tmp/ccyhlr5S.s:1081   .text.ethernet_link_check_state:000000a4 $d
+     /tmp/ccyhlr5S.s:1591   .bss.DP83848:00000000 DP83848
+     /tmp/ccyhlr5S.s:1087   .text.low_level_init:00000000 $t
+     /tmp/ccyhlr5S.s:1092   .text.low_level_init:00000000 low_level_init
+     /tmp/ccyhlr5S.s:1269   .text.low_level_init:000000d4 $d
+     /tmp/ccyhlr5S.s:1612   .bss.DMATxDscrTab:00000000 DMATxDscrTab
+     /tmp/ccyhlr5S.s:1619   .bss.DMARxDscrTab:00000000 DMARxDscrTab
+     /tmp/ccyhlr5S.s:1580   .data.DP83848_IOCtx:00000000 DP83848_IOCtx
+     /tmp/ccyhlr5S.s:1281   .rodata.ethernetif_init.str1.4:00000000 $d
+     /tmp/ccyhlr5S.s:1291   .text.ethernetif_init:00000000 $t
+     /tmp/ccyhlr5S.s:1297   .text.ethernetif_init:00000000 ethernetif_init
+     /tmp/ccyhlr5S.s:1358   .text.ethernetif_init:00000034 $d
+     /tmp/ccyhlr5S.s:1367   .text.HAL_ETH_RxAllocateCallback:00000000 $t
+     /tmp/ccyhlr5S.s:1373   .text.HAL_ETH_RxAllocateCallback:00000000 HAL_ETH_RxAllocateCallback
+     /tmp/ccyhlr5S.s:1448   .text.HAL_ETH_RxAllocateCallback:00000040 $d
+ARM GAS  /tmp/ccyhlr5S.s 			page 51
+
+
+     /tmp/ccyhlr5S.s:1455   .text.HAL_ETH_RxLinkCallback:00000000 $t
+     /tmp/ccyhlr5S.s:1461   .text.HAL_ETH_RxLinkCallback:00000000 HAL_ETH_RxLinkCallback
+     /tmp/ccyhlr5S.s:1548   .text.HAL_ETH_TxFreeCallback:00000000 $t
+     /tmp/ccyhlr5S.s:1554   .text.HAL_ETH_TxFreeCallback:00000000 HAL_ETH_TxFreeCallback
+     /tmp/ccyhlr5S.s:1577   .data.DP83848_IOCtx:00000000 $d
+     /tmp/ccyhlr5S.s:1588   .bss.DP83848:00000000 $d
+     /tmp/ccyhlr5S.s:1595   .bss.TxConfig:00000000 $d
+     /tmp/ccyhlr5S.s:1602   .bss.heth:00000000 $d
+     /tmp/ccyhlr5S.s:1609   .bss.DMATxDscrTab:00000000 $d
+     /tmp/ccyhlr5S.s:1616   .bss.DMARxDscrTab:00000000 $d
+     /tmp/ccyhlr5S.s:1625   .bss.RxAllocStatus:00000000 $d
+     /tmp/ccyhlr5S.s:1628   .rodata.str1.4:00000000 $d
+     /tmp/ccyhlr5S.s:1632   .rodata.memp_RX_POOL:00000000 $d
+     /tmp/ccyhlr5S.s:1652   .bss.memp_memory_RX_POOL_base:00000000 memp_memory_RX_POOL_base
+     /tmp/ccyhlr5S.s:1645   .bss.memp_tab_RX_POOL:00000000 memp_tab_RX_POOL
+     /tmp/ccyhlr5S.s:1642   .bss.memp_tab_RX_POOL:00000000 $d
+     /tmp/ccyhlr5S.s:1649   .bss.memp_memory_RX_POOL_base:00000000 $d
+
+UNDEFINED SYMBOLS
+HAL_ETH_ReadData
+memset
+HAL_ETH_Transmit
+memp_free_pool
+HAL_GetTick
+HAL_ETH_SetMDIOClockRange
+HAL_ETH_ReadPHYRegister
+HAL_ETH_WritePHYRegister
+pbuf_free
+HAL_GPIO_Init
+HAL_NVIC_SetPriority
+HAL_NVIC_EnableIRQ
+HAL_GPIO_DeInit
+HAL_NVIC_DisableIRQ
+DP83848_GetLinkState
+HAL_ETH_Stop
+netif_set_down
+netif_set_link_down
+HAL_ETH_GetMACConfig
+HAL_ETH_SetMACConfig
+HAL_ETH_Start
+netif_set_up
+netif_set_link_up
+HAL_ETH_Init
+memp_init_pool
+DP83848_RegisterBusIO
+DP83848_Init
+Error_Handler
+printf
+etharp_output
+memp_malloc_pool
+pbuf_alloced_custom

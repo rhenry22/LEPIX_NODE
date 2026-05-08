@@ -39,6 +39,8 @@
 
 #include <stdio.h>
 
+#include "artnet.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -121,9 +123,7 @@ int main(void)
   MX_SDIO_SD_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
-#ifdef ENABLE_ETHERNET
   MX_LWIP_Init();
-#endif
   MX_USB_DEVICE_Init();
   MX_FATFS_Init();
   MX_CRC_Init();
@@ -139,8 +139,15 @@ int main(void)
   MX_SPI2_Check_W25Q64();
   MX_SDIO_SD_Check();
 
-  printf("Checking CAN Devices:\r\n");
-  MX_CAN_Loopback_Check();
+  //ajout du TIMER3
+  
+  //MX_CAN_Loopback_Check();
+
+/* Après MX_LWIP_Init() — USER CODE BEGIN 2 */
+  artnet_init();
+
+  /* Dans while(1) */
+  MX_LWIP_Init();   // déjà présent, ne pas oublier
 
   /* USER CODE END 2 */
 
@@ -148,9 +155,11 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-#ifdef ENABLE_ETHERNET
+    /* Pompe LwIP (mode raw, pas de FreeRTOS) */
     MX_LWIP_Process();
-#endif
+    /* Votre init Art-Net se fait UNE FOIS avant le while(1) : */
+    /* artnet_init();  <-- à appeler après MX_LWIP_Init()      */
+
     /* USER CODE END WHILE */
 
 #ifdef ENABLE_USBHOST
