@@ -40,6 +40,11 @@
 #include <stdio.h>
 
 #include "artnet.h"
+#include "ws2815.h"
+#include "tim.h"
+#include "st7789.h"
+
+#include "st7789_test.h"
 
 /* USER CODE END Includes */
 
@@ -60,6 +65,10 @@
 /* Enable the LWIP Ethernet Stack */
 /* #define ENABLE_ETHERNET */
 
+/* Test GPIO : génère un toggle continu sur PD15 dans le while(1)
+ * pour vérifier la sortie à l'oscilloscope. Désactiver en production. */
+/* #define WS2815_GPIO_TEST */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -71,6 +80,9 @@
 
 /* USER CODE BEGIN PV */
 
+WS2815_Chain_t chain1, chain2, chain3, chain4;
+WS2815_Chain_t all_chains[4];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -80,6 +92,8 @@ void MX_USB_HOST_Process(void);
 /* USER CODE BEGIN PFP */
 
 void MX_EEPRMA2_Check_24C02(void);
+void WS2815_Startup_Sequence(void);
+static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len);
 
 /* USER CODE END PFP */
 
@@ -131,23 +145,56 @@ int main(void)
   MX_USB_HOST_Init();
 #endif
   MX_SPI2_Init();
+  ST7789_Init();
   /* USER CODE BEGIN 2 */
+  printf("Screen Init: Done\r\n");
+  // Clignotement backlight au démarrage = preuve que GPIO fonctionne
+  for(int i = 0; i < 6; i++) {
+    GPIOC->BSRR = GPIO_PIN_13;        // BLK HIGH
+    HAL_Delay(200);
+    GPIOC->BSRR = GPIO_PIN_13 << 16;  // BLK LOW
+    HAL_Delay(200);
+  }
+  HAL_Delay(500);
+  ST7789_FillRect(10, 10, 100, 50, ST7789_RED);
+  printf("/r/nSreen Fill Rect\r\n");
+  /* WS2815 : 4 sorties sur GPIOD — PD15 / PD13 / PD11 / PD09 */
+  WS2815_Init(&chain1, GPIOD, GPIO_PIN_15, 120);
+  WS2815_Init(&chain2, GPIOD, GPIO_PIN_13, 120);
+  WS2815_Init(&chain3, GPIOD, GPIO_PIN_11, 120);
+  WS2815_Init(&chain4, GPIOD, GPIO_PIN_9,  120);
+  printf("WS2815 Init: Done\r\n");
+/* USER CODE BEGIN 2 */
 
   printf("\r\nInit Complete.\r\n");
   printf("Checking Storage Devices:\r\n");
   MX_EEPRMA2_Check_24C02();
-  MX_SPI2_Check_W25Q64();
-  MX_SDIO_SD_Check();
 
-  //ajout du TIMER3
-  
-  //MX_CAN_Loopback_Check();
+  ST7789_RunAllTests();
+  printf("Screen all tests run\r\n");
+  // Test 1 pixel uniquement — quasi instantané
+  ST7789_DrawPixel(120, 160, ST7789_RED);
 
-/* Après MX_LWIP_Init() — USER CODE BEGIN 2 */
-  artnet_init();
+  /* Init TIM4 + DMA pour WS2815 */
+  //MX_TIM4_Init();
+  //WS2815_Init(&chain1);
+  //WS2815_Init(&chain2);
+  //WS2815_Init(&chain3);
+  //WS2815_Init(&chain4);
+      
 
-  /* Dans while(1) */
-  MX_LWIP_Init();   // déjà présent, ne pas oublier
+  /* Séquence de démarrage visuelle */
+  printf("ws2815:    WS2815_Startup_Sequence\r\n");
+  WS2815_Startup_Sequence();
+  printf("WS2815 Startup Sequence: Done\r\n");
+
+  //artnet_init();
+  //artnet_set_callback(dmx_to_ws2815);
+
+  uint32_t last_tick = HAL_GetTick();
+  //printf("Art-Net Initialized\r\n");
+
+  /* USER CODE END 2 */  
 
   /* USER CODE END 2 */
 
@@ -158,14 +205,25 @@ int main(void)
     /* Pompe LwIP (mode raw, pas de FreeRTOS) */
     MX_LWIP_Process();
     /* Votre init Art-Net se fait UNE FOIS avant le while(1) : */
-    /* artnet_init();  <-- à appeler après MX_LWIP_Init()      */
-
+    /* 2. Heartbeat visuel (clignote toutes les 500ms) */
+    if (HAL_GetTick() - last_tick > 500) {
+        HAL_GPIO_TogglePin(GPIOE, LED1_Pin); // Utilise ta pin LED définie
+        last_tick = HAL_GetTick();
+    }
     /* USER CODE END WHILE */
 
 #ifdef ENABLE_USBHOST
     MX_USB_HOST_Process();
 #endif
     /* USER CODE BEGIN 3 */
+#ifdef WS2815_GPIO_TEST
+    /* Test oscilloscope : toggle PD15 à ~1 kHz (500µs haut / 500µs bas)
+     * Si visible sur scope → GPIO OK. Retirer WS2815_GPIO_TEST en production. */
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+    HAL_Delay(1);
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
+    HAL_Delay(1);
+#endif
   }
 
   /* Something went wrong */
@@ -222,6 +280,68 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+void WS2815_Startup_Sequence(void)
+{
+    for (uint8_t i = 0; i < 60; i++) {
+        WS2815_SetLed(&chain1, i, WS2815_WHITE);
+        WS2815_SetLed(&chain2, i, WS2815_WHITE);
+        WS2815_SetLed(&chain3, i, WS2815_WHITE);
+        WS2815_SetLed(&chain4, i, WS2815_WHITE);
+        all_chains[0] = chain1; all_chains[1] = chain2;
+        all_chains[2] = chain3; all_chains[3] = chain4;
+        while (WS2815_Busy());
+        WS2815_Show(all_chains, 4);
+        HAL_Delay(30);
+    }
+    HAL_Delay(1000);
+    for (uint8_t i = 0; i < 60; i++) {
+        WS2815_SetLed(&chain1, i, WS2815_GREEN);
+        WS2815_SetLed(&chain2, i, WS2815_GREEN);
+        WS2815_SetLed(&chain3, i, WS2815_GREEN);
+        WS2815_SetLed(&chain4, i, WS2815_GREEN);
+        all_chains[0] = chain1; all_chains[1] = chain2;
+        all_chains[2] = chain3; all_chains[3] = chain4;
+        while (WS2815_Busy());
+        WS2815_Show(all_chains, 4);
+        HAL_Delay(20);
+    }
+    for (uint8_t i = 0; i < 60; i++) {
+        WS2815_SetLed(&chain1, i, WS2815_RED);
+        WS2815_SetLed(&chain2, i, WS2815_RED);
+        WS2815_SetLed(&chain3, i, WS2815_RED);
+        WS2815_SetLed(&chain4, i, WS2815_RED);
+        all_chains[0] = chain1; all_chains[1] = chain2;
+        all_chains[2] = chain3; all_chains[3] = chain4;
+        while (WS2815_Busy());
+        WS2815_Show(all_chains, 4);
+        HAL_Delay(30);
+    }   
+    HAL_Delay(1000);
+    for (uint8_t i = 0; i < 60; i++) {
+        WS2815_SetLed(&chain1, i, WS2815_BLUE);
+        WS2815_SetLed(&chain2, i, WS2815_BLUE);
+        WS2815_SetLed(&chain3, i, WS2815_BLUE);
+        WS2815_SetLed(&chain4, i, WS2815_BLUE);
+        all_chains[0] = chain1; all_chains[1] = chain2;
+        all_chains[2] = chain3; all_chains[3] = chain4;
+        while (WS2815_Busy());
+        WS2815_Show(all_chains, 4);
+        HAL_Delay(20);
+    }
+    for (uint8_t i = 0; i < 60; i++) {
+        WS2815_SetLed(&chain1, i, WS2815_BLACK);
+        WS2815_SetLed(&chain2, i, WS2815_BLACK);
+        WS2815_SetLed(&chain3, i, WS2815_BLACK);
+        WS2815_SetLed(&chain4, i, WS2815_BLACK);
+        all_chains[2] = chain3; all_chains[3] = chain4;
+        all_chains[0] = chain1; all_chains[1] = chain2;
+        while (WS2815_Busy());
+        WS2815_Show(all_chains, 4);
+        HAL_Delay(20);
+    }
+    while (WS2815_Busy());
+}
+
 /**
   * @brief Override for printf output
   * @param  file: pointer to the source file name
@@ -271,6 +391,47 @@ int _write(int file, char *ptr, int len)
 
     return len;
 }
+
+/* USER CODE BEGIN 4 */
+
+/**
+ * @brief Mappe les données DMX Art-Net sur les chaînes WS2815.
+ *        Univers 0 → chain1 (PD15), 1 → chain2 (PD13),
+ *        2 → chain3 (PD11),         3 → chain4 (PD9).
+ *        3 canaux DMX consécutifs par LED : R, G, B.
+ */
+static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len)
+{
+    WS2815_Chain_t *ch;
+    switch (universe) {
+        case 0: ch = &chain1; break;
+        case 1: ch = &chain2; break;
+        case 2: ch = &chain3; break;
+        case 3: ch = &chain4; break;
+        default: return;
+    }
+
+    uint16_t num_leds = len / 3;
+    if (num_leds > WS2815_MAX_LEDS)
+        num_leds = WS2815_MAX_LEDS;
+
+    for (uint16_t i = 0; i < num_leds; i++) {
+        WS2815Pixel_t px = { data[i * 3], data[i * 3 + 1], data[i * 3 + 2] };
+        WS2815_SetLed(ch, i, px);
+    }
+
+    /* N'envoyer les données WS2815 qu'après le dernier univers.
+     * Cela évite de bloquer lwIP pendant ~14ms à chaque univers reçu.
+     * Les univers 0-2 remplissent les buffers ; univers 3 déclenche l'envoi. */
+    if (universe == 3) {
+        all_chains[0] = chain1; all_chains[1] = chain2;
+        all_chains[2] = chain3; all_chains[3] = chain4;
+        while (WS2815_Busy());
+        WS2815_Show(all_chains, 4);
+    }
+}
+
+/* USER CODE END 4 */
 
 /**
   * @brief Check for presence of I2C Flash

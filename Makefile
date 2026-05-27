@@ -37,13 +37,17 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
+Core/Src/tim.c \
+Core/Src/ws2815.c \
+Core/Src/st7789.c \
+Core/Src/st7789_test.c \
 Core/Src/gpio.c \
 Core/Src/can.c \
 Core/Src/rtc.c \
 Core/Src/sdio.c \
 Core/Src/spi.c \
 Core/Src/usart.c \
-Code/Src/artnet.c \
+Core/Src/artnet.c \
 Core/Src/stm32f4xx_it.c \
 Core/Src/stm32f4xx_hal_msp.c \
 Core/Src/system_stm32f4xx.c \

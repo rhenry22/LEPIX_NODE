@@ -11,6 +11,7 @@
 #include "lwip/ip_addr.h"
 #include <string.h>
 #include <stdio.h>
+#include "ws2815.h"
 
 /* ------------------------------------------------------------------ */
 /*  Defines Art-Net                                                     */
@@ -24,6 +25,16 @@
 /*  Handle UART debug (déclaré extern dans main.c par CubeMX)          */
 /* ------------------------------------------------------------------ */
 extern UART_HandleTypeDef huart1;
+
+/* ------------------------------------------------------------------ */
+/*  Callback utilisateur DMX                                            */
+/* ------------------------------------------------------------------ */
+static artnet_dmx_cb_t s_dmx_cb = NULL;
+
+void artnet_set_callback(artnet_dmx_cb_t cb)
+{
+    s_dmx_cb = cb;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Tampon de debug UART                                               */
@@ -75,7 +86,6 @@ static void artnet_recv_cb(void *arg,
     (void)arg;
     (void)pcb;
     (void)port;
-
     if (p == NULL)
         return;
 
@@ -98,18 +108,15 @@ static void artnet_recv_cb(void *arg,
     if (pkt->opcode != ARTNET_OPCODE_DMX)
         goto done;
 
-    /* Calcul de l'univers Art-Net complet (0..32767) */
+    /* Calcul de l'univers Art-Net complet (0..32767) — utilisé pour le routage */
     uint16_t universe = (uint16_t)(pkt->net << 8) | pkt->sub_uni;
 
     /* Longueur DMX (big-endian dans le paquet) */
     uint16_t dmx_len = (uint16_t)((pkt->length >> 8) | (pkt->length << 8));
 
-    /* ---- Message de debug sur USART1 ---- */
-    debug_printf("[ArtNet] Univers %u | Seq %u | %u ch | src %s\r\n",
-                 universe,
-                 pkt->sequence,
-                 dmx_len,
-                 ipaddr_ntoa(addr));
+    /* ---- Appel du callback utilisateur ---- */
+    if (s_dmx_cb != NULL)
+        s_dmx_cb(universe, pkt->data, dmx_len);
 
 done:
     pbuf_free(p);

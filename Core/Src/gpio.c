@@ -101,14 +101,29 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PDPin PDPin PDPin PDPin
-                           PDPin PDPin PDPin PDPin
-                           PDPin PDPin */
-  GPIO_InitStruct.Pin = P5_GPIOD8_Pin|P5_GPIOD9_Pin|P5_GPIOD10_Pin|P5_GPIOD11_Pin
-                          |P5_GPIOD12_Pin|P5_GPIOD13_Pin|P5_GPIOD14_Pin|P5_GPIOD15_Pin
-                          |SDIO_CD_Pin|P4_GPIOD4_Pin;
+  ///*Configure GPIO pins : PDPin PDPin PDPin PDPin
+  //                         PDPin PDPin PDPin PDPin
+  //                         PDPin PDPin */
+  //GPIO_InitStruct.Pin = P5_GPIOD8_Pin|P5_GPIOD9_Pin|P5_GPIOD10_Pin|P5_GPIOD11_Pin
+  //                        |P5_GPIOD12_Pin|P5_GPIOD13_Pin|P5_GPIOD14_Pin|P5_GPIOD15_Pin
+  //                        |SDIO_CD_Pin|P4_GPIOD4_Pin;
+  //GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  //GPIO_InitStruct.Pull = GPIO_NOPULL;
+  //HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+/* D8/D10/D12/D14 : entrées générales */
+  GPIO_InitStruct.Pin = P5_GPIOD8_Pin|P5_GPIOD10_Pin
+                    |P5_GPIOD12_Pin|P5_GPIOD14_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /* WS2815 : PD9 / PD11 / PD13 / PD15 — sorties données LEDs */
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9|GPIO_PIN_11|GPIO_PIN_13|GPIO_PIN_15, GPIO_PIN_RESET);
+  GPIO_InitStruct.Pin   = GPIO_PIN_9|GPIO_PIN_11|GPIO_PIN_13|GPIO_PIN_15;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PtPin */
@@ -118,8 +133,24 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(RS485_TX_RX__GPIO_Port, &GPIO_InitStruct);
 
-}
-
 /* USER CODE BEGIN 2 */
 
+/* ── LCD ST7789 : PE1 PE4 PE5 PE6 → OUTPUT VERY_HIGH ── */
+HAL_GPIO_WritePin(GPIOE, LCD_SCK_Pin|LCD_MOSI_Pin|LCD_CS_Pin|LCD_DC_Pin, GPIO_PIN_RESET);
+GPIO_InitStruct.Pin   = LCD_SCK_Pin|LCD_MOSI_Pin|LCD_CS_Pin|LCD_DC_Pin;
+GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+GPIO_InitStruct.Pull  = GPIO_NOPULL;
+GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+/* ── LCD ST7789 : PC0 RST, PC13 BLK → OUTPUT ── */
+HAL_GPIO_WritePin(GPIOC, LCD_RST_Pin, GPIO_PIN_SET);    // RST inactif = HIGH
+HAL_GPIO_WritePin(GPIOC, LCD_BLK_Pin, GPIO_PIN_RESET);  // BLK off au démarrage
+GPIO_InitStruct.Pin   = LCD_RST_Pin|LCD_BLK_Pin;
+GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+GPIO_InitStruct.Pull  = GPIO_NOPULL;
+GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
 /* USER CODE END 2 */
+  }
