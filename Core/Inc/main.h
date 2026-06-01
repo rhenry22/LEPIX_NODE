@@ -150,6 +150,21 @@ void Error_Handler(void);
 #define LCD_MOSI_Pin       GPIO_PIN_4
 #define LCD_MOSI_GPIO_Port GPIOE
 
+#define ST7789_CS_Pin        GPIO_PIN_4
+#define ST7789_CS_GPIO_Port  GPIOA
+
+#define ST7789_DC_Pin        GPIO_PIN_6
+#define ST7789_DC_GPIO_Port  GPIOE
+
+#define ST7789_RST_Pin       GPIO_PIN_0
+#define ST7789_RST_GPIO_Port GPIOC
+
+#define ST7789_RST_PORT LCD_RST_GPIO_Port
+#define ST7789_RST_PIN  LCD_RST_Pin
+
+#define ST7789_DC_PORT  LCD_DC_GPIO_Port
+#define ST7789_DC_PIN   LCD_DC_Pin
+
 #define LCD_CS_Pin       GPIO_PIN_5
 #define LCD_CS_GPIO_Port GPIOE
 

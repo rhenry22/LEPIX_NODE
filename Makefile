@@ -41,6 +41,7 @@ Core/Src/tim.c \
 Core/Src/ws2815.c \
 Core/Src/st7789.c \
 Core/Src/st7789_test.c \
+Core/Src/fonts.c \
 Core/Src/gpio.c \
 Core/Src/can.c \
 Core/Src/rtc.c \

@@ -89,11 +89,19 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : PAPin PAPin PAPin PAPin
                            PAPin PAPin */
-  GPIO_InitStruct.Pin = P4_GPIOA0_Pin|P4_GPIOA3_Pin|P4_GPIOA4_Pin|P4_GPIOA5_Pin
+  GPIO_InitStruct.Pin = P4_GPIOA0_Pin|P4_GPIOA3_Pin|P4_GPIOA5_Pin
                           |P4_GPIOA6_Pin|P5_GPIOA8_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* ── CS ST7789 : PA4 → OUTPUT ── */
+HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);  // CS inactif au démarrage
+GPIO_InitStruct.Pin   = GPIO_PIN_4;
+GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+GPIO_InitStruct.Pull  = GPIO_NOPULL;
+GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PBPin PBPin PBPin PBPin */
   GPIO_InitStruct.Pin = P5_GPIO_Pin|P5_GPIOB1_Pin|BOOT1_Pin|P4_GPIOB7_Pin;

@@ -74,6 +74,9 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 
+/* Enable the ENABLE_SPI_SCREEN*/
+#define ENABLE_SPI_SCREEN 
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -131,79 +134,80 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_CAN1_Init();
-  MX_CAN2_Init();
+  //MX_CAN1_Init();
+  //MX_CAN2_Init();
   MX_RTC_Init();
-  MX_SDIO_SD_Init();
+  //MX_SDIO_SD_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  printf("MX_USART_UART_Init : Done\r\n");
   MX_LWIP_Init();
   MX_USB_DEVICE_Init();
+  printf("MX_USB_DEVICE_Init : Done\r\n");
   MX_FATFS_Init();
   MX_CRC_Init();
 #ifdef ENABLE_USBHOST
   MX_USB_HOST_Init();
+  printf("MX_USB_HOST_Init : Done\r\n");
 #endif
   MX_SPI2_Init();
-  ST7789_Init();
-  /* USER CODE BEGIN 2 */
-  printf("Screen Init: Done\r\n");
+  printf("MX_SPI2_Init : Done\r\n");
+/* USER CODE BEGIN 2 */
+#ifdef ENABLE_SPI_SCREEN
+
+    // 1 — CS Flash et NRF inactifs AVANT tout accès SPI
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);  // Flash CS HIGH
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_8, GPIO_PIN_SET);  // NRF CS HIGH
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);  // LCD CS HIGH
+    HAL_Delay(10);
+
+    // 2 — Init écran
+    ST7789_Init();
+    printf("Screen Init: Done\r\n");
+
+    // 3 — Backlight ON (ne jamais l'éteindre)
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+    printf("BLK: ON\r\n");
+    HAL_Delay(10);
+
+    ST7789_RunAllTests();
+
+#endif
   // Clignotement backlight au démarrage = preuve que GPIO fonctionne
-  for(int i = 0; i < 6; i++) {
-    GPIOC->BSRR = GPIO_PIN_13;        // BLK HIGH
-    HAL_Delay(200);
-    GPIOC->BSRR = GPIO_PIN_13 << 16;  // BLK LOW
-    HAL_Delay(200);
-  }
   HAL_Delay(500);
-  ST7789_FillRect(10, 10, 100, 50, ST7789_RED);
-  printf("/r/nSreen Fill Rect\r\n");
+
   /* WS2815 : 4 sorties sur GPIOD — PD15 / PD13 / PD11 / PD09 */
   WS2815_Init(&chain1, GPIOD, GPIO_PIN_15, 120);
   WS2815_Init(&chain2, GPIOD, GPIO_PIN_13, 120);
   WS2815_Init(&chain3, GPIOD, GPIO_PIN_11, 120);
   WS2815_Init(&chain4, GPIOD, GPIO_PIN_9,  120);
   printf("WS2815 Init: Done\r\n");
-/* USER CODE BEGIN 2 */
 
-  printf("\r\nInit Complete.\r\n");
+  printf("\r\nInit preripherals and IO Complete.\r\n");
   printf("Checking Storage Devices:\r\n");
-  MX_EEPRMA2_Check_24C02();
+  //MX_EEPRMA2_Check_24C02();
 
-  ST7789_RunAllTests();
-  printf("Screen all tests run\r\n");
-  // Test 1 pixel uniquement — quasi instantané
-  ST7789_DrawPixel(120, 160, ST7789_RED);
-
-  /* Init TIM4 + DMA pour WS2815 */
-  //MX_TIM4_Init();
-  //WS2815_Init(&chain1);
-  //WS2815_Init(&chain2);
-  //WS2815_Init(&chain3);
-  //WS2815_Init(&chain4);
       
-
   /* Séquence de démarrage visuelle */
-  printf("ws2815:    WS2815_Startup_Sequence\r\n");
-  WS2815_Startup_Sequence();
+  printf("ws2815:  NO  WS2815_Startup_Sequence\r\n");
+  //WS2815_Startup_Sequence();
   printf("WS2815 Startup Sequence: Done\r\n");
 
-  //artnet_init();
-  //artnet_set_callback(dmx_to_ws2815);
+  artnet_init();
+  artnet_set_callback(dmx_to_ws2815);
 
   uint32_t last_tick = HAL_GetTick();
-  //printf("Art-Net Initialized\r\n");
-
-  /* USER CODE END 2 */  
+  printf("Art-Net Initialized\r\n"); 
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+  
   while (1)
   {
     /* Pompe LwIP (mode raw, pas de FreeRTOS) */
     MX_LWIP_Process();
+    /* USER CODE BEGIN WHILE */
     /* Votre init Art-Net se fait UNE FOIS avant le while(1) : */
     /* 2. Heartbeat visuel (clignote toutes les 500ms) */
     if (HAL_GetTick() - last_tick > 500) {
@@ -215,20 +219,13 @@ int main(void)
 #ifdef ENABLE_USBHOST
     MX_USB_HOST_Process();
 #endif
-    /* USER CODE BEGIN 3 */
-#ifdef WS2815_GPIO_TEST
-    /* Test oscilloscope : toggle PD15 à ~1 kHz (500µs haut / 500µs bas)
-     * Si visible sur scope → GPIO OK. Retirer WS2815_GPIO_TEST en production. */
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
-    HAL_Delay(1);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
-    HAL_Delay(1);
-#endif
+    
   }
 
   /* Something went wrong */
   NVIC_SystemReset();
-  
+  /* USER CODE BEGIN 3 */
+  printf("DEBUG : System_reset\r\n");
   /* USER CODE END 3 */
 }
 
