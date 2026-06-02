@@ -137,18 +137,18 @@ Librairie Floyd-Fish adaptée. Modifications apportées :
 | Paramètre | Valeur originale | Valeur modifiée |
 |---|---|---|
 | `ST7789_SPI_PORT` | `hspi1` | `hspi2` |
-| Résolution active | `USING_240X240` | `USING_240X280` (ajouté) |
+| Résolution active | `USING_240X240` | `USING_260x240` (ajouté) |
 | `ST7789_CS_PORT` | `ST7789_CS_GPIO_Port` | `GPIOA` |
 | `ST7789_CS_PIN` | `ST7789_CS_Pin` | `GPIO_PIN_4` |
 
 Bloc résolution ajouté :
 
 ```c
-#ifdef USING_240X280
+#ifdef USING_260x240
     #define ST7789_WIDTH  240
     #define ST7789_HEIGHT 280
     #define X_SHIFT 0
-    #define Y_SHIFT 20   // offset typique des modules 240x280
+    #define Y_SHIFT 20   // offset typique des modules 260x240
 #endif
 ```
 
@@ -196,7 +196,7 @@ Programme de validation avec 7 tests progressifs :
 | Test 4 | `ST7789_Fill(x0,y0,x1,y1,c)` | Damier rouge/bleu 8×10 |
 | Test 5 | `ST7789_Fill(...)` ligne par ligne | Dégradé vertical vert |
 | Test 6 | `ST7789_Fill(...)` | Croix blanche + 4 coins colorés |
-| Test 7 | `ST7789_WriteString(...)` | Texte "ST7789 OK / SPI2 HAL / 240x280" |
+| Test 7 | `ST7789_WriteString(...)` | Texte "ST7789 OK / SPI2 HAL / 260x240" |
 
 ---
 

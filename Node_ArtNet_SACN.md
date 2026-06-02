@@ -93,13 +93,13 @@ Attention : retirer PC0 et PC13 des blocs GPIO_MODE_INPUT existants pour éviter
 Fichiers ajoutés au projet
 Core/Inc/st7789.h
 Librairie Floyd-Fish adaptée. Modifications apportées :
-ParamètreValeur originaleValeur modifiéeST7789_SPI_PORThspi1hspi2Résolution activeUSING_240X240USING_240X280 (ajouté)ST7789_CS_PORTST7789_CS_GPIO_PortGPIOAST7789_CS_PINST7789_CS_PinGPIO_PIN_4
+ParamètreValeur originaleValeur modifiéeST7789_SPI_PORThspi1hspi2Résolution activeUSING_240X240USING_260x240 (ajouté)ST7789_CS_PORTST7789_CS_GPIO_PortGPIOAST7789_CS_PINST7789_CS_PinGPIO_PIN_4
 Bloc résolution ajouté :
-c#ifdef USING_240X280
+c#ifdef USING_260x240
     #define ST7789_WIDTH  240
     #define ST7789_HEIGHT 280
     #define X_SHIFT 0
-    #define Y_SHIFT 20   // offset typique des modules 240x280
+    #define Y_SHIFT 20   // offset typique des modules 260x240
 #endif
 Core/Src/st7789.c
 Correction du cast de type ligne 188 :
@@ -126,7 +126,7 @@ void Test7_Text(void);
 #endif
 Core/Src/st7789_test.c
 Programme de validation avec 7 tests progressifs :
-TestFonction Floyd-Fish utiliséeRésultat attenduTest 1HAL_GPIO_WritePin BLKBacklight clignote 3×Test 2ST7789_Fill_Color(RED)Écran rouge uniformeTest 3ST7789_Fill_Color(...)Cycle 8 couleursTest 4ST7789_Fill(x0,y0,x1,y1,c)Damier rouge/bleu 8×10Test 5ST7789_Fill(...) ligne par ligneDégradé vertical vertTest 6ST7789_Fill(...)Croix blanche + 4 coins colorésTest 7ST7789_WriteString(...)Texte "ST7789 OK / SPI2 HAL / 240x280"
+TestFonction Floyd-Fish utiliséeRésultat attenduTest 1HAL_GPIO_WritePin BLKBacklight clignote 3×Test 2ST7789_Fill_Color(RED)Écran rouge uniformeTest 3ST7789_Fill_Color(...)Cycle 8 couleursTest 4ST7789_Fill(x0,y0,x1,y1,c)Damier rouge/bleu 8×10Test 5ST7789_Fill(...) ligne par ligneDégradé vertical vertTest 6ST7789_Fill(...)Croix blanche + 4 coins colorésTest 7ST7789_WriteString(...)Texte "ST7789 OK / SPI2 HAL / 260x240"
 
 Correspondance API — ancien driver vs Floyd-Fish
 Ancien driver bit-bangFloyd-Fish HAL SPIST7789_Init()ST7789_Init() (inchangé)ST7789_FillScreen(color)ST7789_Fill_Color(color)ST7789_FillRect(x, y, w, h, c)ST7789_Fill(x0, y0, x1, y1, c)ST7789_DrawPixel(x, y, c)ST7789_DrawPixel(x, y, c) (inchangé)ST7789_DrawPixel_4px(x, y, c)ST7789_DrawPixel_4px(x, y, c) (inchangé)LCD_BLK_HIGH()HAL_GPIO_WritePin(LCD_BLK_GPIO_Port, LCD_BLK_Pin, GPIO_PIN_SET)LCD_BLK_LOW()HAL_GPIO_WritePin(LCD_BLK_GPIO_Port, LCD_BLK_Pin, GPIO_PIN_RESET)

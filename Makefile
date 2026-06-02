@@ -36,6 +36,11 @@ BUILD_DIR = build
 ######################################
 # C sources
 C_SOURCES =  \
+Core/Src/encoder.c \
+Core/Src/config.c \
+Core/Src/icon_loader.c \
+Core/Src/menu.c \
+Core/Src/menu_screens.c \
 Core/Src/main.c \
 Core/Src/tim.c \
 Core/Src/ws2815.c \

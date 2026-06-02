@@ -36,16 +36,16 @@ extern SPI_HandleTypeDef ST7789_SPI_PORT;
 /* Choose a type you are using */
 //#define USING_135X240
 // Adapter le type d'écran
-#undef  USING_240X280
-#define USING_240X280   // à créer (voir ci-dessous)
+#undef  USING_260x240
+#define USING_260x240   // à créer (voir ci-dessous)
 //#undef  USING_240X240
 //#define USING_240X240
 //#define USING_170X320
 
 /* Choose a display rotation you want to use: (0-3) */
 //#define ST7789_ROTATION 0
-//#define ST7789_ROTATION 1
-#define ST7789_ROTATION 2				//  use Normally on 240x240
+#define ST7789_ROTATION 1
+//#define ST7789_ROTATION 2				//  use Normally on 240x240
 //#define ST7789_ROTATION 3
 
 #ifdef USING_135X240
@@ -133,11 +133,11 @@ extern SPI_HandleTypeDef ST7789_SPI_PORT;
 
 #endif
 
-#ifdef USING_240X280
-    #define ST7789_WIDTH  240
-    #define ST7789_HEIGHT 280
+#ifdef USING_260x240
+    #define ST7789_WIDTH  280
+    #define ST7789_HEIGHT 240
     #define X_SHIFT 0
-    #define Y_SHIFT 0   // offset typique des modules 240x280
+    #define Y_SHIFT 0    // offset typique des modules 260x240
 #endif
 
 /**

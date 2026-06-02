@@ -45,7 +45,7 @@ void Test7_Text(void) {
     ST7789_Fill_Color(BLACK);
     ST7789_WriteString(10,10,  "ST7789 OK",  Font_16x26, WHITE,  BLACK);
     ST7789_WriteString(10,50,  "SPI2 HAL",   Font_16x26, GREEN,  BLACK);
-    ST7789_WriteString(10,90,  "240x280",    Font_16x26, YELLOW, BLACK);
+    ST7789_WriteString(10,90,  "240x220",    Font_16x26, YELLOW, BLACK);
     ST7789_WriteString(10,130, "STM32F407",  Font_11x18, CYAN,   BLACK);
     HAL_Delay(3000);
 }

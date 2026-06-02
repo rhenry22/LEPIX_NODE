@@ -46,6 +46,11 @@
 
 #include "st7789_test.h"
 
+/* ← Ajouter ces trois lignes */
+#include "config.h"
+#include "icon_loader.h"
+#include "menu.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,6 +81,7 @@
 
 /* Enable the ENABLE_SPI_SCREEN*/
 #define ENABLE_SPI_SCREEN 
+#define ENABLE_ROTARY_ENCODER
 
 /* USER CODE END PM */
 
@@ -137,7 +143,7 @@ int main(void)
   //MX_CAN1_Init();
   //MX_CAN2_Init();
   MX_RTC_Init();
-  //MX_SDIO_SD_Init();
+  MX_SDIO_SD_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   printf("MX_USART_UART_Init : Done\r\n");
@@ -170,9 +176,21 @@ int main(void)
     printf("BLK: ON\r\n");
     HAL_Delay(10);
 
+    #ifdef ENABLE_SCREEN_TEST
     ST7789_RunAllTests();
+    #endif
 
 #endif
+
+#ifdef ENABLE_ROTARY_ENCODER
+    Encoder_Init();
+    printf("ROTARY_ENCODER: ON\r\n");
+
+#endif
+  Config_Init();          // loads config.json from SD
+  Icon_LoadAll();         // loads all 8 icons into RAM cache (~16KB)
+  Menu_Init();            // clears screen, shows main menu
+
   // Clignotement backlight au démarrage = preuve que GPIO fonctionne
   HAL_Delay(500);
 
@@ -185,16 +203,15 @@ int main(void)
 
   printf("\r\nInit preripherals and IO Complete.\r\n");
   printf("Checking Storage Devices:\r\n");
-  //MX_EEPRMA2_Check_24C02();
-
       
   /* Séquence de démarrage visuelle */
-  printf("ws2815:  NO  WS2815_Startup_Sequence\r\n");
-  //WS2815_Startup_Sequence();
-  printf("WS2815 Startup Sequence: Done\r\n");
-
-  artnet_init();
-  artnet_set_callback(dmx_to_ws2815);
+  #ifdef ENABLE_STARTUP_SEQUENCE
+    printf("ws2815:  NO  WS2815_Startup_Sequence\r\n");
+    WS2815_Startup_Sequence();
+    printf("WS2815 Startup Sequence: Done\r\n");
+  #endif
+  //artnet_init();
+  //artnet_set_callback(dmx_to_ws2815);
 
   uint32_t last_tick = HAL_GetTick();
   printf("Art-Net Initialized\r\n"); 
@@ -214,6 +231,8 @@ int main(void)
         HAL_GPIO_TogglePin(GPIOE, LED1_Pin); // Utilise ta pin LED définie
         last_tick = HAL_GetTick();
     }
+    Menu_Task();            // handles encoder events + redraws when needed
+    MX_LWIP_Process();
     /* USER CODE END WHILE */
 
 #ifdef ENABLE_USBHOST
