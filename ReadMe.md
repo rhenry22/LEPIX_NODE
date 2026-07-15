@@ -1,4 +1,7 @@
 ## STM32F407VET6 Industrial Board
+
+> 📖 **LEPIX NODE** — [Schéma de la carte d'envoi des données LED](Docs/Schema_Carte_LED/README.md) (synoptique Art-Net/sACN → WS2815, moteur TIM1+DMA2, brochage).
+
 ![](Docs/STM32F407VET6_Industrial_Board.jpg)
 
 I came across [this board](https://www.aliexpress.com/item/1005002760530120.html) on AliExpress and naively assumed it would have some software support!<br/>

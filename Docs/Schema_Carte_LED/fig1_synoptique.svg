@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 330" role="img" aria-label="Synoptique de la carte : contrôleur, Ethernet, STM32, sorties WS2815">
+  <style>
+    svg {
+      --paper: #f4f6f2; --panel: #fdfefc; --ink: #23282b; --muted: #5d6862;
+      --line: #d5dbd2; --accent: #b4622d; --accent-soft: #f3e4d7;
+      --ch1: #c34a38; --ch2: #3c8a5f; --ch3: #3f7cb8; --ch4: #a8842a;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --paper: #15181a; --panel: #1d2124; --ink: #e6e9e4; --muted: #98a29a;
+        --line: #2f3639; --accent: #d98d51; --accent-soft: #3a2b1e;
+        --ch1: #e07a68; --ch2: #64b389; --ch3: #6fa7d8; --ch4: #cfa94e;
+      }
+    }
+    .bg { fill: var(--paper); }
+    .box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.3; }
+    .subbox { fill: var(--paper); stroke: var(--muted); stroke-width: 1; }
+    .hotbox { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.3; }
+    .flow { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+    .flowbold { stroke: var(--ink); stroke-width: 1.8; fill: none; }
+    .t { fill: var(--ink); font-family: Arial, Helvetica, sans-serif; font-size: 13px; }
+    .tb { fill: var(--ink); font-family: Arial, Helvetica, sans-serif; font-size: 13.5px; font-weight: 700; }
+    .ts { fill: var(--muted); font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
+    .tm { fill: var(--ink); font-family: Consolas, Menlo, monospace; font-size: 11.5px; }
+    .tms { fill: var(--muted); font-family: Consolas, Menlo, monospace; font-size: 10.5px; }
+    .w1 { stroke: var(--ch1); } .w2 { stroke: var(--ch2); } .w3 { stroke: var(--ch3); } .w4 { stroke: var(--ch4); }
+    .b1 { stroke: var(--ch1); } .b2 { stroke: var(--ch2); } .b3 { stroke: var(--ch3); } .b4 { stroke: var(--ch4); }
+    .wave { stroke-width: 2.2; fill: none; }
+    .arrowhead { fill: var(--muted); }
+    .arrowheadb { fill: var(--ink); }
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead"/>
+    </marker>
+    <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowheadb"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1160" height="330" class="bg"/>
+
+  <!-- Source -->
+  <rect x="14" y="110" width="150" height="110" rx="4" class="box"/>
+  <text x="89" y="136" text-anchor="middle" class="tb">Contrôleur</text>
+  <text x="89" y="153" text-anchor="middle" class="ts">PC / console lumière</text>
+  <text x="89" y="178" text-anchor="middle" class="tm">Art-Net · UDP 6454</text>
+  <text x="89" y="195" text-anchor="middle" class="tm">sACN · UDP 5568</text>
+  <text x="89" y="212" text-anchor="middle" class="tms">réseau 2.x.x.x /8</text>
+
+  <line x1="164" y1="165" x2="212" y2="165" class="flowbold" marker-end="url(#ahb)"/>
+  <text x="188" y="155" text-anchor="middle" class="ts">Cat.5</text>
+
+  <!-- RJ45 + PHY -->
+  <rect x="214" y="122" width="88" height="86" rx="4" class="box"/>
+  <text x="258" y="150" text-anchor="middle" class="tb">RJ45</text>
+  <text x="258" y="168" text-anchor="middle" class="ts">+ transfo</text>
+  <text x="258" y="184" text-anchor="middle" class="ts">d'isolement</text>
+
+  <line x1="302" y1="165" x2="342" y2="165" class="flowbold" marker-end="url(#ahb)"/>
+
+  <rect x="344" y="110" width="130" height="110" rx="4" class="box"/>
+  <text x="409" y="138" text-anchor="middle" class="tb">DP83848</text>
+  <text x="409" y="156" text-anchor="middle" class="ts">PHY 10/100</text>
+  <text x="409" y="180" text-anchor="middle" class="tm">RMII 50 MHz</text>
+  <text x="409" y="198" text-anchor="middle" class="tms">MDIO PA2 · MDC PC1</text>
+
+  <line x1="474" y1="165" x2="516" y2="165" class="flowbold" marker-end="url(#ahb)"/>
+  <text x="495" y="152" text-anchor="middle" class="ts">RMII</text>
+
+  <!-- STM32 -->
+  <rect x="518" y="26" width="330" height="288" rx="6" class="box"/>
+  <text x="683" y="50" text-anchor="middle" class="tb">STM32F407VET6 — 168 MHz</text>
+
+  <rect x="538" y="64" width="290" height="34" rx="3" class="subbox"/>
+  <text x="683" y="86" text-anchor="middle" class="t">MAC Ethernet + LwIP <tspan class="tms">(IP 2.2.2.2 /8)</tspan></text>
+  <line x1="683" y1="98" x2="683" y2="110" class="flow" marker-end="url(#ah)"/>
+
+  <rect x="538" y="112" width="290" height="34" rx="3" class="subbox"/>
+  <text x="683" y="134" text-anchor="middle" class="t"><tspan class="tm">artnet.c / sacn.c</tspan> — décodage 512 ch. DMX</text>
+  <line x1="683" y1="146" x2="683" y2="158" class="flow" marker-end="url(#ah)"/>
+
+  <rect x="538" y="160" width="290" height="34" rx="3" class="subbox"/>
+  <text x="683" y="182" text-anchor="middle" class="t">Routage univers → sortie <tspan class="tms">(config.json, SD)</tspan></text>
+  <line x1="683" y1="194" x2="683" y2="206" class="flow" marker-end="url(#ah)"/>
+
+  <rect x="538" y="208" width="290" height="34" rx="3" class="subbox"/>
+  <text x="683" y="230" text-anchor="middle" class="t"><tspan class="tm">all_chains[4]</tspan> — 120 px RGB / sortie</text>
+  <line x1="683" y1="242" x2="683" y2="254" class="flow" marker-end="url(#ah)"/>
+
+  <rect x="538" y="256" width="290" height="40" rx="3" class="hotbox"/>
+  <text x="683" y="273" text-anchor="middle" class="t">TIM1 + 3 flux DMA2 → <tspan class="tm">GPIOD-&gt;BSRR</tspan></text>
+  <text x="683" y="289" text-anchor="middle" class="tms">4 canaux émis en parallèle — voir Fig. 2</text>
+
+  <!-- Connecteur P5 -->
+  <rect x="884" y="70" width="86" height="220" rx="4" class="box"/>
+  <text x="927" y="94" text-anchor="middle" class="tb">P5</text>
+  <text x="927" y="110" text-anchor="middle" class="ts">connecteur</text>
+  <text x="927" y="140" text-anchor="middle" class="tm">PD15</text>
+  <text x="927" y="180" text-anchor="middle" class="tm">PD13</text>
+  <text x="927" y="220" text-anchor="middle" class="tm">PD11</text>
+  <text x="927" y="260" text-anchor="middle" class="tm">PD9</text>
+  <text x="927" y="281" text-anchor="middle" class="tms">+ GND</text>
+
+  <line x1="848" y1="276" x2="884" y2="276" class="flowbold"/>
+  <line x1="866" y1="276" x2="866" y2="136" class="flowbold"/>
+  <line x1="866" y1="136" x2="882" y2="136" class="flowbold" marker-end="url(#ahb)"/>
+  <line x1="866" y1="176" x2="882" y2="176" class="flowbold" marker-end="url(#ahb)"/>
+  <line x1="866" y1="216" x2="882" y2="216" class="flowbold" marker-end="url(#ahb)"/>
+  <line x1="866" y1="256" x2="882" y2="256" class="flowbold" marker-end="url(#ahb)"/>
+
+  <!-- Rubans -->
+  <line x1="970" y1="136" x2="1002" y2="136" class="wave w1" marker-end="url(#ah)"/>
+  <rect x="1004" y="118" width="142" height="36" rx="3" class="subbox b1"/>
+  <text x="1075" y="133" text-anchor="middle" class="tm">CH1 · univers 0</text>
+  <text x="1075" y="148" text-anchor="middle" class="tms">WS2815 ×120 · 12 V</text>
+
+  <line x1="970" y1="176" x2="1002" y2="176" class="wave w2" marker-end="url(#ah)"/>
+  <rect x="1004" y="158" width="142" height="36" rx="3" class="subbox b2"/>
+  <text x="1075" y="173" text-anchor="middle" class="tm">CH2 · univers 1</text>
+  <text x="1075" y="188" text-anchor="middle" class="tms">WS2815 ×120 · 12 V</text>
+
+  <line x1="970" y1="216" x2="1002" y2="216" class="wave w3" marker-end="url(#ah)"/>
+  <rect x="1004" y="198" width="142" height="36" rx="3" class="subbox b3"/>
+  <text x="1075" y="213" text-anchor="middle" class="tm">CH3 · univers 2</text>
+  <text x="1075" y="228" text-anchor="middle" class="tms">WS2815 ×120 · 12 V</text>
+
+  <line x1="970" y1="256" x2="1002" y2="256" class="wave w4" marker-end="url(#ah)"/>
+  <rect x="1004" y="238" width="142" height="36" rx="3" class="subbox b4"/>
+  <text x="1075" y="253" text-anchor="middle" class="tm">CH4 · univers 3</text>
+  <text x="1075" y="268" text-anchor="middle" class="tms">WS2815 ×120 · 12 V</text>
+
+  <text x="1075" y="292" text-anchor="middle" class="ts">data 3,3 V · alim 12 V externe</text>
+</svg>

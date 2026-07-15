@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEPIX NODE — Carte d'envoi des données LED</title>
+</head>
+<body>
+<style>
+  :root {
+    --paper: #f4f6f2;
+    --panel: #fdfefc;
+    --ink: #23282b;
+    --muted: #5d6862;
+    --line: #d5dbd2;
+    --accent: #b4622d;
+    --accent-soft: #f3e4d7;
+    --ok: #2e7d5b;
+    --ch1: #c34a38;
+    --ch2: #3c8a5f;
+    --ch3: #3f7cb8;
+    --ch4: #a8842a;
+    --code-bg: #eceee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #15181a;
+      --panel: #1d2124;
+      --ink: #e6e9e4;
+      --muted: #98a29a;
+      --line: #2f3639;
+      --accent: #d98d51;
+      --accent-soft: #3a2b1e;
+      --ok: #57b389;
+      --ch1: #e07a68;
+      --ch2: #64b389;
+      --ch3: #6fa7d8;
+      --ch4: #cfa94e;
+      --code-bg: #24292c;
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #f4f6f2;
+    --panel: #fdfefc;
+    --ink: #23282b;
+    --muted: #5d6862;
+    --line: #d5dbd2;
+    --accent: #b4622d;
+    --accent-soft: #f3e4d7;
+    --ok: #2e7d5b;
+    --ch1: #c34a38;
+    --ch2: #3c8a5f;
+    --ch3: #3f7cb8;
+    --ch4: #a8842a;
+    --code-bg: #eceee9;
+  }
+  :root[data-theme="dark"] {
+    --paper: #15181a;
+    --panel: #1d2124;
+    --ink: #e6e9e4;
+    --muted: #98a29a;
+    --line: #2f3639;
+    --accent: #d98d51;
+    --accent-soft: #3a2b1e;
+    --ok: #57b389;
+    --ch1: #e07a68;
+    --ch2: #64b389;
+    --ch3: #6fa7d8;
+    --ch4: #cfa94e;
+    --code-bg: #24292c;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+    font-size: 0.92em;
+  }
+  code {
+    background: var(--code-bg);
+    padding: 0.08em 0.35em;
+    border-radius: 3px;
+  }
+
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 1.5rem; }
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0 0 0.6rem;
+  }
+  h1 {
+    font-size: clamp(1.6rem, 4vw, 2.3rem);
+    line-height: 1.15;
+    margin: 0 0 0.7rem;
+    text-wrap: balance;
+    font-weight: 700;
+  }
+  .lede { color: var(--muted); max-width: 62ch; margin: 0; }
+
+  h2 {
+    font-size: 1.15rem;
+    margin: 0 0 0.35rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  h2 .tag {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  section > p.note { color: var(--muted); margin: 0 0 1rem; max-width: 72ch; }
+
+  .figure {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  .figure svg { display: block; min-width: 720px; width: 100%; height: auto; }
+  .figure.narrow svg { min-width: 480px; }
+  figcaption {
+    font-size: 0.8rem;
+    color: var(--muted);
+    padding: 0.6rem 0.2rem 0;
+  }
+  figure { margin: 0; }
+
+  .duo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  .tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 0.5rem 0.85rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--ink);
+  }
+  .chdot { display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%; margin-right: 0.45em; vertical-align: baseline; }
+
+  ul.notes { margin: 0; padding-left: 1.2rem; max-width: 75ch; }
+  ul.notes li { margin-bottom: 0.55rem; }
+  ul.notes li::marker { color: var(--accent); }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 1rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  /* --- styles SVG --- */
+  .box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.3; }
+  .subbox { fill: var(--paper); stroke: var(--muted); stroke-width: 1; }
+  .hotbox { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.3; }
+  .flow { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+  .flowbold { stroke: var(--ink); stroke-width: 1.8; fill: none; }
+  .t { fill: var(--ink); font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; }
+  .tb { fill: var(--ink); font-family: "Segoe UI", Arial, sans-serif; font-size: 13.5px; font-weight: 700; }
+  .ts { fill: var(--muted); font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; }
+  .tm { fill: var(--ink); font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
+  .tms { fill: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; }
+  .ta { fill: var(--accent); font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
+  .w1 { stroke: var(--ch1); } .w2 { stroke: var(--ch2); } .w3 { stroke: var(--ch3); } .w4 { stroke: var(--ch4); }
+  .wave { stroke-width: 2.2; fill: none; }
+  .gridline { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 4; }
+  .arrowhead { fill: var(--muted); }
+  .arrowheadb { fill: var(--ink); }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">LEPIX NODE · Documentation matérielle</p>
+  <h1>Carte d'envoi des données LED</h1>
+  <p class="lede">Node Art-Net / sACN sur carte industrielle JZ-STM32F407VET6 (STM32F407VET6, LQFP100, 168&nbsp;MHz).
+  Réception DMX sur IP via Ethernet, pilotage de 4 chaînes WS2815 en parallèle par TIM1&nbsp;+&nbsp;DMA2 sur le port GPIOD.
+  Schéma reconstitué depuis le code du dépôt (branche <code>artnet_receiver_HRP</code>).</p>
+</header>
+
+<section>
+  <h2><span class="tag">Fig. 1</span> Synoptique — du réseau aux rubans</h2>
+  <p class="note">Chaîne complète du signal : la trame Art-Net (UDP 6454) ou sACN E1.31 (UDP 5568) arrive par le PHY
+  DP83848 en RMII, est décodée par LwIP puis routée univers&nbsp;→&nbsp;sortie selon <code>config.json</code> (carte SD).
+  Les 4 sorties sont émises simultanément par écriture DMA dans <code>GPIOD-&gt;BSRR</code>.</p>
+  <figure>
+  <div class="figure">
+  <svg viewBox="0 0 1160 330" role="img" aria-label="Synoptique de la carte : contrôleur, Ethernet, STM32, sorties WS2815">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="arrowhead"/>
+      </marker>
+      <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="arrowheadb"/>
+      </marker>
+    </defs>
+
+    <!-- Source -->
+    <rect x="14" y="110" width="150" height="110" rx="4" class="box"/>
+    <text x="89" y="136" text-anchor="middle" class="tb">Contrôleur</text>
+    <text x="89" y="153" text-anchor="middle" class="ts">PC / console lumière</text>
+    <text x="89" y="178" text-anchor="middle" class="tm">Art-Net · UDP 6454</text>
+    <text x="89" y="195" text-anchor="middle" class="tm">sACN · UDP 5568</text>
+    <text x="89" y="212" text-anchor="middle" class="tms">réseau 2.x.x.x /8</text>
+
+    <line x1="164" y1="165" x2="212" y2="165" class="flowbold" marker-end="url(#ahb)"/>
+    <text x="188" y="155" text-anchor="middle" class="ts">Cat.5</text>
+
+    <!-- RJ45 + PHY -->
+    <rect x="214" y="122" width="88" height="86" rx="4" class="box"/>
+    <text x="258" y="150" text-anchor="middle" class="tb">RJ45</text>
+    <text x="258" y="168" text-anchor="middle" class="ts">+ transfo</text>
+    <text x="258" y="184" text-anchor="middle" class="ts">d'isolement</text>
+
+    <line x1="302" y1="165" x2="342" y2="165" class="flowbold" marker-end="url(#ahb)"/>
+
+    <rect x="344" y="110" width="130" height="110" rx="4" class="box"/>
+    <text x="409" y="138" text-anchor="middle" class="tb">DP83848</text>
+    <text x="409" y="156" text-anchor="middle" class="ts">PHY 10/100</text>
+    <text x="409" y="180" text-anchor="middle" class="tm">RMII 50 MHz</text>
+    <text x="409" y="198" text-anchor="middle" class="tms">MDIO PA2 · MDC PC1</text>
+
+    <line x1="474" y1="165" x2="516" y2="165" class="flowbold" marker-end="url(#ahb)"/>
+    <text x="495" y="152" text-anchor="middle" class="ts">RMII</text>
+
+    <!-- STM32 -->
+    <rect x="518" y="26" width="330" height="288" rx="6" class="box"/>
+    <text x="683" y="50" text-anchor="middle" class="tb">STM32F407VET6 — 168 MHz</text>
+
+    <rect x="538" y="64" width="290" height="34" rx="3" class="subbox"/>
+    <text x="683" y="86" text-anchor="middle" class="t">MAC Ethernet + LwIP <tspan class="tms">(IP 2.2.2.2 /8)</tspan></text>
+    <line x1="683" y1="98" x2="683" y2="110" class="flow" marker-end="url(#ah)"/>
+
+    <rect x="538" y="112" width="290" height="34" rx="3" class="subbox"/>
+    <text x="683" y="134" text-anchor="middle" class="t"><tspan class="tm">artnet.c / sacn.c</tspan> — décodage 512 ch. DMX</text>
+    <line x1="683" y1="146" x2="683" y2="158" class="flow" marker-end="url(#ah)"/>
+
+    <rect x="538" y="160" width="290" height="34" rx="3" class="subbox"/>
+    <text x="683" y="182" text-anchor="middle" class="t">Routage univers → sortie <tspan class="tms">(config.json, SD)</tspan></text>
+    <line x1="683" y1="194" x2="683" y2="206" class="flow" marker-end="url(#ah)"/>
+
+    <rect x="538" y="208" width="290" height="34" rx="3" class="subbox"/>
+    <text x="683" y="230" text-anchor="middle" class="t"><tspan class="tm">all_chains[4]</tspan> — 120 px RGB / sortie</text>
+    <line x1="683" y1="242" x2="683" y2="254" class="flow" marker-end="url(#ah)"/>
+
+    <rect x="538" y="256" width="290" height="40" rx="3" class="hotbox"/>
+    <text x="683" y="273" text-anchor="middle" class="t">TIM1 + 3 flux DMA2 → <tspan class="tm">GPIOD-&gt;BSRR</tspan></text>
+    <text x="683" y="289" text-anchor="middle" class="tms">4 canaux émis en parallèle — voir Fig. 2</text>
+
+    <!-- Connecteur P5 -->
+    <rect x="884" y="70" width="86" height="220" rx="4" class="box"/>
+    <text x="927" y="94" text-anchor="middle" class="tb">P5</text>
+    <text x="927" y="110" text-anchor="middle" class="ts">connecteur</text>
+    <text x="927" y="140" text-anchor="middle" class="tm">PD15</text>
+    <text x="927" y="180" text-anchor="middle" class="tm">PD13</text>
+    <text x="927" y="220" text-anchor="middle" class="tm">PD11</text>
+    <text x="927" y="260" text-anchor="middle" class="tm">PD9</text>
+    <text x="927" y="281" text-anchor="middle" class="tms">+ GND</text>
+
+    <line x1="848" y1="276" x2="884" y2="276" class="flowbold"/>
+    <line x1="866" y1="276" x2="866" y2="136" class="flowbold"/>
+    <line x1="866" y1="136" x2="882" y2="136" class="flowbold" marker-end="url(#ahb)"/>
+    <line x1="866" y1="176" x2="882" y2="176" class="flowbold" marker-end="url(#ahb)"/>
+    <line x1="866" y1="216" x2="882" y2="216" class="flowbold" marker-end="url(#ahb)"/>
+    <line x1="866" y1="256" x2="882" y2="256" class="flowbold" marker-end="url(#ahb)"/>
+
+    <!-- Rubans -->
+    <g>
+      <line x1="970" y1="136" x2="1002" y2="136" class="wave w1" marker-end="url(#ah)"/>
+      <rect x="1004" y="118" width="142" height="36" rx="3" class="subbox" style="stroke: var(--ch1);"/>
+      <text x="1075" y="133" text-anchor="middle" class="tm">CH1 · univers 0</text>
+      <text x="1075" y="148" text-anchor="middle" class="tms">WS2815 ×120 · 12 V</text>
+
+      <line x1="970" y1="176" x2="1002" y2="176" class="wave w2" marker-end="url(#ah)"/>
+      <rect x="1004" y="158" width="142" height="36" rx="3" class="subbox" style="stroke: var(--ch2);"/>
+      <text x="1075" y="173" text-anchor="middle" class="tm">CH2 · univers 1</text>
+      <text x="1075" y="188" text-anchor="middle" class="tms">WS2815 ×120 · 12 V</text>
+
+      <line x1="970" y1="216" x2="1002" y2="216" class="wave w3" marker-end="url(#ah)"/>
+      <rect x="1004" y="198" width="142" height="36" rx="3" class="subbox" style="stroke: var(--ch3);"/>
+      <text x="1075" y="213" text-anchor="middle" class="tm">CH3 · univers 2</text>
+      <text x="1075" y="228" text-anchor="middle" class="tms">WS2815 ×120 · 12 V</text>
+
+      <line x1="970" y1="256" x2="1002" y2="256" class="wave w4" marker-end="url(#ah)"/>
+      <rect x="1004" y="238" width="142" height="36" rx="3" class="subbox" style="stroke: var(--ch4);"/>
+      <text x="1075" y="253" text-anchor="middle" class="tm">CH4 · univers 3</text>
+      <text x="1075" y="268" text-anchor="middle" class="tms">WS2815 ×120 · 12 V</text>
+    </g>
+
+    <text x="1075" y="292" text-anchor="middle" class="ts">data 3,3 V · alim 12 V externe</text>
+  </svg>
+  </div>
+  <figcaption>Fig. 1 — Chaîne du signal, du contrôleur Art-Net/sACN jusqu'aux 4 rubans WS2815. Univers indiqués = configuration par défaut (<code>config.h</code>).</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="duo">
+    <div>
+      <h2><span class="tag">Fig. 2</span> Moteur d'émission TIM1 + DMA2</h2>
+      <p class="note">Trois événements du timer par bit, chacun déclenchant un flux DMA qui écrit dans
+      <code>GPIOD-&gt;BSRR</code>. Le port entier bascule d'un coup : les 4 sorties sont strictement synchrones.</p>
+      <figure>
+      <div class="figure narrow">
+      <svg viewBox="0 0 560 470" role="img" aria-label="Détail du moteur TIM1 et des trois flux DMA2">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="arrowhead"/>
+          </marker>
+        </defs>
+        <rect x="20" y="16" width="520" height="52" rx="4" class="box"/>
+        <text x="280" y="38" text-anchor="middle" class="tb">TIM1 — horloge APB2 168 MHz</text>
+        <text x="280" y="56" text-anchor="middle" class="tm">PSC = 0 · ARR = 209  →  période 1,25 µs = 1 bit WS2815</text>
+
+        <line x1="110" y1="68" x2="110" y2="102" class="flow" marker-end="url(#ah2)"/>
+        <line x1="280" y1="68" x2="280" y2="102" class="flow" marker-end="url(#ah2)"/>
+        <line x1="450" y1="68" x2="450" y2="102" class="flow" marker-end="url(#ah2)"/>
+        <text x="110" y="92" text-anchor="middle" class="ta" dx="42">UP · t=0</text>
+        <text x="280" y="92" text-anchor="middle" class="ta" dx="52">CC1 · t=0,30 µs</text>
+        <text x="450" y="92" text-anchor="middle" class="ta" dx="-58">CC2 · t=0,70 µs</text>
+
+        <rect x="30" y="104" width="160" height="88" rx="3" class="subbox"/>
+        <text x="110" y="126" text-anchor="middle" class="tm">DMA2 Stream5 · Ch6</text>
+        <text x="110" y="144" text-anchor="middle" class="tms">hdma_set</text>
+        <text x="110" y="166" text-anchor="middle" class="t">mot constant</text>
+        <text x="110" y="183" text-anchor="middle" class="ts">toutes pins → 1</text>
+
+        <rect x="200" y="104" width="160" height="88" rx="3" class="hotbox"/>
+        <text x="280" y="126" text-anchor="middle" class="tm">DMA2 Stream1 · Ch6</text>
+        <text x="280" y="144" text-anchor="middle" class="tms">hdma_data (MINC)</text>
+        <text x="280" y="166" text-anchor="middle" class="t">buffer de masques</text>
+        <text x="280" y="183" text-anchor="middle" class="ts">pins des bits « 0 » → 0</text>
+
+        <rect x="370" y="104" width="160" height="88" rx="3" class="subbox"/>
+        <text x="450" y="126" text-anchor="middle" class="tm">DMA2 Stream2 · Ch6</text>
+        <text x="450" y="144" text-anchor="middle" class="tms">hdma_reset</text>
+        <text x="450" y="166" text-anchor="middle" class="t">mot constant</text>
+        <text x="450" y="183" text-anchor="middle" class="ts">toutes pins → 0 · IRQ fin</text>
+
+        <line x1="110" y1="192" x2="110" y2="230" class="flow"/>
+        <line x1="280" y1="192" x2="280" y2="230" class="flow"/>
+        <line x1="450" y1="192" x2="450" y2="230" class="flow"/>
+        <line x1="110" y1="230" x2="450" y2="230" class="flow"/>
+        <line x1="280" y1="230" x2="280" y2="252" class="flowbold" marker-end="url(#ah2)"/>
+
+        <rect x="90" y="254" width="380" height="56" rx="4" class="box"/>
+        <text x="280" y="278" text-anchor="middle" class="tb">GPIOD → registre BSRR</text>
+        <text x="280" y="296" text-anchor="middle" class="tm">écriture 32 bits · set (0-15) / reset (16-31)</text>
+
+        <line x1="145" y1="310" x2="145" y2="344" class="wave w1" marker-end="url(#ah2)"/>
+        <line x1="235" y1="310" x2="235" y2="344" class="wave w2" marker-end="url(#ah2)"/>
+        <line x1="325" y1="310" x2="325" y2="344" class="wave w3" marker-end="url(#ah2)"/>
+        <line x1="415" y1="310" x2="415" y2="344" class="wave w4" marker-end="url(#ah2)"/>
+
+        <rect x="105" y="346" width="80" height="52" rx="3" class="subbox" style="stroke: var(--ch1);"/>
+        <text x="145" y="368" text-anchor="middle" class="tm">PD15</text>
+        <text x="145" y="386" text-anchor="middle" class="tms">CH1</text>
+        <rect x="195" y="346" width="80" height="52" rx="3" class="subbox" style="stroke: var(--ch2);"/>
+        <text x="235" y="368" text-anchor="middle" class="tm">PD13</text>
+        <text x="235" y="386" text-anchor="middle" class="tms">CH2</text>
+        <rect x="285" y="346" width="80" height="52" rx="3" class="subbox" style="stroke: var(--ch3);"/>
+        <text x="325" y="368" text-anchor="middle" class="tm">PD11</text>
+        <text x="325" y="386" text-anchor="middle" class="tms">CH3</text>
+        <rect x="375" y="346" width="80" height="52" rx="3" class="subbox" style="stroke: var(--ch4);"/>
+        <text x="415" y="368" text-anchor="middle" class="tm">PD9</text>
+        <text x="415" y="386" text-anchor="middle" class="tms">CH4</text>
+
+        <text x="280" y="428" text-anchor="middle" class="ts">Sorties push-pull 3,3 V · GPIO_SPEED_VERY_HIGH</text>
+        <text x="280" y="446" text-anchor="middle" class="ts">Trame 120 LED ≈ 3,6 ms · latch &gt; 280 µs (niveau bas)</text>
+      </svg>
+      </div>
+      <figcaption>Fig. 2 — Génération du signal : <code>MX_TIM1_WS2815_Init()</code> dans <code>Core/Src/tim.c</code>.</figcaption>
+      </figure>
+    </div>
+
+    <div>
+      <h2><span class="tag">Fig. 3</span> Chronogramme d'un bit (1,25 µs)</h2>
+      <p class="note">La valeur du bit est décidée uniquement par l'événement CC1 : si le masque DMA contient la pin,
+      elle retombe à 0,30 µs (bit «&nbsp;0&nbsp;»), sinon elle reste haute jusqu'à CC2 à 0,70 µs (bit «&nbsp;1&nbsp;»).</p>
+      <figure>
+      <div class="figure narrow">
+      <svg viewBox="0 0 560 300" role="img" aria-label="Chronogramme des bits 0 et 1 du protocole WS2815">
+        <!-- grille temporelle -->
+        <line x1="80" y1="30" x2="80" y2="240" class="gridline"/>
+        <line x1="188" y1="30" x2="188" y2="240" class="gridline"/>
+        <line x1="332" y1="30" x2="332" y2="240" class="gridline"/>
+        <line x1="530" y1="30" x2="530" y2="240" class="gridline"/>
+        <text x="80" y="262" text-anchor="middle" class="tm">0</text>
+        <text x="188" y="262" text-anchor="middle" class="tm">0,30 µs</text>
+        <text x="332" y="262" text-anchor="middle" class="tm">0,70 µs</text>
+        <text x="530" y="262" text-anchor="middle" class="tm">1,25 µs</text>
+        <text x="80" y="282" text-anchor="middle" class="ta">UP</text>
+        <text x="188" y="282" text-anchor="middle" class="ta">CC1</text>
+        <text x="332" y="282" text-anchor="middle" class="ta">CC2</text>
+
+        <!-- bit 0 -->
+        <text x="20" y="75" class="tb">« 0 »</text>
+        <polyline points="40,100 80,100 80,55 188,55 188,100 530,100 530,100" class="wave w3"/>
+        <text x="134" y="47" text-anchor="middle" class="tms">T0H = 0,30 µs</text>
+
+        <!-- bit 1 -->
+        <text x="20" y="185" class="tb">« 1 »</text>
+        <polyline points="40,210 80,210 80,165 332,165 332,210 530,210" class="wave w1"/>
+        <text x="206" y="157" text-anchor="middle" class="tms">T1H = 0,70 µs</text>
+      </svg>
+      </div>
+      <figcaption>Fig. 3 — Valeurs codées : <code>Pulse=50</code> (CC1) et <code>Pulse=118</code> (CC2) pour ARR&nbsp;=&nbsp;209 à 168&nbsp;MHz.</figcaption>
+      </figure>
+
+      <div class="tablebox" style="margin-top:1.25rem;">
+        <table>
+          <thead><tr><th>Paramètre</th><th>Valeur</th><th>Origine</th></tr></thead>
+          <tbody>
+            <tr><td>Période bit</td><td class="mono">1,25 µs</td><td class="mono">ARR = 209 @ 168 MHz</td></tr>
+            <tr><td>T0H</td><td class="mono">0,30 µs</td><td class="mono">TIM1_CH1, Pulse = 50</td></tr>
+            <tr><td>T1H</td><td class="mono">0,70 µs</td><td class="mono">TIM1_CH2, Pulse = 118</td></tr>
+            <tr><td>Trame 120 LED</td><td class="mono">≈ 3,6 ms</td><td class="mono">120 × 24 bits</td></tr>
+            <tr><td>Latch (reset)</td><td class="mono">&gt; 280 µs bas</td><td class="mono">WS2815_Busy()</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="tag">Brochage</span> Sorties LED — GPIOD / connecteur P5</h2>
+  <div class="tablebox">
+    <table>
+      <thead>
+        <tr><th>Canal</th><th>Pin MCU</th><th>Label CubeMX</th><th>Univers (défaut)</th><th>LEDs max</th><th>Courant max (config)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="chdot" style="background:var(--ch1)"></span>CH1</td><td class="mono">PD15</td><td class="mono">WS2815_CH1</td><td class="mono">0</td><td class="mono">120</td><td class="mono">5 A</td></tr>
+        <tr><td><span class="chdot" style="background:var(--ch2)"></span>CH2</td><td class="mono">PD13</td><td class="mono">WS2815_CH2</td><td class="mono">1</td><td class="mono">120</td><td class="mono">5 A</td></tr>
+        <tr><td><span class="chdot" style="background:var(--ch3)"></span>CH3</td><td class="mono">PD11</td><td class="mono">WS2815_CH3</td><td class="mono">2</td><td class="mono">120</td><td class="mono">5 A</td></tr>
+        <tr><td><span class="chdot" style="background:var(--ch4)"></span>CH4</td><td class="mono">PD9</td><td class="mono">WS2815_CH4</td><td class="mono">3</td><td class="mono">120</td><td class="mono">5 A</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="duo">
+    <div>
+      <h2><span class="tag">Brochage</span> Ethernet RMII (PHY DP83848)</h2>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>Signal</th><th>Pin MCU</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">ETH_REF_CLK (50 MHz)</td><td class="mono">PA1</td></tr>
+            <tr><td class="mono">ETH_MDIO / ETH_MDC</td><td class="mono">PA2 / PC1</td></tr>
+            <tr><td class="mono">ETH_CRS_DV</td><td class="mono">PA7</td></tr>
+            <tr><td class="mono">ETH_RXD0 / RXD1</td><td class="mono">PC4 / PC5</td></tr>
+            <tr><td class="mono">ETH_TX_EN</td><td class="mono">PB11</td></tr>
+            <tr><td class="mono">ETH_TXD0 / TXD1</td><td class="mono">PB12 / PB13</td></tr>
+            <tr><td>Adresse MAC</td><td class="mono">00:80:E1:00:00:01</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h2><span class="tag">Brochage</span> Interface locale (config du node)</h2>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>Périphérique</th><th>Bus / pins</th></tr></thead>
+          <tbody>
+            <tr><td>Écran ST7789 280×240</td><td class="mono">SPI2 : SCK PB10 · MOSI PC3</td></tr>
+            <tr><td>&nbsp;&nbsp;CS / DC / RST / BLK</td><td class="mono">PA4 / PE6 / PC0 / PC13</td></tr>
+            <tr><td>Encodeur rotatif CLK/DT/SW</td><td class="mono">PE0 / PE5 / PB7</td></tr>
+            <tr><td>Carte SD (config.json)</td><td class="mono">SDIO : PC8-PC12, PD2 · CD PD3</td></tr>
+            <tr><td>DMX filaire (option)</td><td class="mono">USART1 PA9/PA10 · USART2 PD5/PD6 (RS485, DE PD7)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="tag">Notes</span> Points d'attention matériels</h2>
+  <ul class="notes">
+    <li><strong>Niveau logique :</strong> le signal data sort du GPIO en 3,3&nbsp;V push-pull, sans level-shifter visible dans le
+    projet. Les WS2815 (alim 12&nbsp;V) l'acceptent généralement, mais sur câble long un buffer 5&nbsp;V (74HCT245) et une
+    résistance série ~100&nbsp;Ω en début de ligne sécurisent le montage.</li>
+    <li><strong>Masse commune obligatoire :</strong> le GND de l'alimentation 12&nbsp;V des rubans doit être relié au GND de la
+    carte, sinon le signal data n'a pas de référence.</li>
+    <li><strong>Alimentation des rubans :</strong> le 12&nbsp;V des WS2815 est externe — la carte ne fournit que le signal data.
+    La limite 5&nbsp;A par sortie est une valeur de configuration (<code>max_current_A</code>), pas une protection matérielle.</li>
+    <li><strong>Broche BI des WS2815 :</strong> ligne de secours du ruban ; la carte ne la pilote pas, la laisser suivre le
+    câblage recommandé du fabricant (généralement reliée à GND en entrée de ruban ou au DO précédent).</li>
+    <li><strong>Synchronisation :</strong> les 4 canaux partagent le même port GPIOD et les mêmes événements TIM1 — les trames
+    partent rigoureusement en même temps sur les 4 sorties (~3,6&nbsp;ms pour 120 LED).</li>
+  </ul>
+</section>
+
+<footer>
+  Sources : <span class="mono">Core/Src/tim.c</span> · <span class="mono">Core/Inc/tim.h</span> ·
+  <span class="mono">Core/Src/ws2815.c</span> · <span class="mono">Core/Inc/config.h</span> ·
+  <span class="mono">Industrial_Board.ioc</span> · <span class="mono">ReadMe.md</span> ·
+  <span class="mono">Node_ArtNet_SACN.md</span> — LEPIX_NODE, branche artnet_receiver_HRP, juillet 2026.
+</footer>
+
+</div>
+
+</body>
+</html>

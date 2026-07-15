@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 470" role="img" aria-label="Détail du moteur TIM1 et des trois flux DMA2">
+  <style>
+    svg {
+      --paper: #f4f6f2; --panel: #fdfefc; --ink: #23282b; --muted: #5d6862;
+      --line: #d5dbd2; --accent: #b4622d; --accent-soft: #f3e4d7;
+      --ch1: #c34a38; --ch2: #3c8a5f; --ch3: #3f7cb8; --ch4: #a8842a;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --paper: #15181a; --panel: #1d2124; --ink: #e6e9e4; --muted: #98a29a;
+        --line: #2f3639; --accent: #d98d51; --accent-soft: #3a2b1e;
+        --ch1: #e07a68; --ch2: #64b389; --ch3: #6fa7d8; --ch4: #cfa94e;
+      }
+    }
+    .bg { fill: var(--paper); }
+    .box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.3; }
+    .subbox { fill: var(--paper); stroke: var(--muted); stroke-width: 1; }
+    .hotbox { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.3; }
+    .flow { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+    .flowbold { stroke: var(--ink); stroke-width: 1.8; fill: none; }
+    .t { fill: var(--ink); font-family: Arial, Helvetica, sans-serif; font-size: 13px; }
+    .tb { fill: var(--ink); font-family: Arial, Helvetica, sans-serif; font-size: 13.5px; font-weight: 700; }
+    .ts { fill: var(--muted); font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
+    .tm { fill: var(--ink); font-family: Consolas, Menlo, monospace; font-size: 11.5px; }
+    .tms { fill: var(--muted); font-family: Consolas, Menlo, monospace; font-size: 10.5px; }
+    .ta { fill: var(--accent); font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
+    .w1 { stroke: var(--ch1); } .w2 { stroke: var(--ch2); } .w3 { stroke: var(--ch3); } .w4 { stroke: var(--ch4); }
+    .b1 { stroke: var(--ch1); } .b2 { stroke: var(--ch2); } .b3 { stroke: var(--ch3); } .b4 { stroke: var(--ch4); }
+    .wave { stroke-width: 2.2; fill: none; }
+    .arrowhead { fill: var(--muted); }
+  </style>
+  <defs>
+    <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="560" height="470" class="bg"/>
+
+  <rect x="20" y="16" width="520" height="52" rx="4" class="box"/>
+  <text x="280" y="38" text-anchor="middle" class="tb">TIM1 — horloge APB2 168 MHz</text>
+  <text x="280" y="56" text-anchor="middle" class="tm">PSC = 0 · ARR = 209  →  période 1,25 µs = 1 bit WS2815</text>
+
+  <line x1="110" y1="68" x2="110" y2="102" class="flow" marker-end="url(#ah2)"/>
+  <line x1="280" y1="68" x2="280" y2="102" class="flow" marker-end="url(#ah2)"/>
+  <line x1="450" y1="68" x2="450" y2="102" class="flow" marker-end="url(#ah2)"/>
+  <text x="110" y="92" text-anchor="middle" class="ta" dx="42">UP · t=0</text>
+  <text x="280" y="92" text-anchor="middle" class="ta" dx="52">CC1 · t=0,30 µs</text>
+  <text x="450" y="92" text-anchor="middle" class="ta" dx="-58">CC2 · t=0,70 µs</text>
+
+  <rect x="30" y="104" width="160" height="88" rx="3" class="subbox"/>
+  <text x="110" y="126" text-anchor="middle" class="tm">DMA2 Stream5 · Ch6</text>
+  <text x="110" y="144" text-anchor="middle" class="tms">hdma_set</text>
+  <text x="110" y="166" text-anchor="middle" class="t">mot constant</text>
+  <text x="110" y="183" text-anchor="middle" class="ts">toutes pins → 1</text>
+
+  <rect x="200" y="104" width="160" height="88" rx="3" class="hotbox"/>
+  <text x="280" y="126" text-anchor="middle" class="tm">DMA2 Stream1 · Ch6</text>
+  <text x="280" y="144" text-anchor="middle" class="tms">hdma_data (MINC)</text>
+  <text x="280" y="166" text-anchor="middle" class="t">buffer de masques</text>
+  <text x="280" y="183" text-anchor="middle" class="ts">pins des bits « 0 » → 0</text>
+
+  <rect x="370" y="104" width="160" height="88" rx="3" class="subbox"/>
+  <text x="450" y="126" text-anchor="middle" class="tm">DMA2 Stream2 · Ch6</text>
+  <text x="450" y="144" text-anchor="middle" class="tms">hdma_reset</text>
+  <text x="450" y="166" text-anchor="middle" class="t">mot constant</text>
+  <text x="450" y="183" text-anchor="middle" class="ts">toutes pins → 0 · IRQ fin</text>
+
+  <line x1="110" y1="192" x2="110" y2="230" class="flow"/>
+  <line x1="280" y1="192" x2="280" y2="230" class="flow"/>
+  <line x1="450" y1="192" x2="450" y2="230" class="flow"/>
+  <line x1="110" y1="230" x2="450" y2="230" class="flow"/>
+  <line x1="280" y1="230" x2="280" y2="252" class="flowbold" marker-end="url(#ah2)"/>
+
+  <rect x="90" y="254" width="380" height="56" rx="4" class="box"/>
+  <text x="280" y="278" text-anchor="middle" class="tb">GPIOD → registre BSRR</text>
+  <text x="280" y="296" text-anchor="middle" class="tm">écriture 32 bits · set (0-15) / reset (16-31)</text>
+
+  <line x1="145" y1="310" x2="145" y2="344" class="wave w1" marker-end="url(#ah2)"/>
+  <line x1="235" y1="310" x2="235" y2="344" class="wave w2" marker-end="url(#ah2)"/>
+  <line x1="325" y1="310" x2="325" y2="344" class="wave w3" marker-end="url(#ah2)"/>
+  <line x1="415" y1="310" x2="415" y2="344" class="wave w4" marker-end="url(#ah2)"/>
+
+  <rect x="105" y="346" width="80" height="52" rx="3" class="subbox b1"/>
+  <text x="145" y="368" text-anchor="middle" class="tm">PD15</text>
+  <text x="145" y="386" text-anchor="middle" class="tms">CH1</text>
+  <rect x="195" y="346" width="80" height="52" rx="3" class="subbox b2"/>
+  <text x="235" y="368" text-anchor="middle" class="tm">PD13</text>
+  <text x="235" y="386" text-anchor="middle" class="tms">CH2</text>
+  <rect x="285" y="346" width="80" height="52" rx="3" class="subbox b3"/>
+  <text x="325" y="368" text-anchor="middle" class="tm">PD11</text>
+  <text x="325" y="386" text-anchor="middle" class="tms">CH3</text>
+  <rect x="375" y="346" width="80" height="52" rx="3" class="subbox b4"/>
+  <text x="415" y="368" text-anchor="middle" class="tm">PD9</text>
+  <text x="415" y="386" text-anchor="middle" class="tms">CH4</text>
+
+  <text x="280" y="428" text-anchor="middle" class="ts">Sorties push-pull 3,3 V · GPIO_SPEED_VERY_HIGH</text>
+  <text x="280" y="446" text-anchor="middle" class="ts">Trame 120 LED ≈ 3,6 ms · latch &gt; 280 µs (niveau bas)</text>
+</svg>
