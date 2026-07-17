@@ -47,9 +47,9 @@ Core/Src/menu_screens.c \
 Core/Src/main.c \
 Core/Src/tim.c \
 Core/Src/ws2815.c \
-Core/Src/st7789.c \
-Core/Src/st7789_test.c \
-Core/Src/fonts.c \
+Drivers/BSP/ST7789/st7789.c \
+Drivers/BSP/ST7789/st7789_test.c \
+Drivers/BSP/ST7789/fonts.c \
 Core/Src/gpio.c \
 Core/Src/can.c \
 Core/Src/rtc.c \
@@ -264,6 +264,8 @@ AS_INCLUDES =
 # C includes
 C_INCLUDES =  \
 -ICore/Inc \
+-IDrivers/BSP/ST7789 \
+-IMiddlewares/LEPIX/sACN/Inc \
 -ILWIP/App \
 -ILWIP/Target \
 -IUSB_DEVICE/App \
