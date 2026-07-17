@@ -38,6 +38,7 @@ BUILD_DIR = build
 C_SOURCES =  \
 Core/Src/encoder.c \
 Core/Src/config.c \
+Core/Src/web_ui.c \
 Core/Src/icon_loader.c \
 Core/Src/menu.c \
 Core/Src/menu_screens.c \
@@ -173,6 +174,9 @@ Middlewares/Third_Party/LwIP/src/core/ipv6/inet6.c \
 Middlewares/Third_Party/LwIP/src/core/ipv6/ethip6.c \
 Middlewares/Third_Party/LwIP/src/core/ipv6/icmp6.c \
 Middlewares/Third_Party/LwIP/src/apps/mqtt/mqtt.c \
+Middlewares/Third_Party/LwIP/src/apps/http/httpd.c \
+Middlewares/Third_Party/LwIP/src/apps/http/fs.c \
+LWIP/App/fsdata_custom.c \
 Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c \
 Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c \
 Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c \
@@ -273,6 +277,7 @@ C_INCLUDES =  \
 -IDrivers/CMSIS/Device/ST/STM32F4xx/Include \
 -IMiddlewares/Third_Party/LwIP/src/include/lwip \
 -IMiddlewares/Third_Party/LwIP/src/include/lwip/apps \
+-IMiddlewares/Third_Party/LwIP/src/apps/http \
 -IMiddlewares/Third_Party/LwIP/src/include/lwip/priv \
 -IMiddlewares/Third_Party/LwIP/src/include/lwip/prot \
 -IMiddlewares/Third_Party/LwIP/src/include/netif \

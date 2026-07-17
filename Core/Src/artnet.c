@@ -13,6 +13,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "ws2815.h"
+#include "web_ui.h"
 
 extern struct netif gnetif;
 
@@ -119,6 +120,9 @@ static void artnet_recv_cb(void *arg,
     uint16_t dmx_len = (uint16_t)((pkt->length >> 8) | (pkt->length << 8));
     if (dmx_len > (uint16_t)(copy_len - 18))
         dmx_len = (uint16_t)(copy_len - 18);
+
+    /* ---- Monitoring (interface web) ---- */
+    WebUI_NotifyArtnet(universe);
 
     /* ---- Appel du callback utilisateur ---- */
     if (s_dmx_cb != NULL)

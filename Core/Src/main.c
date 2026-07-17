@@ -50,6 +50,7 @@
 #include "config.h"
 #include "icon_loader.h"
 #include "menu.h"
+#include "web_ui.h"
 
 /* USER CODE END Includes */
 
@@ -233,6 +234,9 @@ int main(void)
   artnet_init();
   artnet_set_callback(dmx_to_ws2815);
   printf("Art-Net Initialized\r\n");
+
+  WebUI_Init();   /* serveur HTTP : http://<ip>/ (config + monitoring) */
+  printf("Web UI Initialized\r\n");
 
   uint32_t last_tick = HAL_GetTick();
 

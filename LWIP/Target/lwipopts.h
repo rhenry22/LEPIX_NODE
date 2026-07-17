@@ -96,6 +96,22 @@
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
 
+/* ---- Serveur HTTP (interface web de configuration/monitoring) ----
+ * Approche "custom files" : les pages sont générées à la volée en RAM
+ * par fs_open_custom() (web_ui.c), ce qui permet un rendu snprintf() de
+ * toute la config sans la lourdeur du format fsdata statique. Évolution
+ * future prévue : servir les pages depuis la carte SD via le même hook. */
+#define LWIP_HTTPD                      1
+#define LWIP_HTTPD_CUSTOM_FILES         1   /* fs_open_custom() fourni par web_ui.c        */
+#define LWIP_HTTPD_DYNAMIC_FILE_READ    1
+#define LWIP_HTTPD_FILE_STATE           1   /* file->state = notre buffer de page généré   */
+#define LWIP_HTTPD_CGI                  1   /* endpoints CGI (réception des changements)   */
+#define LWIP_HTTPD_DYNAMIC_HEADERS      1   /* en-têtes HTTP générés (Content-Type, etc.)  */
+#define HTTPD_USE_CUSTOM_FSDATA         1   /* fsdata_custom.c (table statique, vide ici)  */
+
+/* TCP : marges confortables pour servir les pages HTML */
+#define MEMP_NUM_TCP_PCB                8
+
 /* USER CODE END 1 */
 
 #ifdef __cplusplus
