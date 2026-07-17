@@ -18,16 +18,18 @@ void MX_TIM1_WS2815_Init(void)
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
     GPIOD->BSRR = BSRR_RESET_ALL;
 
-    /* TIM1 : APB2=168MHz, PSC=0, ARR=69 -> 2.4MHz
-     * 3 slots x 0.417us = 1.25us (800kHz WS2815)
-     * CCR1=29 -> T0H ~0.36us
-     * CCR2=58 -> T1H ~0.71us */
+    /* TIM1 : APB2 timer clock = 168 MHz, PSC=0.
+     * 1 période timer = 1 bit WS2815 = 1.25 µs -> ARR = 209 (210 cycles).
+     * 3 événements DMA par bit, tous écrivent GPIOD->BSRR :
+     *   UP  (t=0)       : toutes les pins à 1        (hdma_set)
+     *   CC1 (t=0.30 µs) : pins des bits '0' à 0      (hdma_data, T0H)
+     *   CC2 (t=0.70 µs) : toutes les pins à 0        (hdma_reset, T1H) */
     __HAL_RCC_TIM1_CLK_ENABLE();
 
     htim1.Instance               = TIM1;
     htim1.Init.Prescaler         = 0;
     htim1.Init.CounterMode       = TIM_COUNTERMODE_UP;
-    htim1.Init.Period            = 69;
+    htim1.Init.Period            = 209;
     htim1.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
     htim1.Init.RepetitionCounter = 0;
     htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -35,23 +37,24 @@ void MX_TIM1_WS2815_Init(void)
 
     TIM_OC_InitTypeDef sOC = {
         .OCMode     = TIM_OCMODE_TIMING,
-        .Pulse      = 29,
+        .Pulse      = 50,                 /* T0H ~0.30 µs */
         .OCPolarity = TIM_OCPOLARITY_HIGH,
         .OCFastMode = TIM_OCFAST_DISABLE,
     };
     HAL_TIM_OC_ConfigChannel(&htim1, &sOC, TIM_CHANNEL_1);
-    sOC.Pulse = 58;
+    sOC.Pulse = 118;                      /* T1H ~0.70 µs */
     HAL_TIM_OC_ConfigChannel(&htim1, &sOC, TIM_CHANNEL_2);
 
     /* DMA2 */
     __HAL_RCC_DMA2_CLK_ENABLE();
 
-    /* hdma_set : TIM1_UP -> DMA2_Stream5 Ch6 */
+    /* hdma_set : TIM1_UP -> DMA2_Stream5 Ch6
+     * Source = mot constant (toutes pins à 1) -> pas d'incrément mémoire */
     hdma_set.Instance                 = DMA2_Stream5;
     hdma_set.Init.Channel             = DMA_CHANNEL_6;
     hdma_set.Init.Direction           = DMA_MEMORY_TO_PERIPH;
     hdma_set.Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_set.Init.MemInc              = DMA_MINC_ENABLE;
+    hdma_set.Init.MemInc              = DMA_MINC_DISABLE;
     hdma_set.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_set.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;
     hdma_set.Init.Mode                = DMA_NORMAL;
@@ -74,12 +77,13 @@ void MX_TIM1_WS2815_Init(void)
     HAL_DMA_Init(&hdma_data);
     __HAL_LINKDMA(&htim1, hdma[TIM_DMA_ID_CC1], hdma_data);
 
-    /* hdma_reset : TIM1_CH2 -> DMA2_Stream2 Ch6 */
+    /* hdma_reset : TIM1_CH2 -> DMA2_Stream2 Ch6
+     * Source = mot constant (toutes pins à 0) -> pas d'incrément mémoire */
     hdma_reset.Instance                 = DMA2_Stream2;
     hdma_reset.Init.Channel             = DMA_CHANNEL_6;
     hdma_reset.Init.Direction           = DMA_MEMORY_TO_PERIPH;
     hdma_reset.Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_reset.Init.MemInc              = DMA_MINC_ENABLE;
+    hdma_reset.Init.MemInc              = DMA_MINC_DISABLE;
     hdma_reset.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_reset.Init.MemDataAlignment    = DMA_MDATAALIGN_WORD;
     hdma_reset.Init.Mode                = DMA_NORMAL;
@@ -88,11 +92,8 @@ void MX_TIM1_WS2815_Init(void)
     HAL_DMA_Init(&hdma_reset);
     __HAL_LINKDMA(&htim1, hdma[TIM_DMA_ID_CC2], hdma_reset);
 
-    /* NVIC */
-    HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
-    HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
-    HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+    /* NVIC : seul le stream "reset" (CC2) lève une interruption —
+     * son transfert complet marque la fin de la trame. */
+    HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
 }

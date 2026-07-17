@@ -30,9 +30,12 @@ typedef struct {
 
 /**
  * @brief Initialise une chaîne WS2815 et efface le buffer.
+ *        Le driver TIM1+DMA2 pilote GPIOD uniquement : pin doit être
+ *        l'une de PD15/PD13/PD11/PD9 (voir tim.h) et MX_TIM1_WS2815_Init()
+ *        doit avoir été appelé avant le premier WS2815_Show().
  * @param ch       Pointeur vers la structure chaîne
- * @param port     Port GPIO (ex: GPIOD)
- * @param pin      Numéro de pin GPIO (ex: GPIO_PIN_15)
+ * @param port     Ignoré (GPIOD imposé par le driver DMA)
+ * @param pin      Numéro de pin GPIOD (ex: GPIO_PIN_15)
  * @param num_leds Nombre de LEDs (max WS2815_MAX_LEDS)
  */
 void WS2815_Init(WS2815_Chain_t *ch, GPIO_TypeDef *port, uint16_t pin, uint16_t num_leds);
@@ -43,13 +46,17 @@ void WS2815_Init(WS2815_Chain_t *ch, GPIO_TypeDef *port, uint16_t pin, uint16_t 
 void WS2815_SetLed(WS2815_Chain_t *ch, uint16_t idx, WS2815Pixel_t color);
 
 /**
- * @brief Retourne 0 (envoi bit-bang synchrone, jamais occupé après WS2815_Show).
+ * @brief 1 si une trame DMA est en cours ou si le temps de latch
+ *        (>280 µs de niveau bas) n'est pas encore écoulé.
  */
 int WS2815_Busy(void);
 
 /**
- * @brief Envoie toutes les chaînes séquentiellement.
- * @param chains     Tableau de WS2815_Chain_t (copie par valeur)
+ * @brief Lance l'envoi de toutes les chaînes en parallèle par DMA
+ *        (non bloquant, ~3.6 ms pour 120 LEDs). Les données des chaînes
+ *        sont recopiées dans le buffer DMA avant le retour : les buffers
+ *        pixels peuvent être modifiés immédiatement après.
+ * @param chains     Tableau de WS2815_Chain_t
  * @param num_chains Nombre de chaînes
  */
 void WS2815_Show(WS2815_Chain_t *chains, uint8_t num_chains);
