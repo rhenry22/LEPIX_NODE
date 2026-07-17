@@ -41,6 +41,7 @@ Core/Src/config.c \
 Core/Src/mode_select.c \
 Core/Src/sd_selftest.c \
 Core/Src/dmx.c \
+Core/Src/cli.c \
 Core/Src/web_ui.c \
 Core/Src/icon_loader.c \
 Core/Src/menu.c \
@@ -58,6 +59,7 @@ Core/Src/sdio.c \
 Core/Src/spi.c \
 Core/Src/usart.c \
 Core/Src/artnet.c \
+Core/Src/sacn_rx.c \
 Core/Src/stm32f4xx_it.c \
 Core/Src/stm32f4xx_hal_msp.c \
 Core/Src/system_stm32f4xx.c \

@@ -112,6 +112,11 @@
 /* TCP : marges confortables pour servir les pages HTML */
 #define MEMP_NUM_TCP_PCB                8
 
+/* ---- sACN (E1.31) : réception multicast UDP ----
+ * IGMP est requis pour rejoindre les groupes multicast 239.255.x.y. */
+#define LWIP_IGMP                       1
+#define LWIP_MULTICAST_TX_OPTIONS       1
+
 /* USER CODE END 1 */
 
 #ifdef __cplusplus

@@ -41,12 +41,22 @@ void WebUI_NotifyArtnet(uint16_t universe)
     s_stats.artnet_last_ms = HAL_GetTick();
 }
 
+void WebUI_NotifySacn(uint16_t universe)
+{
+    s_stats.sacn_packets++;
+    s_stats.sacn_last_universe = universe;
+    s_stats.sacn_last_ms = HAL_GetTick();
+}
+
 void WebUI_GetStats(WebUI_Stats_t *out)
 {
     if (!out) return;
     out->artnet_packets       = s_stats.artnet_packets;
     out->artnet_last_ms       = s_stats.artnet_last_ms;
     out->artnet_last_universe = s_stats.artnet_last_universe;
+    out->sacn_packets         = s_stats.sacn_packets;
+    out->sacn_last_ms         = s_stats.sacn_last_ms;
+    out->sacn_last_universe   = s_stats.sacn_last_universe;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -56,7 +66,7 @@ void WebUI_GetStats(WebUI_Stats_t *out)
  *  deux connexions TCP concurrentes.
  * ───────────────────────────────────────────────────────────────────────── */
 
-#define WEBUI_BUF_SIZE   3072
+#define WEBUI_BUF_SIZE   4096
 #define WEBUI_NUM_BUFS   2
 
 typedef struct {
@@ -92,31 +102,52 @@ static const char *proto_name(InputProtocol_t p)
     }
 }
 
-/* En-tête HTTP + <head> commun. Retourne le nombre d'octets écrits. */
-static int emit_header(char *b, int cap, const char *title)
+/* En-tête HTTP + <head> commun. 'refresh_s' > 0 ajoute un auto-refresh.
+ * 'active' surligne l'onglet courant (0=statut,1=flux,2=config). */
+static int emit_header(char *b, int cap, const char *title,
+                       int refresh_s, int active)
 {
-    return snprintf(b, cap,
+    int n = snprintf(b, cap,
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: text/html; charset=utf-8\r\n"
         "Connection: close\r\n"
         "\r\n"
         "<!doctype html><html><head><meta charset=utf-8>"
-        "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
+        "<meta name=viewport content=\"width=device-width,initial-scale=1\">");
+    if (refresh_s > 0)
+        n += snprintf(b + n, cap - n,
+            "<meta http-equiv=refresh content=%d>", refresh_s);
+    n += snprintf(b + n, cap - n,
         "<title>LEPIX Node - %s</title><style>"
-        "body{font-family:system-ui,sans-serif;margin:0;background:#111;color:#eee}"
+        "body{font-family:system-ui,sans-serif;margin:0;background:#0f1115;color:#e8e8e8}"
         "header{background:#1e88e5;padding:14px 20px;font-size:20px;font-weight:600}"
-        "nav a{color:#90caf9;margin-right:16px;text-decoration:none}"
-        "main{padding:20px;max-width:760px}"
-        "table{border-collapse:collapse;width:100%%;margin:10px 0}"
-        "td,th{border:1px solid #333;padding:6px 10px;text-align:left}"
-        "th{background:#1a1a1a}"
-        "input,select{background:#222;color:#eee;border:1px solid #444;padding:4px;border-radius:4px}"
-        "button{background:#1e88e5;color:#fff;border:0;padding:8px 18px;border-radius:4px;cursor:pointer;font-size:15px}"
-        ".ok{color:#66bb6a}.off{color:#888}"
+        "nav{background:#161a20;padding:0 12px}"
+        "nav a{display:inline-block;color:#9fb4c8;padding:12px 16px;text-decoration:none;border-bottom:3px solid transparent}"
+        "nav a.on{color:#fff;border-bottom-color:#1e88e5}"
+        "nav a:hover{color:#fff}"
+        "main{padding:20px;max-width:820px}"
+        "h2{font-size:16px;color:#9fb4c8;margin:22px 0 8px;text-transform:uppercase;letter-spacing:.5px}"
+        "table{border-collapse:collapse;width:100%%;margin:6px 0;background:#161a20;border-radius:8px;overflow:hidden}"
+        "td,th{border-bottom:1px solid #232a33;padding:9px 12px;text-align:left}"
+        "th{background:#1b2028;color:#9fb4c8;font-weight:600}"
+        "tr:last-child td{border-bottom:0}"
+        "input,select{background:#0f1115;color:#e8e8e8;border:1px solid #2a323d;padding:6px;border-radius:5px}"
+        "button{background:#1e88e5;color:#fff;border:0;padding:10px 22px;border-radius:6px;cursor:pointer;font-size:15px;font-weight:600}"
+        "button:hover{background:#1976d2}"
+        ".ok{color:#4caf50;font-weight:600}.off{color:#78828c}"
+        ".pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:13px;font-weight:600}"
+        ".pill.on{background:#14331c;color:#4caf50}.pill.no{background:#2a2020;color:#c86}"
         "</style></head><body>"
-        "<header>LEPIX Node</header>"
-        "<nav style=padding:10px20px><a href=/>Statut</a><a href=/config>Configuration</a></nav>"
-        "<main>", title);
+        "<header>LEPIX Node</header><nav>"
+        "<a href=/ class=%s>Statut</a>"
+        "<a href=/flux class=%s>Reception</a>"
+        "<a href=/config class=%s>Configuration</a>"
+        "</nav><main>",
+        title,
+        active == 0 ? "on" : "",
+        active == 1 ? "on" : "",
+        active == 2 ? "on" : "");
+    return n;
 }
 
 /* Page de statut / monitoring. */
@@ -131,9 +162,7 @@ static void build_status(webui_page_t *p)
     const ip4_addr_t *gw = netif_ip4_gw(&gnetif);
     int link = netif_is_link_up(&gnetif);
 
-    uint32_t ago = HAL_GetTick() - st.artnet_last_ms;
-
-    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Statut");
+    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Statut", 0, 0);
 
     n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
         "<h2>Reseau</h2><table>"
@@ -152,20 +181,12 @@ static void build_status(webui_page_t *p)
     n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
         "<h2>Entree</h2><table>"
         "<tr><th>Protocole</th><td>%s</td></tr>"
-        "<tr><th>Paquets Art-Net</th><td>%lu</td></tr>"
-        "<tr><th>Dernier univers</th><td>%u</td></tr>"
-        "<tr><th>Derniere trame</th><td>%s</td></tr>"
-        "</table>",
+        "<tr><th>Art-Net</th><td>%lu paquets</td></tr>"
+        "<tr><th>sACN</th><td>%lu paquets</td></tr>"
+        "</table><p><a href=/flux style=color:#90caf9>Voir la reception en detail &rarr;</a></p>",
         proto_name(cfg->protocol),
         (unsigned long)st.artnet_packets,
-        st.artnet_last_universe,
-        st.artnet_packets ? "" : "aucune");
-    /* Affichage du délai depuis la dernière trame (si au moins une reçue) */
-    if (st.artnet_packets) {
-        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
-            "<p>Il y a %lu.%lu s</p>",
-            (unsigned long)(ago / 1000), (unsigned long)((ago % 1000) / 100));
-    }
+        (unsigned long)st.sacn_packets);
 
     n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n, "<h2>Sorties</h2><table>"
         "<tr><th>#</th><th>Etat</th><th>Univers</th><th>LEDs</th></tr>");
@@ -183,11 +204,56 @@ static void build_status(webui_page_t *p)
     p->buf[WEBUI_BUF_SIZE - 1] = '\0';
 }
 
+/* Rend une ligne "flux" : nom, actif/inactif (timeout 5 s), stats. */
+static int emit_flux_row(char *b, int cap, const char *name,
+                         uint32_t packets, uint16_t last_uni, uint32_t last_ms)
+{
+    uint32_t ago = HAL_GetTick() - last_ms;
+    bool active = (packets > 0) && (ago < 5000);   /* trame < 5 s */
+    if (packets == 0) {
+        return snprintf(b, cap,
+            "<tr><th>%s</th><td><span class='pill no'>INACTIF</span></td>"
+            "<td>0</td><td>-</td><td>-</td></tr>", name);
+    }
+    return snprintf(b, cap,
+        "<tr><th>%s</th><td><span class='pill %s'>%s</span></td>"
+        "<td>%lu</td><td>%u</td><td>%lu.%lu s</td></tr>",
+        name,
+        active ? "on" : "no", active ? "ACTIF" : "silence",
+        (unsigned long)packets, last_uni,
+        (unsigned long)(ago / 1000), (unsigned long)((ago % 1000) / 100));
+}
+
+/* Onglet "Reception" : monitoring des flux Art-Net et sACN, auto-refresh 2 s. */
+static void build_flux(webui_page_t *p)
+{
+    WebUI_Stats_t st;
+    WebUI_GetStats(&st);
+
+    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Reception", 2, 1);
+
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "<h2>Flux entrants</h2><table>"
+        "<tr><th>Protocole</th><th>Etat</th><th>Paquets</th>"
+        "<th>Dernier univers</th><th>Derniere trame</th></tr>");
+    n += emit_flux_row(p->buf + n, WEBUI_BUF_SIZE - n, "Art-Net",
+                       st.artnet_packets, st.artnet_last_universe, st.artnet_last_ms);
+    n += emit_flux_row(p->buf + n, WEBUI_BUF_SIZE - n, "sACN (E1.31)",
+                       st.sacn_packets, st.sacn_last_universe, st.sacn_last_ms);
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "</table><p style=color:#78828c;font-size:13px>"
+        "Rafraichissement automatique toutes les 2 s. "
+        "Un flux est ACTIF si une trame a ete recue depuis moins de 5 s.</p>"
+        "</main></body></html>");
+
+    p->buf[WEBUI_BUF_SIZE - 1] = '\0';
+}
+
 /* Formulaire de configuration. Un seul GET /save reprend tous les champs. */
 static void build_config(webui_page_t *p)
 {
     DeviceConfig_t *cfg = Config_Get();
-    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Configuration");
+    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Configuration", 0, 2);
 
     n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
         "<form action=/save method=get>"
@@ -313,6 +379,10 @@ int fs_open_custom(struct fs_file *file, const char *name)
         p = page_alloc();
         if (!p) return 0;
         build_status(p);
+    } else if (strcmp(name, "/flux") == 0 || strcmp(name, "/flux.html") == 0) {
+        p = page_alloc();
+        if (!p) return 0;
+        build_flux(p);
     } else if (strcmp(name, "/config") == 0 || strcmp(name, "/config.html") == 0) {
         p = page_alloc();
         if (!p) return 0;

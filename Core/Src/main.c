@@ -40,6 +40,7 @@
 #include <stdio.h>
 
 #include "artnet.h"
+#include "sacn_rx.h"
 #include "ws2815.h"
 #include "tim.h"
 #include "st7789.h"
@@ -54,6 +55,7 @@
 #include "mode_select.h"
 #include "sd_selftest.h"
 #include "dmx.h"
+#include "cli.h"
 
 /* USER CODE END Includes */
 
@@ -233,6 +235,7 @@ int main(void)
 #endif
   Icon_LoadAll();         // loads all 8 icons into RAM cache (~16KB)
   Menu_Init();            // clears screen, shows main menu
+  CLI_Init();             // console de config sur USART1 (DB9, 115200 8N1)
 
   // Clignotement backlight au démarrage = preuve que GPIO fonctionne
   HAL_Delay(500);
@@ -266,6 +269,18 @@ int main(void)
   artnet_set_callback(dmx_to_ws2815);
   printf("Art-Net Initialized\r\n");
 
+  /* sACN (E1.31) : même callback que l'Art-Net (routage par univers).
+   * On rejoint les groupes multicast des univers configurés. */
+  sacn_rx_init();
+  sacn_rx_set_callback(dmx_to_ws2815);
+  {
+    DeviceConfig_t *cfg = Config_Get();
+    for (uint8_t i = 0; i < MAX_OUTPUTS; i++)
+      if (cfg->outputs[i].enabled)
+        sacn_rx_join_universe(cfg->outputs[i].universe);
+  }
+  printf("sACN Initialized\r\n");
+
   WebUI_Init();   /* serveur HTTP : http://<ip>/ (config + monitoring) */
   printf("Web UI Initialized\r\n");
 
@@ -287,6 +302,7 @@ int main(void)
         last_tick = HAL_GetTick();
     }
     Menu_Task();            // handles encoder events + redraws when needed
+    CLI_Task();             // commandes de configuration recues sur USART1
     MX_LWIP_Process();
 
     if (Mode_Get() == MODE_DMX) {

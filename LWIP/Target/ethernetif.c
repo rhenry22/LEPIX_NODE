@@ -198,6 +198,11 @@ static void low_level_init(struct netif *netif)
     netif->flags |= NETIF_FLAG_BROADCAST;
   #endif /* LWIP_ARP */
 
+  /* sACN (E1.31) : autoriser le multicast IGMP sur cette interface */
+  #if LWIP_IGMP
+    netif->flags |= NETIF_FLAG_IGMP;
+  #endif
+
 /* USER CODE BEGIN PHY_PRE_CONFIG */
 
 /* USER CODE END PHY_PRE_CONFIG */
