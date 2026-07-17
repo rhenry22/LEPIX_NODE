@@ -85,9 +85,11 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 
-/* Enable the ENABLE_SPI_SCREEN*/
-#define ENABLE_SPI_SCREEN
-#define ENABLE_ROTARY_ENCODER
+/* Ecran ST7789 + encodeur rotatif : desactives tant que seule la
+ * motherboard est cablee (pas de front panel). Reactiver les deux
+ * lignes ci-dessous quand l'ecran/encodeur seront rebranches. */
+/* #define ENABLE_SPI_SCREEN */
+/* #define ENABLE_ROTARY_ENCODER */
 
 /* Test carte SD : cree test.txt + log au boot, le supprime 2 min apres.
  * Commenter cette ligne pour desactiver le test. */
@@ -233,8 +235,10 @@ int main(void)
     printf("ROTARY_ENCODER: ON\r\n");
 
 #endif
+#ifdef ENABLE_SPI_SCREEN
   Icon_LoadAll();         // loads all 8 icons into RAM cache (~16KB)
   Menu_Init();            // clears screen, shows main menu
+#endif
   CLI_Init();             // console de config sur USART1 (DB9, 115200 8N1)
 
   // Clignotement backlight au démarrage = preuve que GPIO fonctionne
@@ -281,8 +285,13 @@ int main(void)
   }
   printf("sACN Initialized\r\n");
 
-  WebUI_Init();   /* serveur HTTP : http://<ip>/ (config + monitoring) */
-  printf("Web UI Initialized\r\n");
+  /* Serveur web chargé uniquement si la carte SD est présente (montée). */
+  if (sd_res == FR_OK) {
+    WebUI_Init();   /* serveur HTTP : http://<ip>/ (config + monitoring) */
+    printf("Web UI Initialized\r\n");
+  } else {
+    printf("Web UI : desactive (carte SD absente)\r\n");
+  }
 
   uint32_t last_tick = HAL_GetTick();
 
@@ -301,7 +310,9 @@ int main(void)
         HAL_GPIO_TogglePin(GPIOE, LED1_Pin); // Utilise ta pin LED définie
         last_tick = HAL_GetTick();
     }
+#ifdef ENABLE_SPI_SCREEN
     Menu_Task();            // handles encoder events + redraws when needed
+#endif
     CLI_Task();             // commandes de configuration recues sur USART1
     MX_LWIP_Process();
 
