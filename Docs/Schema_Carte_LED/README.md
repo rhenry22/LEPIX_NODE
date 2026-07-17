@@ -100,6 +100,24 @@ elle retombe à 0,30 µs (bit « 0 »), sinon elle reste haute jusqu'à CC2 à 0
 
 ---
 
+## Validation hardware (analyseur logique)
+
+Les scripts [`tools/ws2815_capture.sh`](../../tools/ws2815_capture.sh) et
+[`tools/ws2815_validate.py`](../../tools/ws2815_validate.py) capturent les 4 sorties avec un
+analyseur logique 24 MHz 8 canaux compatible fx2lafw (clones Saleae Logic) et vérifient
+automatiquement : largeurs T0H/T1H, période bit, trames complètes de `leds × 24` bits, latch
+> 280 µs, et décodent les premiers pixels (ordre G,R,B MSB-first).
+
+Câblage : `CH1/D0 → PD15 · CH2/D1 → PD13 · CH3/D2 → PD11 · CH4/D3 → PD9 · GND → GND`.
+
+```bash
+sudo apt install sigrok-cli          # une seule fois
+./tools/ws2815_capture.sh 500 120    # capture 500 ms, 120 LEDs/sortie
+./tools/ws2815_validate.py --selftest  # auto-test du décodeur, sans matériel
+```
+
+---
+
 *Sources : [`Core/Src/tim.c`](../../Core/Src/tim.c) · [`Core/Inc/tim.h`](../../Core/Inc/tim.h) ·
 [`Core/Src/ws2815.c`](../../Core/Src/ws2815.c) · [`Core/Inc/config.h`](../../Core/Inc/config.h) ·
 [`Industrial_Board.ioc`](../../Industrial_Board.ioc) · [`ReadMe.md`](../../ReadMe.md) — juillet 2026.*
