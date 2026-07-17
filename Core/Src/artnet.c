@@ -1,6 +1,6 @@
 /* artnet.c
  * Réception des univers Art-Net via LwIP (mode RAW, sans FreeRTOS)
- * IP statique : 2.2.2.2
+ * IP configurable (défaut statique 2.0.0.2/24, voir config.h)
  * Debug sur USART1 (PA9=TX, PA10=RX) à 115200 bauds
  *
  * À inclure dans Core/Src/ et appeler depuis main.c
