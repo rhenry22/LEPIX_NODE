@@ -50,11 +50,13 @@ typedef struct {
 } DeviceConfig_t;
 
 /* Default values */
+/* Défauts = comportement historique du node : IP statique 2.2.2.2/8
+ * (convention Art-Net réseau 2.x.x.x) même sans carte SD. */
 #define CONFIG_DEFAULT { \
     .version    = CONFIG_VERSION, \
-    .net_mode   = NET_DHCP, \
+    .net_mode   = NET_STATIC, \
     .ip         = {2, 2, 2, 2}, \
-    .netmask    = {255, 255, 255, 0}, \
+    .netmask    = {255, 0, 0, 0}, \
     .gateway    = {2, 2, 2, 1}, \
     .dns        = {8, 8, 8, 8}, \
     .protocol   = PROTO_ARTNET, \

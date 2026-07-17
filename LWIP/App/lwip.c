@@ -28,7 +28,8 @@
 #include "ethernetif.h"
 
 /* USER CODE BEGIN 0 */
-
+#include <stdio.h>
+#include "lwip/dhcp.h"
 /* USER CODE END 0 */
 /* Private function prototypes -----------------------------------------------*/
 static void ethernet_link_status_updated(struct netif *netif);
@@ -51,7 +52,8 @@ ip4_addr_t netmask;
 ip4_addr_t gw;
 
 /* USER CODE BEGIN 2 */
-
+#include "config.h"
+/* USER CODE END 2 */
 
 /**
   * LwIP initialization function
@@ -61,10 +63,10 @@ void MX_LWIP_Init(void)
   /* Initilialize the LwIP stack without RTOS */
   lwip_init();
 
-  /* --- CONFIGURATION IP STATIQUE 2.2.2.2 --- */
-  IP4_ADDR(&ipaddr, 2, 2, 2, 2);
-  IP4_ADDR(&netmask, 255, 0, 0, 0);
-  IP4_ADDR(&gw, 2, 2, 2, 1);
+  /* IP addresses initialization (écrasées depuis la config plus bas) */
+  ipaddr.addr = 0;
+  netmask.addr = 0;
+  gw.addr = 0;
 
   /* add the network interface (IPv4/IPv6) without RTOS */
   netif_add(&gnetif, &ipaddr, &netmask, &gw, NULL, &ethernetif_init, &ethernet_input);
@@ -88,11 +90,25 @@ void MX_LWIP_Init(void)
 
   /* Create the Ethernet link handler thread */
 
-  /* Start DHCP negotiation for a network interface (IPv4) */
-  //dhcp_start(&gnetif);
-
 /* USER CODE BEGIN 3 */
-
+  /* --- Adressage depuis config.json (Config_Init() doit être appelé avant) --- */
+  DeviceConfig_t *cfg = Config_Get();
+  if (cfg->net_mode == NET_STATIC)
+  {
+    IP4_ADDR(&ipaddr,  cfg->ip[0],      cfg->ip[1],      cfg->ip[2],      cfg->ip[3]);
+    IP4_ADDR(&netmask, cfg->netmask[0], cfg->netmask[1], cfg->netmask[2], cfg->netmask[3]);
+    IP4_ADDR(&gw,      cfg->gateway[0], cfg->gateway[1], cfg->gateway[2], cfg->gateway[3]);
+    netif_set_addr(&gnetif, &ipaddr, &netmask, &gw);
+    printf("[LwIP] IP statique %u.%u.%u.%u/%u.%u.%u.%u\r\n",
+           cfg->ip[0], cfg->ip[1], cfg->ip[2], cfg->ip[3],
+           cfg->netmask[0], cfg->netmask[1], cfg->netmask[2], cfg->netmask[3]);
+  }
+  else
+  {
+    /* Start DHCP negotiation for a network interface (IPv4) */
+    dhcp_start(&gnetif);
+    printf("[LwIP] DHCP demarre\r\n");
+  }
 /* USER CODE END 3 */
 }
 

@@ -89,8 +89,15 @@
 
 /* USER CODE BEGIN PV */
 
-WS2815_Chain_t chain1, chain2, chain3, chain4;
-WS2815_Chain_t all_chains[4];
+WS2815_Chain_t all_chains[MAX_OUTPUTS];
+
+/* Sortie i (config) → pin GPIOD (voir tim.h : PD15/PD13/PD11/PD9) */
+static const uint16_t ws_output_pins[MAX_OUTPUTS] = {
+    GPIO_PIN_15, GPIO_PIN_13, GPIO_PIN_11, GPIO_PIN_9
+};
+
+/* Levé par dmx_to_ws2815, consommé dans la boucle principale */
+static volatile bool ws_frame_dirty = false;
 
 /* USER CODE END PV */
 
@@ -147,10 +154,19 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   printf("MX_USART_UART_Init : Done\r\n");
+  /* FATFS + montage SD + config AVANT LwIP :
+   * MX_LWIP_Init() lit la config réseau (DHCP / IP statique).
+   * opt=0 : montage paresseux (n'accède pas à la carte ici) — le premier
+   * accès disque a lieu dans Config_Init(), qui retombe sur les valeurs
+   * par défaut si la carte est absente. Ne jamais bloquer le boot ici. */
+  MX_FATFS_Init();
+  FRESULT sd_res = f_mount(&SDFatFS, SDPath, 0);
+  printf("SD mount : %s\r\n", (sd_res == FR_OK) ? "OK" : "FAILED - config par defaut");
+  Config_Init();
+  printf("Config : Done\r\n");
   MX_LWIP_Init();
   MX_USB_DEVICE_Init();
   printf("MX_USB_DEVICE_Init : Done\r\n");
-  MX_FATFS_Init();
   MX_CRC_Init();
 #ifdef ENABLE_USBHOST
   MX_USB_HOST_Init();
@@ -187,18 +203,22 @@ int main(void)
     printf("ROTARY_ENCODER: ON\r\n");
 
 #endif
-  Config_Init();          // loads config.json from SD
   Icon_LoadAll();         // loads all 8 icons into RAM cache (~16KB)
   Menu_Init();            // clears screen, shows main menu
 
   // Clignotement backlight au démarrage = preuve que GPIO fonctionne
   HAL_Delay(500);
 
-  /* WS2815 : 4 sorties sur GPIOD — PD15 / PD13 / PD11 / PD09 */
-  WS2815_Init(&chain1, GPIOD, GPIO_PIN_15, 120);
-  WS2815_Init(&chain2, GPIOD, GPIO_PIN_13, 120);
-  WS2815_Init(&chain3, GPIOD, GPIO_PIN_11, 120);
-  WS2815_Init(&chain4, GPIOD, GPIO_PIN_9,  120);
+  /* WS2815 : 4 sorties sur GPIOD — PD15 / PD13 / PD11 / PD09
+   * Envoi par TIM1 + DMA2 (non bloquant), nombre de LEDs depuis la config */
+  MX_TIM1_WS2815_Init();
+  {
+    DeviceConfig_t *cfg = Config_Get();
+    for (uint8_t i = 0; i < MAX_OUTPUTS; i++) {
+      uint16_t n = cfg->outputs[i].enabled ? cfg->outputs[i].led_count : 0;
+      WS2815_Init(&all_chains[i], GPIOD, ws_output_pins[i], n);
+    }
+  }
   printf("WS2815 Init: Done\r\n");
 
   printf("\r\nInit preripherals and IO Complete.\r\n");
@@ -210,11 +230,11 @@ int main(void)
     WS2815_Startup_Sequence();
     printf("WS2815 Startup Sequence: Done\r\n");
   #endif
-  //artnet_init();
-  //artnet_set_callback(dmx_to_ws2815);
+  artnet_init();
+  artnet_set_callback(dmx_to_ws2815);
+  printf("Art-Net Initialized\r\n");
 
   uint32_t last_tick = HAL_GetTick();
-  printf("Art-Net Initialized\r\n"); 
 
   /* USER CODE END 2 */
 
@@ -233,6 +253,13 @@ int main(void)
     }
     Menu_Task();            // handles encoder events + redraws when needed
     MX_LWIP_Process();
+
+    /* Envoi WS2815 : dès que des données DMX sont arrivées et que le
+     * DMA est libre (latch >280µs incluse dans WS2815_Busy) */
+    if (ws_frame_dirty && !WS2815_Busy()) {
+        ws_frame_dirty = false;
+        WS2815_Show(all_chains, MAX_OUTPUTS);
+    }
     /* USER CODE END WHILE */
 
 #ifdef ENABLE_USBHOST
@@ -298,62 +325,19 @@ void SystemClock_Config(void)
 
 void WS2815_Startup_Sequence(void)
 {
-    for (uint8_t i = 0; i < 60; i++) {
-        WS2815_SetLed(&chain1, i, WS2815_WHITE);
-        WS2815_SetLed(&chain2, i, WS2815_WHITE);
-        WS2815_SetLed(&chain3, i, WS2815_WHITE);
-        WS2815_SetLed(&chain4, i, WS2815_WHITE);
-        all_chains[0] = chain1; all_chains[1] = chain2;
-        all_chains[2] = chain3; all_chains[3] = chain4;
-        while (WS2815_Busy());
-        WS2815_Show(all_chains, 4);
-        HAL_Delay(30);
-    }
-    HAL_Delay(1000);
-    for (uint8_t i = 0; i < 60; i++) {
-        WS2815_SetLed(&chain1, i, WS2815_GREEN);
-        WS2815_SetLed(&chain2, i, WS2815_GREEN);
-        WS2815_SetLed(&chain3, i, WS2815_GREEN);
-        WS2815_SetLed(&chain4, i, WS2815_GREEN);
-        all_chains[0] = chain1; all_chains[1] = chain2;
-        all_chains[2] = chain3; all_chains[3] = chain4;
-        while (WS2815_Busy());
-        WS2815_Show(all_chains, 4);
-        HAL_Delay(20);
-    }
-    for (uint8_t i = 0; i < 60; i++) {
-        WS2815_SetLed(&chain1, i, WS2815_RED);
-        WS2815_SetLed(&chain2, i, WS2815_RED);
-        WS2815_SetLed(&chain3, i, WS2815_RED);
-        WS2815_SetLed(&chain4, i, WS2815_RED);
-        all_chains[0] = chain1; all_chains[1] = chain2;
-        all_chains[2] = chain3; all_chains[3] = chain4;
-        while (WS2815_Busy());
-        WS2815_Show(all_chains, 4);
-        HAL_Delay(30);
-    }   
-    HAL_Delay(1000);
-    for (uint8_t i = 0; i < 60; i++) {
-        WS2815_SetLed(&chain1, i, WS2815_BLUE);
-        WS2815_SetLed(&chain2, i, WS2815_BLUE);
-        WS2815_SetLed(&chain3, i, WS2815_BLUE);
-        WS2815_SetLed(&chain4, i, WS2815_BLUE);
-        all_chains[0] = chain1; all_chains[1] = chain2;
-        all_chains[2] = chain3; all_chains[3] = chain4;
-        while (WS2815_Busy());
-        WS2815_Show(all_chains, 4);
-        HAL_Delay(20);
-    }
-    for (uint8_t i = 0; i < 60; i++) {
-        WS2815_SetLed(&chain1, i, WS2815_BLACK);
-        WS2815_SetLed(&chain2, i, WS2815_BLACK);
-        WS2815_SetLed(&chain3, i, WS2815_BLACK);
-        WS2815_SetLed(&chain4, i, WS2815_BLACK);
-        all_chains[2] = chain3; all_chains[3] = chain4;
-        all_chains[0] = chain1; all_chains[1] = chain2;
-        while (WS2815_Busy());
-        WS2815_Show(all_chains, 4);
-        HAL_Delay(20);
+    static const WS2815Pixel_t seq[] = {
+        WS2815_WHITE, WS2815_GREEN, WS2815_RED, WS2815_BLUE, WS2815_BLACK
+    };
+
+    for (uint8_t s = 0; s < sizeof(seq) / sizeof(seq[0]); s++) {
+        for (uint8_t i = 0; i < 60; i++) {
+            for (uint8_t c = 0; c < MAX_OUTPUTS; c++)
+                WS2815_SetLed(&all_chains[c], i, seq[s]);
+            while (WS2815_Busy());
+            WS2815_Show(all_chains, MAX_OUTPUTS);
+            HAL_Delay(25);
+        }
+        HAL_Delay(500);
     }
     while (WS2815_Busy());
 }
@@ -412,38 +396,30 @@ int _write(int file, char *ptr, int len)
 
 /**
  * @brief Mappe les données DMX Art-Net sur les chaînes WS2815.
- *        Univers 0 → chain1 (PD15), 1 → chain2 (PD13),
- *        2 → chain3 (PD11),         3 → chain4 (PD9).
+ *        Le routage vient de la config : cfg->outputs[i].universe → all_chains[i].
  *        3 canaux DMX consécutifs par LED : R, G, B.
+ *        L'envoi réel est fait dans la boucle principale (ws_frame_dirty),
+ *        le DMA étant non bloquant il n'y a plus besoin d'attendre le
+ *        dernier univers.
  */
 static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len)
 {
-    WS2815_Chain_t *ch;
-    switch (universe) {
-        case 0: ch = &chain1; break;
-        case 1: ch = &chain2; break;
-        case 2: ch = &chain3; break;
-        case 3: ch = &chain4; break;
-        default: return;
-    }
+    DeviceConfig_t *cfg = Config_Get();
 
-    uint16_t num_leds = len / 3;
-    if (num_leds > WS2815_MAX_LEDS)
-        num_leds = WS2815_MAX_LEDS;
+    for (uint8_t i = 0; i < MAX_OUTPUTS; i++) {
+        if (!cfg->outputs[i].enabled || cfg->outputs[i].universe != universe)
+            continue;
 
-    for (uint16_t i = 0; i < num_leds; i++) {
-        WS2815Pixel_t px = { data[i * 3], data[i * 3 + 1], data[i * 3 + 2] };
-        WS2815_SetLed(ch, i, px);
-    }
+        WS2815_Chain_t *ch = &all_chains[i];
+        uint16_t num_leds = len / 3;
+        if (num_leds > ch->num_leds)
+            num_leds = ch->num_leds;
 
-    /* N'envoyer les données WS2815 qu'après le dernier univers.
-     * Cela évite de bloquer lwIP pendant ~14ms à chaque univers reçu.
-     * Les univers 0-2 remplissent les buffers ; univers 3 déclenche l'envoi. */
-    if (universe == 3) {
-        all_chains[0] = chain1; all_chains[1] = chain2;
-        all_chains[2] = chain3; all_chains[3] = chain4;
-        while (WS2815_Busy());
-        WS2815_Show(all_chains, 4);
+        for (uint16_t l = 0; l < num_leds; l++) {
+            WS2815Pixel_t px = { data[l * 3], data[l * 3 + 1], data[l * 3 + 2] };
+            WS2815_SetLed(ch, l, px);
+        }
+        ws_frame_dirty = true;
     }
 }
 

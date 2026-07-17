@@ -9,9 +9,12 @@
 #include "artnet.h"
 #include "lwip/udp.h"
 #include "lwip/ip_addr.h"
+#include "lwip/netif.h"
 #include <string.h>
 #include <stdio.h>
 #include "ws2815.h"
+
+extern struct netif gnetif;
 
 /* ------------------------------------------------------------------ */
 /*  Defines Art-Net                                                     */
@@ -111,8 +114,11 @@ static void artnet_recv_cb(void *arg,
     /* Calcul de l'univers Art-Net complet (0..32767) — utilisé pour le routage */
     uint16_t universe = (uint16_t)(pkt->net << 8) | pkt->sub_uni;
 
-    /* Longueur DMX (big-endian dans le paquet) */
+    /* Longueur DMX (big-endian dans le paquet), bornée par ce qui a
+     * réellement été reçu (18 octets de header avant les données) */
     uint16_t dmx_len = (uint16_t)((pkt->length >> 8) | (pkt->length << 8));
+    if (dmx_len > (uint16_t)(copy_len - 18))
+        dmx_len = (uint16_t)(copy_len - 18);
 
     /* ---- Appel du callback utilisateur ---- */
     if (s_dmx_cb != NULL)
@@ -143,5 +149,6 @@ void artnet_init(void)
 
     udp_recv(pcb, artnet_recv_cb, NULL);
 
-    debug_print("[ArtNet] Ecoute sur 2.2.2.2:" ARTNET_PORT_STR "\r\n");
+    debug_printf("[ArtNet] Ecoute sur %s:" ARTNET_PORT_STR "\r\n",
+                 ip4addr_ntoa(netif_ip4_addr(&gnetif)));
 }
