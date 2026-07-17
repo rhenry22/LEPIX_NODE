@@ -100,6 +100,12 @@ static const uint16_t ws_output_pins[MAX_OUTPUTS] = {
 /* Levé par dmx_to_ws2815, consommé dans la boucle principale */
 static volatile bool ws_frame_dirty = false;
 
+/* Perte de signal Art-Net : après ARTNET_TIMEOUT_MS sans trame, on émet
+ * un flash blanc bref sur toutes les LEDs toutes les ARTNET_FLASH_PERIOD_MS. */
+#define ARTNET_TIMEOUT_MS       60000u   /* 1 minute sans trame        */
+#define ARTNET_FLASH_PERIOD_MS  20000u   /* un flash toutes les 20 s   */
+#define ARTNET_FLASH_ON_MS        120u   /* durée d'allumage du flash  */
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -111,6 +117,7 @@ void MX_USB_HOST_Process(void);
 void MX_EEPRMA2_Check_24C02(void);
 void WS2815_Startup_Sequence(void);
 static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len);
+static void artnet_signal_lost_task(void);
 
 /* USER CODE END PFP */
 
@@ -264,6 +271,9 @@ int main(void)
         ws_frame_dirty = false;
         WS2815_Show(all_chains, MAX_OUTPUTS);
     }
+
+    /* Fixture "perte de signal" : flash blanc si pas d'Art-Net depuis 1 min */
+    artnet_signal_lost_task();
     /* USER CODE END WHILE */
 
 #ifdef ENABLE_USBHOST
@@ -424,6 +434,68 @@ static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len)
             WS2815_SetLed(ch, l, px);
         }
         ws_frame_dirty = true;
+    }
+}
+
+/**
+ * @brief Signale la perte de signal Art-Net.
+ *        Si aucune trame n'a été reçue depuis ARTNET_TIMEOUT_MS, émet un
+ *        flash blanc bref sur toutes les LEDs toutes les ARTNET_FLASH_PERIOD_MS.
+ *        S'arrête dès qu'une trame arrive (le DMX reprend alors la main).
+ *        À appeler depuis la boucle principale (non bloquant).
+ */
+static void artnet_signal_lost_task(void)
+{
+    static uint32_t last_flash_ms = 0;   /* début du dernier cycle de flash */
+    static bool     flash_on      = false;
+
+    DeviceConfig_t *cfg = Config_Get();
+    /* La fixture ne concerne que la réception Art-Net */
+    if (cfg->protocol != PROTO_ARTNET)
+        return;
+
+    WebUI_Stats_t st;
+    WebUI_GetStats(&st);
+    uint32_t now = HAL_GetTick();
+
+    /* Temps écoulé depuis la dernière trame. Si aucune trame n'a jamais été
+     * reçue (packets==0), on mesure depuis le boot (last_ms == 0). */
+    uint32_t since = now - st.artnet_last_ms;
+    bool signal_lost = (since >= ARTNET_TIMEOUT_MS);
+
+    if (!signal_lost) {
+        /* Signal présent : on s'assure de ne pas laisser un flash allumé.
+         * (le DMX écrasera de toute façon les LEDs au prochain ws_frame_dirty) */
+        flash_on = false;
+        return;
+    }
+
+    if (!flash_on) {
+        /* Attente entre deux flashs */
+        if (now - last_flash_ms < ARTNET_FLASH_PERIOD_MS)
+            return;
+        if (WS2815_Busy())
+            return;
+        /* Allumage : blanc sur toutes les LEDs des sorties actives */
+        for (uint8_t i = 0; i < MAX_OUTPUTS; i++) {
+            for (uint16_t l = 0; l < all_chains[i].num_leds; l++)
+                WS2815_SetLed(&all_chains[i], l, WS2815_WHITE);
+        }
+        WS2815_Show(all_chains, MAX_OUTPUTS);
+        last_flash_ms = now;
+        flash_on      = true;
+    } else {
+        /* Extinction après ARTNET_FLASH_ON_MS */
+        if (now - last_flash_ms < ARTNET_FLASH_ON_MS)
+            return;
+        if (WS2815_Busy())
+            return;
+        for (uint8_t i = 0; i < MAX_OUTPUTS; i++) {
+            for (uint16_t l = 0; l < all_chains[i].num_leds; l++)
+                WS2815_SetLed(&all_chains[i], l, WS2815_BLACK);
+        }
+        WS2815_Show(all_chains, MAX_OUTPUTS);
+        flash_on = false;
     }
 }
 
