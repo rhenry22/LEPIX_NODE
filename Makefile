@@ -345,6 +345,24 @@ vpath %.c $(sort $(dir $(C_SOURCES)))
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
 
+#######################################
+# objets regroupes par sous-partie (pour compilation separee)
+# On filtre les sources par prefixe de dossier, puis on reconstruit le
+# nom d'objet ($(notdir ...) car les .o sont a plat dans build/).
+#######################################
+CORE_SRC        = $(filter Core/%,        $(C_SOURCES))
+DRIVERS_SRC     = $(filter Drivers/%,     $(C_SOURCES))
+LWIP_SRC        = $(filter LWIP/%,        $(C_SOURCES)) \
+                  $(filter Middlewares/Third_Party/LwIP/%, $(C_SOURCES))
+# Middlewares hors LwIP (LwIP a sa propre cible)
+MIDDLEWARES_SRC = $(filter-out Middlewares/Third_Party/LwIP/%, \
+                    $(filter Middlewares/%, $(C_SOURCES)))
+
+CORE_OBJ        = $(addprefix $(BUILD_DIR)/,$(notdir $(CORE_SRC:.c=.o)))
+DRIVERS_OBJ     = $(addprefix $(BUILD_DIR)/,$(notdir $(DRIVERS_SRC:.c=.o)))
+LWIP_OBJ        = $(addprefix $(BUILD_DIR)/,$(notdir $(LWIP_SRC:.c=.o)))
+MIDDLEWARES_OBJ = $(addprefix $(BUILD_DIR)/,$(notdir $(MIDDLEWARES_SRC:.c=.o)))
+
 $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
 	@echo $<
 	@$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
@@ -365,6 +383,20 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	
 $(BUILD_DIR):
 	mkdir $@		
+
+#######################################
+# compilation separee par sous-partie
+# (ne produit que les .o du groupe, pas d'edition de liens)
+#######################################
+.PHONY: core drivers lwip middlewares
+core: $(CORE_OBJ)
+	@echo "== Core compile ($(words $(CORE_OBJ)) objets) =="
+drivers: $(DRIVERS_OBJ)
+	@echo "== Drivers compile ($(words $(DRIVERS_OBJ)) objets) =="
+lwip: $(LWIP_OBJ)
+	@echo "== LWIP compile ($(words $(LWIP_OBJ)) objets) =="
+middlewares: $(MIDDLEWARES_OBJ)
+	@echo "== Middlewares (hors LwIP) compile ($(words $(MIDDLEWARES_OBJ)) objets) =="
 
 flash:
 	dfu-util -a0 -s 0x8000000 -D $(BUILD_DIR)/$(TARGET).bin -R
