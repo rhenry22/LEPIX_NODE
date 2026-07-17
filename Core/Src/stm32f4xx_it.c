@@ -495,11 +495,19 @@ void DMA2_Stream2_IRQHandler(void)
 }
 
 /**
-  * @brief DMA1 stream6 : USART2_TX (sortie DMX512).
+  * @brief DMA1 stream6 : USART2_TX (sortie DMX port 0).
   */
 void DMA1_Stream6_IRQHandler(void)
 {
-  DMX_DMA_TX_IRQHandler();
+  DMX_DMA_TX_IRQHandler(0);
+}
+
+/**
+  * @brief DMA1 stream3 : USART3_TX (sortie DMX port 1).
+  */
+void DMA1_Stream3_IRQHandler(void)
+{
+  DMX_DMA_TX_IRQHandler(1);
 }
 
 /* USER CODE END 1 */

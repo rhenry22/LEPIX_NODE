@@ -6,7 +6,13 @@
 
 static DeviceConfig_t g_config = CONFIG_DEFAULT;
 
+/* true si la config a été chargée depuis un config.json valide sur SD.
+ * false = valeurs par défaut (permet la surcharge IP-par-mode au boot). */
+static bool g_config_from_sd = false;
+
 DeviceConfig_t *Config_Get(void) { return &g_config; }
+
+bool Config_IsFromSD(void) { return g_config_from_sd; }
 
 void Config_SetDefaults(void)
 {
@@ -96,6 +102,7 @@ void Config_Load(void)
         g_config.outputs[i].dmx_channel  = (uint8_t)parse_uint(section, "dmx_channel");
     }
 
+    g_config_from_sd = true;
     printf("[Config] Loaded from SD\r\n");
 }
 

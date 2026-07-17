@@ -50,12 +50,13 @@ typedef struct {
 } DeviceConfig_t;
 
 /* Default values */
-/* Défauts = IP statique 2.0.0.2/24 (convention Art-Net réseau 2.x.x.x)
- * même sans carte SD. */
+/* Défauts = IP statique 2.0.0.3/24 (convention Art-Net réseau 2.x.x.x)
+ * même sans carte SD. Le dernier octet est surchargé au boot selon le
+ * mode (jumper) : node DMX -> .3, node LED -> .4 (voir main.c). */
 #define CONFIG_DEFAULT { \
     .version    = CONFIG_VERSION, \
     .net_mode   = NET_STATIC, \
-    .ip         = {2, 0, 0, 2}, \
+    .ip         = {2, 0, 0, 3}, \
     .netmask    = {255, 255, 255, 0}, \
     .gateway    = {2, 0, 0, 1}, \
     .dns        = {8, 8, 8, 8}, \
@@ -74,5 +75,8 @@ void Config_Load(void);
 void Config_Save(void);
 void Config_SetDefaults(void);
 DeviceConfig_t *Config_Get(void);
+
+/* true si la config vient d'un config.json valide (SD), false si défauts. */
+bool Config_IsFromSD(void);
 
 #endif

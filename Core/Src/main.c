@@ -180,7 +180,15 @@ int main(void)
   FRESULT sd_res = f_mount(&SDFatFS, SDPath, 0);
   printf("SD mount : %s\r\n", (sd_res == FR_OK) ? "OK" : "FAILED - config par defaut");
   Config_Init();
-  printf("Config : Done\r\n");
+  /* IP par défaut selon le mode (jumper), sauf si un config.json valide
+   * l'a déjà fixée : node DMX -> 2.0.0.3, node LED -> 2.0.0.4. */
+  if (!Config_IsFromSD()) {
+    DeviceConfig_t *cfg = Config_Get();
+    cfg->ip[3] = (Mode_Get() == MODE_DMX) ? 3 : 4;
+  }
+  printf("Config : Done (IP %u.%u.%u.%u)\r\n",
+         Config_Get()->ip[0], Config_Get()->ip[1],
+         Config_Get()->ip[2], Config_Get()->ip[3]);
 #ifdef SD_SELFTEST
   SDTest_Begin();   /* cree test.txt + log ; suppression 2 min plus tard */
 #endif
@@ -446,11 +454,14 @@ static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len)
     DeviceConfig_t *cfg = Config_Get();
 
     if (Mode_Get() == MODE_DMX) {
-        /* Le port DMX suit l'univers de la sortie 0. */
-        if (cfg->outputs[0].universe == universe) {
-            uint16_t n = (len > DMX_SLOTS) ? DMX_SLOTS : len;
-            DMX_SetSlots(0, data, n);
-            DMX_Commit();
+        /* 2 ports DMX : port i suit l'univers de outputs[i] (i=0,1). */
+        for (uint8_t port = 0; port < DMX_NUM_PORTS; port++) {
+            if (cfg->outputs[port].enabled &&
+                cfg->outputs[port].universe == universe) {
+                uint16_t n = (len > DMX_SLOTS) ? DMX_SLOTS : len;
+                DMX_SetSlots(port, 0, data, n);
+                DMX_Commit(port);
+            }
         }
         return;
     }
