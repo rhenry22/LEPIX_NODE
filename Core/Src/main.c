@@ -51,6 +51,7 @@
 #include "icon_loader.h"
 #include "menu.h"
 #include "web_ui.h"
+#include "mode_select.h"
 
 /* USER CODE END Includes */
 
@@ -154,6 +155,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  Mode_Init();   /* jumper PA5/PA6 : mode LED (WS2815) ou DMX/RDM */
   MX_DMA_Init();
   //MX_CAN1_Init();
   //MX_CAN2_Init();
@@ -162,6 +164,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   printf("MX_USART_UART_Init : Done\r\n");
+  printf("Mode (jumper PA5/PA6) : %s\r\n", Mode_Name(Mode_Get()));
   /* FATFS + montage SD + config AVANT LwIP :
    * MX_LWIP_Init() lit la config réseau (DHCP / IP statique).
    * opt=0 : montage paresseux (n'accède pas à la carte ici) — le premier
