@@ -52,6 +52,7 @@
 #include "menu.h"
 #include "web_ui.h"
 #include "mode_select.h"
+#include "sd_selftest.h"
 
 /* USER CODE END Includes */
 
@@ -82,8 +83,12 @@
 /* USER CODE BEGIN PM */
 
 /* Enable the ENABLE_SPI_SCREEN*/
-#define ENABLE_SPI_SCREEN 
+#define ENABLE_SPI_SCREEN
 #define ENABLE_ROTARY_ENCODER
+
+/* Test carte SD : cree test.txt + log au boot, le supprime 2 min apres.
+ * Commenter cette ligne pour desactiver le test. */
+#define SD_SELFTEST
 
 /* USER CODE END PM */
 
@@ -175,6 +180,9 @@ int main(void)
   printf("SD mount : %s\r\n", (sd_res == FR_OK) ? "OK" : "FAILED - config par defaut");
   Config_Init();
   printf("Config : Done\r\n");
+#ifdef SD_SELFTEST
+  SDTest_Begin();   /* cree test.txt + log ; suppression 2 min plus tard */
+#endif
   MX_LWIP_Init();
   MX_USB_DEVICE_Init();
   printf("MX_USB_DEVICE_Init : Done\r\n");
@@ -277,6 +285,10 @@ int main(void)
 
     /* Fixture "perte de signal" : flash blanc si pas d'Art-Net depuis 1 min */
     artnet_signal_lost_task();
+
+#ifdef SD_SELFTEST
+    SDTest_Task();   /* supprime test.txt une fois les 2 min ecoulees */
+#endif
     /* USER CODE END WHILE */
 
 #ifdef ENABLE_USBHOST
