@@ -53,6 +53,7 @@
 #include "web_ui.h"
 #include "mode_select.h"
 #include "sd_selftest.h"
+#include "dmx.h"
 
 /* USER CODE END Includes */
 
@@ -228,17 +229,21 @@ int main(void)
   // Clignotement backlight au démarrage = preuve que GPIO fonctionne
   HAL_Delay(500);
 
-  /* WS2815 : 4 sorties sur GPIOD — PD15 / PD13 / PD11 / PD09
-   * Envoi par TIM1 + DMA2 (non bloquant), nombre de LEDs depuis la config */
-  MX_TIM1_WS2815_Init();
-  {
+  /* Aiguillage selon le jumper PA5/PA6 (lu par Mode_Init) :
+   *  - MODE_DMX : sortie DMX512/RDM sur XLR (USART2 PD5/6, dir PD7)
+   *  - MODE_LED : 4 chaines WS2815 sur GPIOD (PD15/13/11/9), TIM1+DMA2 */
+  if (Mode_Get() == MODE_DMX) {
+    DMX_Init();
+    printf("DMX Init: Done (sortie XLR)\r\n");
+  } else {
+    MX_TIM1_WS2815_Init();
     DeviceConfig_t *cfg = Config_Get();
     for (uint8_t i = 0; i < MAX_OUTPUTS; i++) {
       uint16_t n = cfg->outputs[i].enabled ? cfg->outputs[i].led_count : 0;
       WS2815_Init(&all_chains[i], GPIOD, ws_output_pins[i], n);
     }
+    printf("WS2815 Init: Done\r\n");
   }
-  printf("WS2815 Init: Done\r\n");
 
   printf("\r\nInit preripherals and IO Complete.\r\n");
   printf("Checking Storage Devices:\r\n");
@@ -276,15 +281,20 @@ int main(void)
     Menu_Task();            // handles encoder events + redraws when needed
     MX_LWIP_Process();
 
-    /* Envoi WS2815 : dès que des données DMX sont arrivées et que le
-     * DMA est libre (latch >280µs incluse dans WS2815_Busy) */
-    if (ws_frame_dirty && !WS2815_Busy()) {
-        ws_frame_dirty = false;
-        WS2815_Show(all_chains, MAX_OUTPUTS);
-    }
+    if (Mode_Get() == MODE_DMX) {
+        /* Rafraîchissement DMX512 à 40 Hz (flux continu vers le XLR) */
+        DMX_Task();
+    } else {
+        /* Envoi WS2815 : dès que des données DMX sont arrivées et que le
+         * DMA est libre (latch >280µs incluse dans WS2815_Busy) */
+        if (ws_frame_dirty && !WS2815_Busy()) {
+            ws_frame_dirty = false;
+            WS2815_Show(all_chains, MAX_OUTPUTS);
+        }
 
-    /* Fixture "perte de signal" : flash blanc si pas d'Art-Net depuis 1 min */
-    artnet_signal_lost_task();
+        /* Fixture "perte de signal" : flash blanc si pas d'Art-Net depuis 1 min */
+        artnet_signal_lost_task();
+    }
 
 #ifdef SD_SELFTEST
     SDTest_Task();   /* supprime test.txt une fois les 2 min ecoulees */
@@ -424,16 +434,26 @@ int _write(int file, char *ptr, int len)
 /* USER CODE BEGIN 4 */
 
 /**
- * @brief Mappe les données DMX Art-Net sur les chaînes WS2815.
- *        Le routage vient de la config : cfg->outputs[i].universe → all_chains[i].
- *        3 canaux DMX consécutifs par LED : R, G, B.
- *        L'envoi réel est fait dans la boucle principale (ws_frame_dirty),
- *        le DMA étant non bloquant il n'y a plus besoin d'attendre le
- *        dernier univers.
+ * @brief Route une trame Art-Net reçue selon le mode courant.
+ *        - MODE_DMX : l'univers configuré (outputs[0].universe) sort sur
+ *          le port XLR via la couche DMX512.
+ *        - MODE_LED : mappe les données sur les chaînes WS2815 (config
+ *          par sortie), 3 canaux DMX par LED (R,G,B). Envoi réel dans la
+ *          boucle principale (ws_frame_dirty).
  */
 static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len)
 {
     DeviceConfig_t *cfg = Config_Get();
+
+    if (Mode_Get() == MODE_DMX) {
+        /* Le port DMX suit l'univers de la sortie 0. */
+        if (cfg->outputs[0].universe == universe) {
+            uint16_t n = (len > DMX_SLOTS) ? DMX_SLOTS : len;
+            DMX_SetSlots(0, data, n);
+            DMX_Commit();
+        }
+        return;
+    }
 
     for (uint8_t i = 0; i < MAX_OUTPUTS; i++) {
         if (!cfg->outputs[i].enabled || cfg->outputs[i].universe != universe)

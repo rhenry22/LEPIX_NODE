@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "encoder.h"
 #include "tim.h"
+#include "dmx.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -491,6 +492,14 @@ void OTG_HS_IRQHandler(void)
 void DMA2_Stream2_IRQHandler(void)
 {
   HAL_DMA_IRQHandler(&hdma_reset);
+}
+
+/**
+  * @brief DMA1 stream6 : USART2_TX (sortie DMX512).
+  */
+void DMA1_Stream6_IRQHandler(void)
+{
+  DMX_DMA_TX_IRQHandler();
 }
 
 /* USER CODE END 1 */
