@@ -60,7 +60,7 @@ typedef struct {
     .netmask    = {255, 255, 255, 0}, \
     .gateway    = {2, 0, 0, 1}, \
     .dns        = {8, 8, 8, 8}, \
-    .protocol   = PROTO_ARTNET, \
+    .protocol   = PROTO_SACN, \
     .dmx_uart   = 2, \
     .outputs    = { \
         {true,  0, 120, 5, 1}, \
