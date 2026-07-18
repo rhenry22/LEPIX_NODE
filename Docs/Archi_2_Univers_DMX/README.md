@@ -25,8 +25,8 @@ La console émet les univers 1 et 2 en sACN (multicast UDP 5568). Le node (IP pa
 
 | Port | UART   | TX / direction | DMA         | Transceiver              |
 |------|--------|----------------|-------------|--------------------------|
-| A    | USART2 | PD5 / PD7      | DMA1 St.6   | RS-485 intégré à la carte |
-| B    | USART3 | PC10 / PD10    | DMA1 St.3   | MAX485 **externe** (5 V)  |
+| A    | USART2 | PD5 / PD7 (TX/#RX)      | DMA1 St.6   | port **RS485 de la carte** (bornier A/B/GND) |
+| B    | USART3 | PD8 / PD10    | DMA1 St.3   | MAX485 **externe** (5 V)  |
 
 | Paramètre DMX512     | Valeur                              |
 |----------------------|-------------------------------------|
@@ -56,7 +56,7 @@ Générée avec [`tools/make_sd_config.py`](../../tools/make_sd_config.py) :
 
 - **Jumper de mode** : PA5/PA6 sélectionne DMX au boot — sans lui le node reste en mode LED et
   les ports DMX sont muets.
-- **Port B** : PC10 et PD10 sortent en logique 3,3 V sur les connecteurs — le transceiver RS-485
+- **Port B** : PD8 et PD10 (adjacents sur P5) sortent en logique 3,3 V sur les connecteurs — le transceiver RS-485
   externe (MAX485/SN75176 alimenté en 5 V) est indispensable pour attaquer le bus.
 - **Câblage XLR** : broche 1 = GND, 2 = Data−, 3 = Data+. Toujours une terminaison 120 Ω sur le
   dernier appareil de chaque ligne.

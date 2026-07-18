@@ -143,16 +143,16 @@
     <!-- Port A -->
     <rect x="410" y="198" width="150" height="120" rx="3" class="hotbox"/>
     <text x="485" y="219" text-anchor="middle" class="tb">Port DMX A</text>
-    <text x="485" y="238" text-anchor="middle" class="tm">USART2 · TX PD5</text>
-    <text x="485" y="255" text-anchor="middle" class="tm">dir RS485 PD7</text>
+    <text x="485" y="238" text-anchor="middle" class="tm">RS485 carte · USART2</text>
+    <text x="485" y="255" text-anchor="middle" class="tm">TX PD5 · dir PD7 (TX/#RX)</text>
     <text x="485" y="272" text-anchor="middle" class="tm">DMA1 Stream6</text>
-    <text x="485" y="292" text-anchor="middle" class="ts">transceiver RS-485</text>
-    <text x="485" y="307" text-anchor="middle" class="ts">intégré à la carte</text>
+    <text x="485" y="292" text-anchor="middle" class="ts">bornier A/B/GND de</text>
+    <text x="485" y="307" text-anchor="middle" class="ts">la carte → XLR A</text>
 
     <!-- Port B -->
     <rect x="580" y="198" width="150" height="120" rx="3" class="hotbox"/>
     <text x="655" y="219" text-anchor="middle" class="tb">Port DMX B</text>
-    <text x="655" y="238" text-anchor="middle" class="tm">USART3 · TX PC10</text>
+    <text x="655" y="238" text-anchor="middle" class="tm">USART3 · TX PD8</text>
     <text x="655" y="255" text-anchor="middle" class="tm">dir PD10</text>
     <text x="655" y="272" text-anchor="middle" class="tm">DMA1 Stream3</text>
     <text x="655" y="292" text-anchor="middle" class="ts">transceiver MAX485</text>
@@ -216,10 +216,10 @@
           <thead><tr><th>Port</th><th>UART</th><th>TX / dir</th><th>DMA</th><th>Transceiver</th></tr></thead>
           <tbody>
             <tr><td><span class="chdot" style="background:var(--chA)"></span>A</td>
-                <td class="mono">USART2</td><td class="mono">PD5 / PD7</td>
-                <td class="mono">DMA1 St.6</td><td>RS-485 carte</td></tr>
+                <td class="mono">USART2</td><td class="mono">PD5 / PD7 (TX/#RX)</td>
+                <td class="mono">DMA1 St.6</td><td>port RS485 carte (bornier)</td></tr>
             <tr><td><span class="chdot" style="background:var(--chB)"></span>B</td>
-                <td class="mono">USART3</td><td class="mono">PC10 / PD10</td>
+                <td class="mono">USART3</td><td class="mono">PD8 / PD10</td>
                 <td class="mono">DMA1 St.3</td><td>MAX485 externe</td></tr>
           </tbody>
         </table>
@@ -262,7 +262,7 @@
   <ul class="notes">
     <li><strong>Jumper de mode :</strong> PA5/PA6 sélectionne DMX au boot — sans lui le node reste en
     mode LED et les ports DMX sont muets.</li>
-    <li><strong>Port B :</strong> PC10 et PD10 sortent en logique 3,3 V sur les connecteurs — le
+    <li><strong>Port B :</strong> PD8 et PD10 (adjacents sur P5) sortent en logique 3,3 V sur les connecteurs — le
     transceiver RS-485 externe (MAX485/SN75176 alimenté en 5 V) est indispensable pour attaquer le bus.</li>
     <li><strong>Câblage XLR :</strong> broche 1 = GND, 2 = Data−, 3 = Data+. Toujours une terminaison
     120 Ω sur le dernier appareil de chaque ligne.</li>

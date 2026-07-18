@@ -80,7 +80,7 @@ elle retombe à 0,30 µs (bit « 0 »), sinon elle reste haute jusqu'à CC2 à 0
 | — CS / DC / RST / BLK        | PA4 / PE6 / PC0 / PC13                              |
 | Encodeur rotatif CLK/DT/SW   | PE0 / PE5 / PB7                                     |
 | Carte SD (`config.json`)     | SDIO : PC8-PC12, PD2 · CD PD3                       |
-| DMX filaire (option)         | USART1 PA9/PA10 · USART2 PD5/PD6 (RS485, DE PD7)    |
+| DMX filaire (option)         | port A : RS485 carte, USART2 PD5 + dir PD7 (TX/#RX) · port B : USART3 PD8/PD9, dir PD10    |
 
 ---
 
