@@ -90,6 +90,7 @@
  * lignes ci-dessous quand l'ecran/encodeur seront rebranches. */
 /* #define ENABLE_SPI_SCREEN */
 /* #define ENABLE_ROTARY_ENCODER */
+#define ENABLE_STARTUP_SEQUENCE
 
 /* Test carte SD : cree test.txt + log au boot, le supprime 2 min apres.
  * Commenter cette ligne pour desactiver le test. */
@@ -110,6 +111,15 @@ static const uint16_t ws_output_pins[MAX_OUTPUTS] = {
 
 /* Levé par dmx_to_ws2815, consommé dans la boucle principale */
 static volatile bool ws_frame_dirty = false;
+
+/* LED3 (PE15) = indicateur "trame recue" (Art-Net/sACN, tous modes).
+ * Allumee a chaque trame, eteinte apres RX_LED_ON_MS dans la boucle.
+ * Convention carte : niveau bas (RESET) = LED allumee. */
+#define RX_LED_ON_MS   40u
+static volatile uint32_t rx_led_last_ms = 0;
+static volatile bool     rx_led_on      = false;
+#define RX_LED_SET_ON()   do { HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET); rx_led_on = true; } while (0)
+#define RX_LED_SET_OFF()  do { HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);   rx_led_on = false; } while (0)
 
 /* Perte de signal Art-Net : après ARTNET_TIMEOUT_MS sans trame, on émet
  * un flash blanc bref sur toutes les LEDs toutes les ARTNET_FLASH_PERIOD_MS. */
@@ -241,9 +251,6 @@ int main(void)
 #endif
   CLI_Init();             // console de config sur USART1 (DB9, 115200 8N1)
 
-  // Clignotement backlight au démarrage = preuve que GPIO fonctionne
-  HAL_Delay(500);
-
   /* Aiguillage selon le jumper PA5/PA6 (lu par Mode_Init) :
    *  - MODE_DMX : sortie DMX512/RDM sur XLR (USART2 PD5/6, dir PD7)
    *  - MODE_LED : 4 chaines WS2815 sur GPIOD (PD15/13/11/9), TIM1+DMA2 */
@@ -251,11 +258,13 @@ int main(void)
     DMX_Init();
     printf("DMX Init: Done (sortie XLR)\r\n");
   } else {
+    printf("WS2815 Init: Start\r\n");
     MX_TIM1_WS2815_Init();
     DeviceConfig_t *cfg = Config_Get();
     for (uint8_t i = 0; i < MAX_OUTPUTS; i++) {
       uint16_t n = cfg->outputs[i].enabled ? cfg->outputs[i].led_count : 0;
       WS2815_Init(&all_chains[i], GPIOD, ws_output_pins[i], n);
+    printf("WS2815 Init: OUTPUT %d\r\n", i);
     }
     printf("WS2815 Init: Done\r\n");
   }
@@ -269,12 +278,14 @@ int main(void)
     WS2815_Startup_Sequence();
     printf("WS2815 Startup Sequence: Done\r\n");
   #endif
+  printf("Art-Net Configuration ...\r\n");
   artnet_init();
   artnet_set_callback(dmx_to_ws2815);
   printf("Art-Net Initialized\r\n");
 
   /* sACN (E1.31) : même callback que l'Art-Net (routage par univers).
    * On rejoint les groupes multicast des univers configurés. */
+  printf("sACN (E1.31) Configuration ...\r\n");
   sacn_rx_init();
   sacn_rx_set_callback(dmx_to_ws2815);
   {
@@ -329,6 +340,11 @@ int main(void)
 
         /* Fixture "perte de signal" : flash blanc si pas d'Art-Net depuis 1 min */
         artnet_signal_lost_task();
+    }
+
+    /* Extinction de LED3 (indicateur RX) apres l'impulsion */
+    if (rx_led_on && (HAL_GetTick() - rx_led_last_ms) >= RX_LED_ON_MS) {
+        RX_LED_SET_OFF();
     }
 
 #ifdef SD_SELFTEST
@@ -479,6 +495,11 @@ int _write(int file, char *ptr, int len)
 static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len)
 {
     DeviceConfig_t *cfg = Config_Get();
+
+    /* Indicateur visuel : LED3 s'allume a chaque trame recue (tous modes,
+     * Art-Net ou sACN). Extinction geree dans la boucle principale. */
+    RX_LED_SET_ON();
+    rx_led_last_ms = HAL_GetTick();
 
     if (Mode_Get() == MODE_DMX) {
         /* 2 ports DMX : port i suit l'univers de outputs[i] (i=0,1). */
