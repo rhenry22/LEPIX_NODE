@@ -98,17 +98,20 @@ static void port_init(dmx_port_t *p,
     p->last_refresh_ms = 0;
 }
 
-/* GPIO AF pour USART3 sur PC10 (TX) / PC11 (RX) — pas géré par le MSP CubeMX. */
+/* GPIO AF pour USART3 sur PD8 (TX) / PD9 (RX) — pas géré par le MSP CubeMX.
+ * PD8/PD9 sont sur le connecteur P5, adjacents a PD10 (direction) : la nappe
+ * du MAX485 part d'un seul connecteur. PD9 = WS2815_CH4 en mode LED, sans
+ * conflit : DMX_Init() n'est appele qu'en mode DMX (jumper). */
 static void usart3_gpio_init(void)
 {
     GPIO_InitTypeDef gi = {0};
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    gi.Pin       = GPIO_PIN_10 | GPIO_PIN_11;   /* PC10=TX, PC11=RX */
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    gi.Pin       = GPIO_PIN_8 | GPIO_PIN_9;     /* PD8=TX, PD9=RX */
     gi.Mode      = GPIO_MODE_AF_PP;
     gi.Pull      = GPIO_NOPULL;
     gi.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
     gi.Alternate = GPIO_AF7_USART3;
-    HAL_GPIO_Init(GPIOC, &gi);
+    HAL_GPIO_Init(GPIOD, &gi);
 }
 
 void DMX_Init(void)
@@ -126,7 +129,7 @@ void DMX_Init(void)
               DMA1_Stream6, DMA_CHANNEL_4,
               RS485_TX_RX__GPIO_Port, RS485_TX_RX__Pin);
 
-    /* Port 1 : USART3 (PC10/PC11), dir PD10 (P5_GPIOD10), DMA1_Stream3 Ch4. */
+    /* Port 1 : USART3 (PD8/PD9), dir PD10 (P5_GPIOD10), DMA1_Stream3 Ch4. */
     port_init(&s_ports[1], USART3, &huart3,
               DMA1_Stream3, DMA_CHANNEL_4,
               P5_GPIOD10_GPIO_Port, P5_GPIOD10_Pin);

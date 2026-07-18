@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "net_mode": 1,
+  "ip": "2.0.0.4",
+  "netmask": "255.255.255.0",
+  "gateway": "2.0.0.1",
+  "dns": "8.8.8.8",
+  "protocol": 1,
+  "dmx_uart": 2,
+  "output0": {"enabled":1, "universe":0, "led_count":120, "max_current_A":5, "dmx_channel":1},
+  "output1": {"enabled":1, "universe":1, "led_count":120, "max_current_A":5, "dmx_channel":1},
+  "output2": {"enabled":1, "universe":2, "led_count":120, "max_current_A":5, "dmx_channel":1},
+  "output3": {"enabled":1, "universe":3, "led_count":120, "max_current_A":5, "dmx_channel":1}
+}

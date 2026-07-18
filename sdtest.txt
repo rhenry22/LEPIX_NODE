@@ -1,0 +1,13 @@
+LEPIX_NODE - fichier de test carte SD
+=====================================
+
+Ce fichier sert a valider la lecture de la carte SD par le node.
+Si tu peux lire ces lignes depuis la carte, le systeme de fichiers
+FAT (FAT16/FAT32) et le lecteur SDIO fonctionnent.
+
+Repere de verification : LEPIX-SD-OK-2026
+
+Rappels :
+- La carte doit etre formatee en FAT16 ou FAT32 (pas d'exFAT).
+- Le node lit config.json a la racine au demarrage :
+  IP et protocole y sont definis (ex. 2.0.0.4 / sACN).

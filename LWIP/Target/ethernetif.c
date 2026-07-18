@@ -205,6 +205,17 @@ static void low_level_init(struct netif *netif)
 
 /* USER CODE BEGIN PHY_PRE_CONFIG */
 
+  /* sACN (E1.31) : le MAC filtre par defaut en "perfect filtering" et jette
+   * toutes les trames multicast (01:00:5e:xx). Les joins IGMP de LwIP ne
+   * programment pas le hash du MAC -> il faut laisser passer le multicast,
+   * sinon les univers 239.255.x.x n'arrivent jamais a udp_recv. */
+  {
+    ETH_MACFilterConfigTypeDef filt;
+    HAL_ETH_GetMACFilterConfig(&heth, &filt);
+    filt.PassAllMulticast = ENABLE;
+    HAL_ETH_SetMACFilterConfig(&heth, &filt);
+  }
+
 /* USER CODE END PHY_PRE_CONFIG */
   /* Set PHY IO functions */
   DP83848_RegisterBusIO(&DP83848, &DP83848_IOCtx);

@@ -60,13 +60,38 @@ void WebUI_GetStats(WebUI_Stats_t *out)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+ *  Instantané des canaux DMX (matrice /dmx)
+ *  Un slot de 512 canaux par sortie configurée. 2 Ko de RAM.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+#define DMX_SNAP_SLOTS 512u
+
+static uint8_t  s_dmx_val[MAX_OUTPUTS][DMX_SNAP_SLOTS];
+static uint16_t s_dmx_len[MAX_OUTPUTS];
+static uint32_t s_dmx_ms[MAX_OUTPUTS];
+
+void WebUI_NotifyDmxData(uint16_t universe, const uint8_t *data, uint16_t len)
+{
+    DeviceConfig_t *cfg = Config_Get();
+    if (len > DMX_SNAP_SLOTS)
+        len = DMX_SNAP_SLOTS;
+    for (int i = 0; i < MAX_OUTPUTS; i++) {
+        if (!cfg->outputs[i].enabled || cfg->outputs[i].universe != universe)
+            continue;
+        memcpy(s_dmx_val[i], data, len);
+        s_dmx_len[i] = len;
+        s_dmx_ms[i]  = HAL_GetTick();
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
  *  Génération des pages
  *  Un buffer par fichier ouvert. Le httpd raw no-RTOS ne sert qu'une requête
  *  à la fois dans MX_LWIP_Process() ; on garde néanmoins 2 buffers pour tolérer
  *  deux connexions TCP concurrentes.
  * ───────────────────────────────────────────────────────────────────────── */
 
-#define WEBUI_BUF_SIZE   4096
+#define WEBUI_BUF_SIZE   6144   /* la page /dmx (HTML+JS) approche 4 Ko */
 #define WEBUI_NUM_BUFS   2
 
 typedef struct {
@@ -141,12 +166,14 @@ static int emit_header(char *b, int cap, const char *title,
         "<header>LEPIX Node</header><nav>"
         "<a href=/ class=%s>Statut</a>"
         "<a href=/flux class=%s>Reception</a>"
+        "<a href=/dmx class=%s>Canaux</a>"
         "<a href=/config class=%s>Configuration</a>"
         "</nav><main>",
         title,
         active == 0 ? "on" : "",
         active == 1 ? "on" : "",
-        active == 2 ? "on" : "");
+        active == 2 ? "on" : "",
+        active == 3 ? "on" : "");
     return n;
 }
 
@@ -249,11 +276,86 @@ static void build_flux(webui_page_t *p)
     p->buf[WEBUI_BUF_SIZE - 1] = '\0';
 }
 
+/* Onglet "Canaux" : matrice 32x16 des 512 canaux de la sortie choisie.
+ * Rendu cote client (canvas) : chaque canal est une cellule en degrade
+ * dont l'intensite suit la valeur DMX (0-255). Le JS interroge
+ * /dmxdata<i> toutes les 500 ms — la representation pourra changer
+ * sans toucher au firmware, seul ce JS est a modifier. */
+static void build_dmx(webui_page_t *p)
+{
+    DeviceConfig_t *cfg = Config_Get();
+    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Canaux DMX", 0, 2);
+
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "<h2>Matrice des canaux</h2>"
+        "<p>Sortie <select id=out>");
+    for (int i = 0; i < MAX_OUTPUTS; i++)
+        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+            "<option value=%d>%d — univers %u%s</option>",
+            i, i + 1, cfg->outputs[i].universe,
+            cfg->outputs[i].enabled ? "" : " (off)");
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "</select> <span id=inf class=off></span></p>"
+        "<canvas id=cv width=704 height=352 "
+        "style=\"width:100%%;background:#0a0c10;border-radius:8px\"></canvas>"
+        "<p id=tip class=off>Survoler une cellule pour lire canal et valeur.</p>"
+        "<script>\n"
+        "const cv=document.getElementById('cv'),cx=cv.getContext('2d');\n"
+        "const sel=document.getElementById('out');let last=null;\n"
+        "function draw(j){last=j;const W=32,H=16,cw=cv.width/W,ch=cv.height/H;\n"
+        " cx.clearRect(0,0,cv.width,cv.height);\n"
+        " for(let i=0;i<512;i++){\n"
+        "  const v=i<j.len?parseInt(j.hex.substr(i*2,2),16):0;\n"
+        "  const x=(i%%W)*cw,y=Math.floor(i/W)*ch;\n"
+        "  const g=cx.createLinearGradient(x,y,x,y+ch);\n"
+        "  g.addColorStop(0,'rgb('+v+','+Math.round(v*.62)+','+Math.round(v*.18)+')');\n"
+        "  g.addColorStop(1,'rgb('+Math.round(v*.35)+','+Math.round(v*.22)+',0)');\n"
+        "  cx.fillStyle=g;cx.fillRect(x+1,y+1,cw-2,ch-2);}}\n"
+        "async function poll(){try{\n"
+        " const r=await fetch('/dmxdata'+sel.value);const j=await r.json();draw(j);\n"
+        " document.getElementById('inf').textContent=j.len?\n"
+        "  (j.len+' canaux — trame il y a '+(j.age/1000).toFixed(1)+' s'):\n"
+        "  'aucune trame recue pour cette sortie';\n"
+        "}catch(e){}setTimeout(poll,500);}\n"
+        "cv.onmousemove=e=>{if(!last)return;const r=cv.getBoundingClientRect();\n"
+        " const cx2=Math.floor((e.clientX-r.left)/r.width*32);\n"
+        " const cy=Math.floor((e.clientY-r.top)/r.height*16);\n"
+        " const i=cy*32+cx2;if(i<0||i>511)return;\n"
+        " const v=i<last.len?parseInt(last.hex.substr(i*2,2),16):0;\n"
+        " document.getElementById('tip').textContent='canal '+(i+1)+' = '+v;};\n"
+        "poll();\n"
+        "</script></main></body></html>");
+
+    p->buf[WEBUI_BUF_SIZE - 1] = '\0';
+}
+
+/* /dmxdata<i> : instantane JSON des canaux de la sortie i (hex, 2 c/canal). */
+static void build_dmxdata(webui_page_t *p, int idx)
+{
+    static const char hexd[] = "0123456789abcdef";
+    uint16_t len = s_dmx_len[idx];
+    uint32_t age = len ? (HAL_GetTick() - s_dmx_ms[idx]) : 0;
+
+    int n = snprintf(p->buf, WEBUI_BUF_SIZE,
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Cache-Control: no-store\r\n"
+        "Connection: close\r\n\r\n"
+        "{\"out\":%d,\"len\":%u,\"age\":%lu,\"hex\":\"",
+        idx + 1, len, (unsigned long)age);
+    for (uint16_t i = 0; i < len && n < WEBUI_BUF_SIZE - 8; i++) {
+        p->buf[n++] = hexd[s_dmx_val[idx][i] >> 4];
+        p->buf[n++] = hexd[s_dmx_val[idx][i] & 0x0F];
+    }
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n, "\"}");
+    p->buf[WEBUI_BUF_SIZE - 1] = '\0';
+}
+
 /* Formulaire de configuration. Un seul GET /save reprend tous les champs. */
 static void build_config(webui_page_t *p)
 {
     DeviceConfig_t *cfg = Config_Get();
-    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Configuration", 0, 2);
+    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Configuration", 0, 3);
 
     n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
         "<form action=/save method=get>"
@@ -387,6 +489,15 @@ int fs_open_custom(struct fs_file *file, const char *name)
         p = page_alloc();
         if (!p) return 0;
         build_config(p);
+    } else if (strcmp(name, "/dmx") == 0 || strcmp(name, "/dmx.html") == 0) {
+        p = page_alloc();
+        if (!p) return 0;
+        build_dmx(p);
+    } else if (strncmp(name, "/dmxdata", 8) == 0 &&
+               name[8] >= '0' && name[8] < '0' + MAX_OUTPUTS && name[9] == '\0') {
+        p = page_alloc();
+        if (!p) return 0;
+        build_dmxdata(p, name[8] - '0');
     } else {
         return 0;   /* non géré -> 404 */
     }

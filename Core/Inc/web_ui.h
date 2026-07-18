@@ -30,4 +30,9 @@ void WebUI_NotifySacn(uint16_t universe);
 /* Copie atomique-ish des compteurs pour affichage. */
 void WebUI_GetStats(WebUI_Stats_t *out);
 
+/* Instantané des canaux DMX reçus, pour la matrice de l'onglet /dmx.
+ * À appeler depuis le callback de réception (dmx_to_ws2815) : recopie la
+ * trame dans le slot de chaque sortie dont l'univers correspond. */
+void WebUI_NotifyDmxData(uint16_t universe, const uint8_t *data, uint16_t len);
+
 #endif /* WEB_UI_H */
