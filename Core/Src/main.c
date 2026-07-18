@@ -55,6 +55,7 @@
 #include "mode_select.h"
 #include "sd_selftest.h"
 #include "dmx.h"
+#include "gpio_test.h"
 
 /* USER CODE END Includes */
 
@@ -94,6 +95,10 @@
 /* Test carte SD : cree test.txt + log au boot, le supprime 2 min apres.
  * Commenter cette ligne pour desactiver le test. */
 #define SD_SELFTEST
+
+/* Test GPIO : lit et affiche au boot l'etat du jumper de mode (PA5/PA6)
+ * et des broches DMX (direction PD7/PD10, TX/RX). Diagnostic passif. */
+#define GPIO_TEST
 
 /* USER CODE END PM */
 
@@ -266,6 +271,10 @@ int main(void)
     }
     printf("WS2815 Init: Done\r\n");
   }
+
+#ifdef GPIO_TEST
+  GpioTest_Run();   /* log etat jumper + GPIO DMX */
+#endif
 
   printf("\r\nInit preripherals and IO Complete.\r\n");
   printf("Checking Storage Devices:\r\n");
