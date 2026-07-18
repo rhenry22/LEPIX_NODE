@@ -96,6 +96,11 @@
  * Commenter cette ligne pour desactiver le test. */
 #define SD_SELFTEST
 
+/* Serveur web (httpd LwIP) : desactive pour le moment — instabilites a
+ * investiguer, migration Zephyr OS envisagee pour porter cette partie.
+ * Decommenter pour reactiver (onglets statut/reception/canaux/config). */
+/* #define ENABLE_WEB_UI */
+
 /* Test GPIO : lit et affiche au boot l'etat du jumper de mode (PA5/PA6)
  * et des broches DMX (direction PD7/PD10, TX/RX). Diagnostic passif. */
 #define GPIO_TEST
@@ -303,13 +308,17 @@ int main(void)
   }
   printf("sACN Initialized\r\n");
 
-  /* Serveur web chargé uniquement si la carte SD est présente (montée). */
+  /* Serveur web chargé uniquement si activé et carte SD présente (montée). */
+#ifndef ENABLE_WEB_UI
+  printf("Web UI : desactive (ENABLE_WEB_UI commente)\r\n");
+#else
   if (sd_res == FR_OK) {
     WebUI_Init();   /* serveur HTTP : http://<ip>/ (config + monitoring) */
     printf("Web UI Initialized\r\n");
   } else {
     printf("Web UI : desactive (carte SD absente)\r\n");
   }
+#endif /* ENABLE_WEB_UI */
 
   uint32_t last_tick = HAL_GetTick();
 
@@ -426,9 +435,11 @@ void WS2815_Startup_Sequence(void)
     };
 
     for (uint8_t s = 0; s < sizeof(seq) / sizeof(seq[0]); s++) {
+        printf("WS2815 Startup Sequence: Step %d\r\n", s);
         for (uint8_t i = 0; i < 60; i++) {
-            for (uint8_t c = 0; c < MAX_OUTPUTS; c++)
+            for (uint8_t c = 0; c < MAX_OUTPUTS; c++) {
                 WS2815_SetLed(&all_chains[c], i, seq[s]);
+            }
             while (WS2815_Busy());
             WS2815_Show(all_chains, MAX_OUTPUTS);
             HAL_Delay(25);
@@ -506,6 +517,9 @@ static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len)
      * Art-Net ou sACN). Extinction geree dans la boucle principale. */
     RX_LED_SET_ON();
     rx_led_last_ms = HAL_GetTick();
+
+    /* Instantané pour la matrice de canaux de l'interface web (/dmx) */
+    WebUI_NotifyDmxData(universe, data, len);
 
     if (Mode_Get() == MODE_DMX) {
         /* 2 ports DMX : port i suit l'univers de outputs[i] (i=0,1). */

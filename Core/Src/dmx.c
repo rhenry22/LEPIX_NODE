@@ -6,7 +6,7 @@
 /* ─── Paramètres de timing ─────────────────────────────────────────────── */
 #define DMX_BAUD          250000u   /* débit DMX512 nominal                 */
 #define DMX_BREAK_BAUD     90000u    /* débit réduit pour le BREAK (~100 µs) */
-#define DMX_REFRESH_MS        25u    /* période de rafraîchissement (40 Hz)  */
+#define DMX_REFRESH_MS        16u    /* période de rafraîchissement (~60 Hz) */
 
 /* Machine à états d'un port. */
 typedef enum {
