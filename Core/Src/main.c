@@ -55,7 +55,6 @@
 #include "mode_select.h"
 #include "sd_selftest.h"
 #include "dmx.h"
-#include "cli.h"
 
 /* USER CODE END Includes */
 
@@ -249,7 +248,6 @@ int main(void)
   Icon_LoadAll();         // loads all 8 icons into RAM cache (~16KB)
   Menu_Init();            // clears screen, shows main menu
 #endif
-  CLI_Init();             // console de config sur USART1 (DB9, 115200 8N1)
 
   /* Aiguillage selon le jumper PA5/PA6 (lu par Mode_Init) :
    *  - MODE_DMX : sortie DMX512/RDM sur XLR (USART2 PD5/6, dir PD7)
@@ -324,7 +322,6 @@ int main(void)
 #ifdef ENABLE_SPI_SCREEN
     Menu_Task();            // handles encoder events + redraws when needed
 #endif
-    CLI_Task();             // commandes de configuration recues sur USART1
     MX_LWIP_Process();
 
     if (Mode_Get() == MODE_DMX) {

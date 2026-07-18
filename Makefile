@@ -41,7 +41,6 @@ Core/Src/config.c \
 Core/Src/mode_select.c \
 Core/Src/sd_selftest.c \
 Core/Src/dmx.c \
-Core/Src/cli.c \
 Core/Src/web_ui.c \
 Core/Src/icon_loader.c \
 Core/Src/menu.c \
