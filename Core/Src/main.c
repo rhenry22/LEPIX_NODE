@@ -96,10 +96,10 @@
  * Commenter cette ligne pour desactiver le test. */
 #define SD_SELFTEST
 
-/* Serveur web (httpd LwIP) : desactive pour le moment — instabilites a
- * investiguer, migration Zephyr OS envisagee pour porter cette partie.
- * Decommenter pour reactiver (onglets statut/reception/canaux/config). */
-/* #define ENABLE_WEB_UI */
+/* Serveur web (httpd LwIP) : compile ici, pilote au runtime par le
+ * jumper PA6 (Mode_WebEnabled) + presence carte SD. Desactive par defaut
+ * cote materiel (aucun jumper PA6). */
+#define ENABLE_WEB_UI
 
 /* Test GPIO : lit et affiche au boot l'etat du jumper de mode (PA5/PA6)
  * et des broches DMX (direction PD7/PD10, TX/RX). Diagnostic passif. */
