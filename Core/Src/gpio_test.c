@@ -13,14 +13,18 @@ void GpioTest_Run(void)
 {
     printf("\r\n===== TEST GPIO (lecture au boot) =====\r\n");
 
-    /* ---- Jumper de mode PA5/PA6 (entrées pull-up) ---- */
+    /* ---- Jumpers de config PA5 (mode) / PA6 (web), entrées pull-up ---- */
     printf("[Jumper] PA5 = %s | PA6 = %s\r\n",
            lvl(P4_GPIOA5_GPIO_Port, P4_GPIOA5_Pin),
            lvl(P4_GPIOA6_GPIO_Port, P4_GPIOA6_Pin));
-    printf("[Jumper] Mode deduit : %s (%s)\r\n",
+    printf("[Jumper] PA5 -> mode : %s (%s)\r\n",
            Mode_Name(Mode_Get()),
            (Mode_Get() == MODE_DMX) ? "PA5 pontee a la masse"
                                     : "PA5 ouverte (pas de jumper)");
+    printf("[Jumper] PA6 -> web  : %s (%s)\r\n",
+           Mode_WebEnabled() ? "active" : "desactive",
+           Mode_WebEnabled() ? "PA6 pontee a la masse"
+                             : "PA6 ouverte (pas de jumper)");
 
     /* ---- GPIO DMX ---- */
     /* Direction MAX485 : PD7 (port 0) et PD10 (port 1).

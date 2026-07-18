@@ -193,7 +193,8 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   printf("MX_USART_UART_Init : Done\r\n");
-  printf("Mode (jumper PA5/PA6) : %s\r\n", Mode_Name(Mode_Get()));
+  printf("Mode (jumper PA5) : %s\r\n", Mode_Name(Mode_Get()));
+  printf("Web  (jumper PA6) : %s\r\n", Mode_WebEnabled() ? "active" : "desactive (defaut)");
   /* FATFS + montage SD + config AVANT LwIP :
    * MX_LWIP_Init() lit la config réseau (DHCP / IP statique).
    * opt=0 : montage paresseux (n'accède pas à la carte ici) — le premier
@@ -308,15 +309,18 @@ int main(void)
   }
   printf("sACN Initialized\r\n");
 
-  /* Serveur web chargé uniquement si activé et carte SD présente (montée). */
+  /* Serveur web chargé si : compile (ENABLE_WEB_UI) + jumper PA6 pose
+   * + carte SD presente (montee). */
 #ifndef ENABLE_WEB_UI
   printf("Web UI : desactive (ENABLE_WEB_UI commente)\r\n");
 #else
-  if (sd_res == FR_OK) {
-    WebUI_Init();   /* serveur HTTP : http://<ip>/ (config + monitoring) */
-    printf("Web UI Initialized\r\n");
-  } else {
+  if (!Mode_WebEnabled()) {
+    printf("Web UI : desactive (jumper PA6 ouvert)\r\n");
+  } else if (sd_res != FR_OK) {
     printf("Web UI : desactive (carte SD absente)\r\n");
+  } else {
+    WebUI_Init();   /* serveur HTTP : http://<ip>/ (config + monitoring) */
+    printf("Web UI Initialized (jumper PA6)\r\n");
   }
 #endif /* ENABLE_WEB_UI */
 
