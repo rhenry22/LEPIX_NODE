@@ -1,0 +1,282 @@
+<title>LEPIX NODE — Architecture 2 univers DMX</title>
+<style>
+  :root {
+    --paper: #f4f6f2; --panel: #fdfefc; --ink: #23282b; --muted: #5d6862;
+    --line: #d5dbd2; --accent: #b4622d; --accent-soft: #f3e4d7;
+    --chA: #c34a38; --chB: #3f7cb8; --code-bg: #eceee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #15181a; --panel: #1d2124; --ink: #e6e9e4; --muted: #98a29a;
+      --line: #2f3639; --accent: #d98d51; --accent-soft: #3a2b1e;
+      --chA: #e07a68; --chB: #6fa7d8; --code-bg: #24292c;
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #f4f6f2; --panel: #fdfefc; --ink: #23282b; --muted: #5d6862;
+    --line: #d5dbd2; --accent: #b4622d; --accent-soft: #f3e4d7;
+    --chA: #c34a38; --chB: #3f7cb8; --code-bg: #eceee9;
+  }
+  :root[data-theme="dark"] {
+    --paper: #15181a; --panel: #1d2124; --ink: #e6e9e4; --muted: #98a29a;
+    --line: #2f3639; --accent: #d98d51; --accent-soft: #3a2b1e;
+    --chA: #e07a68; --chB: #6fa7d8; --code-bg: #24292c;
+  }
+  body { background: var(--paper); color: var(--ink); margin: 0;
+         font-family: "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
+         line-height: 1.55; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem;
+          display: flex; flex-direction: column; gap: 2.5rem; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 0.92em; }
+  code { background: var(--code-bg); padding: 0.08em 0.35em; border-radius: 3px; }
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 1.5rem; }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.75rem;
+             font-weight: 600; color: var(--accent); margin: 0 0 0.6rem; }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.3rem); line-height: 1.15; margin: 0 0 0.7rem;
+       text-wrap: balance; font-weight: 700; }
+  .lede { color: var(--muted); max-width: 62ch; margin: 0; }
+  h2 { font-size: 1.15rem; margin: 0 0 0.35rem; display: flex; align-items: baseline; gap: 0.6rem; }
+  h2 .tag { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em;
+            color: var(--accent); font-weight: 600; white-space: nowrap; }
+  section > p.note { color: var(--muted); margin: 0 0 1rem; max-width: 72ch; }
+  .figure { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+            padding: 1rem; overflow-x: auto; }
+  .figure svg { display: block; min-width: 760px; width: 100%; height: auto; }
+  figure { margin: 0; }
+  figcaption { font-size: 0.8rem; color: var(--muted); padding: 0.6rem 0.2rem 0; }
+  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+         gap: 1.25rem; align-items: start; }
+  .tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px;
+              background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem;
+          font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 0.5rem 0.85rem; border-bottom: 1px solid var(--line);
+           white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+       color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--ink); }
+  .chdot { display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%;
+           margin-right: 0.45em; }
+  ul.notes { margin: 0; padding-left: 1.2rem; max-width: 75ch; }
+  ul.notes li { margin-bottom: 0.55rem; }
+  ul.notes li::marker { color: var(--accent); }
+  footer { border-top: 1px solid var(--line); padding-top: 1rem; font-size: 0.8rem;
+           color: var(--muted); }
+  /* SVG */
+  .box { fill: var(--panel); stroke: var(--ink); stroke-width: 1.3; }
+  .subbox { fill: var(--paper); stroke: var(--muted); stroke-width: 1; }
+  .hotbox { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.3; }
+  .flow { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+  .flowbold { stroke: var(--ink); stroke-width: 1.8; fill: none; }
+  .t  { fill: var(--ink); font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; }
+  .tb { fill: var(--ink); font-family: "Segoe UI", Arial, sans-serif; font-size: 13.5px; font-weight: 700; }
+  .ts { fill: var(--muted); font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; }
+  .tm { fill: var(--ink); font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
+  .tms{ fill: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; }
+  .ta { fill: var(--accent); font-family: "Segoe UI", Arial, sans-serif; font-size: 11px;
+        font-weight: 600; letter-spacing: 0.08em; }
+  .wA { stroke: var(--chA); } .wB { stroke: var(--chB); }
+  .wave { stroke-width: 2.2; fill: none; }
+  .arrowhead { fill: var(--muted); } .arrowheadb { fill: var(--ink); }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">LEPIX NODE · Architecture cible</p>
+  <h1>Node 2 univers DMX512 filaires</h1>
+  <p class="lede">Le même matériel que le node LED, basculé en <strong>mode DMX</strong> par le jumper
+  PA5/PA6 : il reçoit deux univers en sACN (ou Art-Net) sur Ethernet et les ressort en continu sur
+  deux lignes DMX512 RS-485 à 40&nbsp;Hz. Aucune sortie WS2815 dans cette configuration.</p>
+</header>
+
+<section>
+  <h2><span class="tag">Fig. 1</span> Synoptique — 2 univers, de la console aux projecteurs</h2>
+  <p class="note">La console émet les univers 1 et 2 en sACN (multicast UDP 5568). Le node
+  (IP par défaut <code>2.0.0.3</code> en mode DMX) décode chaque univers et alimente son port
+  série dédié : chaque port émet en boucle BREAK + 512 canaux, que la console envoie ou non.</p>
+  <figure>
+  <div class="figure">
+  <svg viewBox="0 0 1160 400" role="img" aria-label="Architecture 2 univers DMX : console, Ethernet, node, deux lignes DMX512">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="arrowhead"/>
+      </marker>
+      <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" class="arrowheadb"/>
+      </marker>
+    </defs>
+
+    <!-- Console -->
+    <rect x="14" y="140" width="160" height="120" rx="4" class="box"/>
+    <text x="94" y="168" text-anchor="middle" class="tb">Console / PC</text>
+    <text x="94" y="186" text-anchor="middle" class="ts">GrandMA, QLC+, …</text>
+    <text x="94" y="210" text-anchor="middle" class="tm">sACN · UDP 5568</text>
+    <text x="94" y="227" text-anchor="middle" class="tms">univers 1 + univers 2</text>
+    <text x="94" y="245" text-anchor="middle" class="tms">(ou Art-Net · UDP 6454)</text>
+
+    <line x1="174" y1="200" x2="230" y2="200" class="flowbold" marker-end="url(#ahb)"/>
+    <text x="202" y="188" text-anchor="middle" class="ts">Ethernet</text>
+
+    <!-- Switch -->
+    <rect x="232" y="162" width="100" height="76" rx="4" class="box"/>
+    <text x="282" y="192" text-anchor="middle" class="tb">Switch</text>
+    <text x="282" y="210" text-anchor="middle" class="ts">100 Mb/s</text>
+
+    <line x1="332" y1="200" x2="388" y2="200" class="flowbold" marker-end="url(#ahb)"/>
+
+    <!-- Node -->
+    <rect x="390" y="42" width="360" height="330" rx="6" class="box"/>
+    <text x="570" y="68" text-anchor="middle" class="tb">LEPIX NODE — mode DMX</text>
+    <text x="570" y="85" text-anchor="middle" class="tms">jumper PA5/PA6 · IP 2.0.0.3 /24</text>
+
+    <rect x="410" y="98" width="320" height="34" rx="3" class="subbox"/>
+    <text x="570" y="120" text-anchor="middle" class="t">PHY DP83848 + LwIP + <tspan class="tm">sacn_rx.c</tspan></text>
+    <line x1="570" y1="132" x2="570" y2="144" class="flow" marker-end="url(#ah)"/>
+
+    <rect x="410" y="146" width="320" height="34" rx="3" class="subbox"/>
+    <text x="570" y="168" text-anchor="middle" class="t">Routage univers → port <tspan class="tms">(config.json / CLI)</tspan></text>
+
+    <line x1="490" y1="180" x2="490" y2="196" class="flow" marker-end="url(#ah)"/>
+    <line x1="650" y1="180" x2="650" y2="196" class="flow" marker-end="url(#ah)"/>
+
+    <!-- Port A -->
+    <rect x="410" y="198" width="150" height="120" rx="3" class="hotbox"/>
+    <text x="485" y="219" text-anchor="middle" class="tb">Port DMX A</text>
+    <text x="485" y="238" text-anchor="middle" class="tm">USART2 · TX PD5</text>
+    <text x="485" y="255" text-anchor="middle" class="tm">dir RS485 PD7</text>
+    <text x="485" y="272" text-anchor="middle" class="tm">DMA1 Stream6</text>
+    <text x="485" y="292" text-anchor="middle" class="ts">transceiver RS-485</text>
+    <text x="485" y="307" text-anchor="middle" class="ts">intégré à la carte</text>
+
+    <!-- Port B -->
+    <rect x="580" y="198" width="150" height="120" rx="3" class="hotbox"/>
+    <text x="655" y="219" text-anchor="middle" class="tb">Port DMX B</text>
+    <text x="655" y="238" text-anchor="middle" class="tm">USART3 · TX PC10</text>
+    <text x="655" y="255" text-anchor="middle" class="tm">dir PD10</text>
+    <text x="655" y="272" text-anchor="middle" class="tm">DMA1 Stream3</text>
+    <text x="655" y="292" text-anchor="middle" class="ts">transceiver MAX485</text>
+    <text x="655" y="307" text-anchor="middle" class="ts">externe (3,3 V → bus)</text>
+
+    <text x="570" y="348" text-anchor="middle" class="tms">250 kbauds · 8N2 · BREAK + 513 octets · rafraîchi 40 Hz</text>
+    <text x="570" y="364" text-anchor="middle" class="tms">config : SD (config.json) · console UART DB9 · interface web</text>
+
+    <!-- XLR A -->
+    <line x1="560" y1="258" x2="560" y2="258" class="flow"/>
+    <line x1="485" y1="318" x2="485" y2="318" class="flow"/>
+    <line x1="750" y1="240" x2="800" y2="240" class="wave wA" marker-end="url(#ah)"/>
+    <line x1="750" y1="292" x2="800" y2="292" class="wave wB" marker-end="url(#ah)"/>
+    <line x1="730" y1="240" x2="750" y2="240" class="wave wA"/>
+    <line x1="730" y1="292" x2="750" y2="292" class="wave wB"/>
+
+    <rect x="802" y="216" width="96" height="48" rx="4" class="box" style="stroke: var(--chA)"/>
+    <text x="850" y="237" text-anchor="middle" class="tb">XLR A</text>
+    <text x="850" y="254" text-anchor="middle" class="tms">univers 1</text>
+    <rect x="802" y="268" width="96" height="48" rx="4" class="box" style="stroke: var(--chB)"/>
+    <text x="850" y="289" text-anchor="middle" class="tb">XLR B</text>
+    <text x="850" y="306" text-anchor="middle" class="tms">univers 2</text>
+
+    <!-- Chaînes de projecteurs -->
+    <line x1="898" y1="240" x2="930" y2="240" class="wave wA" marker-end="url(#ah)"/>
+    <line x1="898" y1="292" x2="930" y2="292" class="wave wB" marker-end="url(#ah)"/>
+
+    <g>
+      <rect x="932" y="222" width="62" height="36" rx="3" class="subbox" style="stroke: var(--chA)"/>
+      <text x="963" y="244" text-anchor="middle" class="tm">PAR 1</text>
+      <line x1="994" y1="240" x2="1012" y2="240" class="wave wA"/>
+      <rect x="1014" y="222" width="62" height="36" rx="3" class="subbox" style="stroke: var(--chA)"/>
+      <text x="1045" y="244" text-anchor="middle" class="tm">PAR 2</text>
+      <line x1="1076" y1="240" x2="1094" y2="240" class="wave wA"/>
+      <rect x="1096" y="222" width="52" height="36" rx="3" class="subbox" style="stroke: var(--chA)"/>
+      <text x="1122" y="244" text-anchor="middle" class="tm">120 Ω</text>
+    </g>
+    <g>
+      <rect x="932" y="274" width="62" height="36" rx="3" class="subbox" style="stroke: var(--chB)"/>
+      <text x="963" y="296" text-anchor="middle" class="tm">Lyre 1</text>
+      <line x1="994" y1="292" x2="1012" y2="292" class="wave wB"/>
+      <rect x="1014" y="274" width="62" height="36" rx="3" class="subbox" style="stroke: var(--chB)"/>
+      <text x="1045" y="296" text-anchor="middle" class="tm">Lyre 2</text>
+      <line x1="1076" y1="292" x2="1094" y2="292" class="wave wB"/>
+      <rect x="1096" y="274" width="52" height="36" rx="3" class="subbox" style="stroke: var(--chB)"/>
+      <text x="1122" y="296" text-anchor="middle" class="tm">120 Ω</text>
+    </g>
+    <text x="1040" y="336" text-anchor="middle" class="ts">jusqu'à 32 appareils par ligne · terminaison 120 Ω en bout</text>
+  </svg>
+  </div>
+  <figcaption>Fig. 1 — Deux univers sACN convertis en deux lignes DMX512 indépendantes, émises en parallèle par DMA (source : <code>Core/Src/dmx.c</code>).</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="duo">
+    <div>
+      <h2><span class="tag">Brochage</span> Les 2 ports DMX</h2>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>Port</th><th>UART</th><th>TX / dir</th><th>DMA</th><th>Transceiver</th></tr></thead>
+          <tbody>
+            <tr><td><span class="chdot" style="background:var(--chA)"></span>A</td>
+                <td class="mono">USART2</td><td class="mono">PD5 / PD7</td>
+                <td class="mono">DMA1 St.6</td><td>RS-485 carte</td></tr>
+            <tr><td><span class="chdot" style="background:var(--chB)"></span>B</td>
+                <td class="mono">USART3</td><td class="mono">PC10 / PD10</td>
+                <td class="mono">DMA1 St.3</td><td>MAX485 externe</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tablebox" style="margin-top:1.25rem;">
+        <table>
+          <thead><tr><th>Paramètre DMX512</th><th>Valeur</th></tr></thead>
+          <tbody>
+            <tr><td>Débit</td><td class="mono">250 kbauds · 8N2</td></tr>
+            <tr><td>Trame</td><td class="mono">BREAK + start code + 512 canaux</td></tr>
+            <tr><td>Rafraîchissement</td><td class="mono">40 Hz (25 ms), flux continu</td></tr>
+            <tr><td>Appareils par ligne</td><td class="mono">32 max (norme EIA-485)</td></tr>
+            <tr><td>Terminaison</td><td class="mono">120 Ω entre Data+ et Data−</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h2><span class="tag">Config</span> config.json pour 2 univers</h2>
+      <p class="note">Généré par <code>tools/make_sd_config.py --protocol sacn --universes 1,2,0,0
+      --disable 3,4</code> — sorties 3 et 4 coupées, univers 1 → port A, univers 2 → port B.</p>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>Clé</th><th>Valeur</th><th>Effet</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">protocol</td><td class="mono">1</td><td>sACN E1.31</td></tr>
+            <tr><td class="mono">net_mode / ip</td><td class="mono">1 · 2.0.0.3</td><td>IP statique</td></tr>
+            <tr><td class="mono">output0.universe</td><td class="mono">1</td><td>port DMX A</td></tr>
+            <tr><td class="mono">output1.universe</td><td class="mono">2</td><td>port DMX B</td></tr>
+            <tr><td class="mono">output2/3.enabled</td><td class="mono">0</td><td>inutilisés</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="tag">Notes</span> Points d'attention</h2>
+  <ul class="notes">
+    <li><strong>Jumper de mode :</strong> PA5/PA6 sélectionne DMX au boot — sans lui le node reste en
+    mode LED et les ports DMX sont muets.</li>
+    <li><strong>Port B :</strong> PC10 et PD10 sortent en logique 3,3 V sur les connecteurs — le
+    transceiver RS-485 externe (MAX485/SN75176 alimenté en 5 V) est indispensable pour attaquer le bus.</li>
+    <li><strong>Câblage XLR :</strong> broche 1 = GND, 2 = Data−, 3 = Data+. Toujours une terminaison
+    120 Ω sur le dernier appareil de chaque ligne.</li>
+    <li><strong>Flux continu :</strong> les ports émettent à 40 Hz même sans trafic réseau — les
+    projecteurs gardent leurs dernières valeurs si la console se tait.</li>
+    <li><strong>sACN multicast :</strong> univers 1 → groupe 239.255.0.1, univers 2 → 239.255.0.2 ;
+    le switch doit laisser passer le multicast (éviter l'IGMP snooping trop agressif).</li>
+  </ul>
+</section>
+
+<footer>
+  Sources : <span class="mono">Core/Src/dmx.c</span> · <span class="mono">Core/Inc/dmx.h</span> ·
+  <span class="mono">Core/Src/mode_select.c</span> · <span class="mono">Core/Src/config.c</span> —
+  LEPIX_NODE, branche artnet_receiver_HRP, juillet 2026.
+</footer>
+
+</div>

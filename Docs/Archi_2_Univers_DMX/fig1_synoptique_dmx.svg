@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 400" font-family="sans-serif" role="img" aria-label="Architecture 2 univers DMX : console, Ethernet, node, deux lignes DMX512">
+  <style>
+    svg{--paper:#f4f6f2;--panel:#fdfefc;--ink:#23282b;--muted:#5d6862;--accent:#b4622d;--accent-soft:#f3e4d7;--chA:#c34a38;--chB:#3f7cb8;}
+    @media (prefers-color-scheme: dark){svg{--paper:#15181a;--panel:#1d2124;--ink:#e6e9e4;--muted:#98a29a;--accent:#d98d51;--accent-soft:#3a2b1e;--chA:#e07a68;--chB:#6fa7d8;}}
+    .bg{fill:var(--paper)}
+    .box{fill:var(--panel);stroke:var(--ink);stroke-width:1.3}
+    .subbox{fill:var(--paper);stroke:var(--muted);stroke-width:1}
+    .hotbox{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.3}
+    .flow{stroke:var(--muted);stroke-width:1.4;fill:none}
+    .flowbold{stroke:var(--ink);stroke-width:1.8;fill:none}
+    .t{fill:var(--ink);font-size:13px}
+    .tb{fill:var(--ink);font-size:13.5px;font-weight:700}
+    .ts{fill:var(--muted);font-size:11px}
+    .tm{fill:var(--ink);font-family:monospace;font-size:11.5px}
+    .tms{fill:var(--muted);font-family:monospace;font-size:10.5px}
+    .wA{stroke:var(--chA)}.wB{stroke:var(--chB)}
+    .wave{stroke-width:2.2;fill:none}
+    .arrowhead{fill:var(--muted)}.arrowheadb{fill:var(--ink)}
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowhead"/>
+    </marker>
+    <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrowheadb"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1160" height="400" class="bg"/>
+
+  <rect x="14" y="140" width="160" height="120" rx="4" class="box"/>
+  <text x="94" y="168" text-anchor="middle" class="tb">Console / PC</text>
+  <text x="94" y="186" text-anchor="middle" class="ts">GrandMA, QLC+, …</text>
+  <text x="94" y="210" text-anchor="middle" class="tm">sACN · UDP 5568</text>
+  <text x="94" y="227" text-anchor="middle" class="tms">univers 1 + univers 2</text>
+  <text x="94" y="245" text-anchor="middle" class="tms">(ou Art-Net · UDP 6454)</text>
+
+  <line x1="174" y1="200" x2="230" y2="200" class="flowbold" marker-end="url(#ahb)"/>
+  <text x="202" y="188" text-anchor="middle" class="ts">Ethernet</text>
+
+  <rect x="232" y="162" width="100" height="76" rx="4" class="box"/>
+  <text x="282" y="192" text-anchor="middle" class="tb">Switch</text>
+  <text x="282" y="210" text-anchor="middle" class="ts">100 Mb/s</text>
+
+  <line x1="332" y1="200" x2="388" y2="200" class="flowbold" marker-end="url(#ahb)"/>
+
+  <rect x="390" y="42" width="360" height="330" rx="6" class="box"/>
+  <text x="570" y="68" text-anchor="middle" class="tb">LEPIX NODE — mode DMX</text>
+  <text x="570" y="85" text-anchor="middle" class="tms">jumper PA5/PA6 · IP 2.0.0.3 /24</text>
+
+  <rect x="410" y="98" width="320" height="34" rx="3" class="subbox"/>
+  <text x="570" y="120" text-anchor="middle" class="t">PHY DP83848 + LwIP + <tspan class="tm">sacn_rx.c</tspan></text>
+  <line x1="570" y1="132" x2="570" y2="144" class="flow" marker-end="url(#ah)"/>
+
+  <rect x="410" y="146" width="320" height="34" rx="3" class="subbox"/>
+  <text x="570" y="168" text-anchor="middle" class="t">Routage univers → port <tspan class="tms">(config.json / CLI)</tspan></text>
+
+  <line x1="490" y1="180" x2="490" y2="196" class="flow" marker-end="url(#ah)"/>
+  <line x1="650" y1="180" x2="650" y2="196" class="flow" marker-end="url(#ah)"/>
+
+  <rect x="410" y="198" width="150" height="120" rx="3" class="hotbox"/>
+  <text x="485" y="219" text-anchor="middle" class="tb">Port DMX A</text>
+  <text x="485" y="238" text-anchor="middle" class="tm">USART2 · TX PD5</text>
+  <text x="485" y="255" text-anchor="middle" class="tm">dir RS485 PD7</text>
+  <text x="485" y="272" text-anchor="middle" class="tm">DMA1 Stream6</text>
+  <text x="485" y="292" text-anchor="middle" class="ts">transceiver RS-485</text>
+  <text x="485" y="307" text-anchor="middle" class="ts">intégré à la carte</text>
+
+  <rect x="580" y="198" width="150" height="120" rx="3" class="hotbox"/>
+  <text x="655" y="219" text-anchor="middle" class="tb">Port DMX B</text>
+  <text x="655" y="238" text-anchor="middle" class="tm">USART3 · TX PC10</text>
+  <text x="655" y="255" text-anchor="middle" class="tm">dir PD10</text>
+  <text x="655" y="272" text-anchor="middle" class="tm">DMA1 Stream3</text>
+  <text x="655" y="292" text-anchor="middle" class="ts">transceiver MAX485</text>
+  <text x="655" y="307" text-anchor="middle" class="ts">externe (3,3 V → bus)</text>
+
+  <text x="570" y="348" text-anchor="middle" class="tms">250 kbauds · 8N2 · BREAK + 513 octets · rafraîchi 40 Hz</text>
+  <text x="570" y="364" text-anchor="middle" class="tms">config : SD (config.json) · console UART DB9 · interface web</text>
+
+  <line x1="730" y1="240" x2="800" y2="240" class="wave wA" marker-end="url(#ah)"/>
+  <line x1="730" y1="292" x2="800" y2="292" class="wave wB" marker-end="url(#ah)"/>
+
+  <rect x="802" y="216" width="96" height="48" rx="4" class="box" style="stroke:var(--chA)"/>
+  <text x="850" y="237" text-anchor="middle" class="tb">XLR A</text>
+  <text x="850" y="254" text-anchor="middle" class="tms">univers 1</text>
+  <rect x="802" y="268" width="96" height="48" rx="4" class="box" style="stroke:var(--chB)"/>
+  <text x="850" y="289" text-anchor="middle" class="tb">XLR B</text>
+  <text x="850" y="306" text-anchor="middle" class="tms">univers 2</text>
+
+  <line x1="898" y1="240" x2="930" y2="240" class="wave wA" marker-end="url(#ah)"/>
+  <line x1="898" y1="292" x2="930" y2="292" class="wave wB" marker-end="url(#ah)"/>
+
+  <rect x="932" y="222" width="62" height="36" rx="3" class="subbox" style="stroke:var(--chA)"/>
+  <text x="963" y="244" text-anchor="middle" class="tm">PAR 1</text>
+  <line x1="994" y1="240" x2="1012" y2="240" class="wave wA"/>
+  <rect x="1014" y="222" width="62" height="36" rx="3" class="subbox" style="stroke:var(--chA)"/>
+  <text x="1045" y="244" text-anchor="middle" class="tm">PAR 2</text>
+  <line x1="1076" y1="240" x2="1094" y2="240" class="wave wA"/>
+  <rect x="1096" y="222" width="52" height="36" rx="3" class="subbox" style="stroke:var(--chA)"/>
+  <text x="1122" y="244" text-anchor="middle" class="tm">120 Ω</text>
+
+  <rect x="932" y="274" width="62" height="36" rx="3" class="subbox" style="stroke:var(--chB)"/>
+  <text x="963" y="296" text-anchor="middle" class="tm">Lyre 1</text>
+  <line x1="994" y1="292" x2="1012" y2="292" class="wave wB"/>
+  <rect x="1014" y="274" width="62" height="36" rx="3" class="subbox" style="stroke:var(--chB)"/>
+  <text x="1045" y="296" text-anchor="middle" class="tm">Lyre 2</text>
+  <line x1="1076" y1="292" x2="1094" y2="292" class="wave wB"/>
+  <rect x="1096" y="274" width="52" height="36" rx="3" class="subbox" style="stroke:var(--chB)"/>
+  <text x="1122" y="296" text-anchor="middle" class="tm">120 Ω</text>
+
+  <text x="1040" y="336" text-anchor="middle" class="ts">jusqu'à 32 appareils par ligne · terminaison 120 Ω en bout</text>
+</svg>

@@ -5,6 +5,7 @@ Réception DMX sur IP via Ethernet, pilotage de **4 chaînes WS2815 en parallèl
 Schéma reconstitué depuis le code du dépôt (branche `artnet_receiver_HRP`).
 
 > 💡 Version interactive : ouvrir [`index.html`](index.html) dans un navigateur (page autonome, thèmes clair/sombre).
+> Architecture mode DMX filaire : [`Docs/Archi_2_Univers_DMX`](../Archi_2_Univers_DMX/README.md).
 
 ---
 
