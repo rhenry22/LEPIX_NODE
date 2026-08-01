@@ -2,6 +2,7 @@
 
 #include "sacn_rx.h"
 #include "web_ui.h"
+#include "merge.h"
 #include "lwip/udp.h"
 #include "lwip/igmp.h"
 #include "lwip/ip_addr.h"
@@ -10,6 +11,7 @@
 
 /* ─── Offsets E1.31 (repris de la biblio sACN) ───────────────────────────── */
 #define OFF_IDENT           4    /* "ASC-E1.17\0..." (12 octets)     */
+#define OFF_CID            22    /* CID source (16 octets)           */
 #define OFF_VECTOR_ROOT     18   /* uint32 BE = 0x00000004 (E1.31)   */
 #define OFF_VECTOR_FRAME    40   /* uint32 BE = 0x00000002 (DATA)    */
 #define OFF_SOURCE_NAME     44   /* 64 octets                        */
@@ -152,8 +154,8 @@ static void sacn_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
 
     WebUI_NotifySacn(universe);
 
-    if (s_cb != NULL)
-        s_cb(universe, &buf[OFF_DMX_DATA], slots);
+    /* Merge HTP : source identifiee par le CID E1.31 (16 octets, offset 22). */
+    Merge_Submit(universe, &buf[OFF_CID], &buf[OFF_DMX_DATA], slots);
 
 done:
     pbuf_free(p);

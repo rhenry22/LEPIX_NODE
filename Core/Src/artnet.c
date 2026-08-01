@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include "ws2815.h"
 #include "web_ui.h"
+#include "merge.h"
 
 extern struct netif gnetif;
 
@@ -124,9 +125,14 @@ static void artnet_recv_cb(void *arg,
     /* ---- Monitoring (interface web) ---- */
     WebUI_NotifyArtnet(universe);
 
-    /* ---- Appel du callback utilisateur ---- */
-    if (s_dmx_cb != NULL)
-        s_dmx_cb(universe, pkt->data, dmx_len);
+    /* ---- Merge HTP : source identifiee par l'IP emettrice (4 octets +
+     *      zeros pour completer les 16 octets d'identifiant). ---- */
+    uint8_t src_id[MERGE_SRCID_LEN] = {0};
+    if (addr != NULL) {
+        uint32_t ip = ip4_addr_get_u32(ip_2_ip4(addr));  /* network order */
+        memcpy(src_id, &ip, 4);
+    }
+    Merge_Submit(universe, src_id, pkt->data, dmx_len);
 
 done:
     pbuf_free(p);

@@ -57,6 +57,7 @@
 #include "dmx.h"
 #include "gpio_test.h"
 #include "watchdog.h"
+#include "merge.h"
 
 /* USER CODE END Includes */
 
@@ -292,16 +293,17 @@ int main(void)
     WS2815_Startup_Sequence();
     printf("WS2815 Startup Sequence: Done\r\n");
   #endif
+  /* Merge HTP : Art-Net et sACN passent par le merger, qui route ensuite
+   * la trame mergee vers dmx_to_ws2815 (sortie LED/DMX). */
+  Merge_SetCallback(dmx_to_ws2815);
+
   printf("Art-Net Configuration ...\r\n");
   artnet_init();
-  artnet_set_callback(dmx_to_ws2815);
   printf("Art-Net Initialized\r\n");
 
-  /* sACN (E1.31) : même callback que l'Art-Net (routage par univers).
-   * On rejoint les groupes multicast des univers configurés. */
+  /* sACN (E1.31) : rejoint les groupes multicast des univers configurés. */
   printf("sACN (E1.31) Configuration ...\r\n");
   sacn_rx_init();
-  sacn_rx_set_callback(dmx_to_ws2815);
   {
     DeviceConfig_t *cfg = Config_Get();
     uint16_t univ[MAX_OUTPUTS];

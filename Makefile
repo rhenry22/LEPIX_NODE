@@ -43,6 +43,7 @@ Core/Src/sd_selftest.c \
 Core/Src/dmx.c \
 Core/Src/gpio_test.c \
 Core/Src/watchdog.c \
+Core/Src/merge.c \
 Core/Src/web_ui.c \
 Core/Src/icon_loader.c \
 Core/Src/menu.c \
