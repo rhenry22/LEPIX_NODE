@@ -15,6 +15,7 @@
 #include "config.h"
 #include "ws2815.h"   /* WS2815_MAX_LEDS */
 #include "sacn_rx.h"  /* sacn_rx_set_universes (application a chaud) */
+#include "lwip.h"     /* MX_LWIP_ApplyNetworkConfig (reseau a chaud)  */
 #include "lwip/apps/httpd.h"
 #include "lwip/apps/fs.h"
 #include "lwip/netif.h"
@@ -472,8 +473,10 @@ static const char *cgi_save(int index, int n, char *keys[], char *vals[])
         sacn_rx_set_universes(univ, nu);
     }
 
-    /* NB : les changements reseau (IP/masque/passerelle) ne sont PAS
-     * appliques a chaud ici — ils necessitent toujours un redemarrage. */
+    /* Reseau applique a chaud (IP/masque/passerelle/DHCP).
+     * ATTENTION : si l'IP change, la session web courante est coupee — le
+     * navigateur devra recharger sur la nouvelle adresse. */
+    MX_LWIP_ApplyNetworkConfig();
 
     /* Redirection vers la page de config (rechargée avec les nouvelles valeurs) */
     return "/config";

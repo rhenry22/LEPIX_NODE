@@ -59,6 +59,10 @@ void MX_LWIP_Init(void);
  */
 void MX_LWIP_Process(void);
 
+/* Applique la config réseau courante (Config_Get) au netif. Appelable à
+ * chaud (après /save) pour changer IP/DHCP sans redémarrer. */
+void MX_LWIP_ApplyNetworkConfig(void);
+
 /* USER CODE END 1 */
 #endif /* WITH_RTOS */
 

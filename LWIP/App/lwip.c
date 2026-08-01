@@ -91,10 +91,33 @@ void MX_LWIP_Init(void)
   /* Create the Ethernet link handler thread */
 
 /* USER CODE BEGIN 3 */
-  /* --- Adressage depuis config.json (Config_Init() doit être appelé avant) --- */
+  /* Adressage depuis la config (Config_Init() doit être appelé avant). */
+  MX_LWIP_ApplyNetworkConfig();
+/* USER CODE END 3 */
+}
+
+/* USER CODE BEGIN ApplyNetworkConfig */
+/**
+ * @brief Applique la config réseau courante (Config_Get) au netif.
+ *        Appelée au boot ET à chaud (après un /save de l'UI web) : elle
+ *        gère les transitions DHCP <-> statique sans réinitialiser la pile.
+ *
+ * ATTENTION (usage à chaud) : changer l'IP coupe les connexions TCP en
+ * cours, y compris la session web qui a declenché le changement — le
+ * navigateur devra se reconnecter sur la nouvelle adresse. Les sockets UDP
+ * Art-Net/sACN (bind sur IP_ADDR_ANY) continuent de fonctionner.
+ */
+void MX_LWIP_ApplyNetworkConfig(void)
+{
   DeviceConfig_t *cfg = Config_Get();
+
   if (cfg->net_mode == NET_STATIC)
   {
+    /* Si le DHCP tournait, l'arrêter avant de forcer l'adresse statique. */
+    if (dhcp_supplied_address(&gnetif) || netif_dhcp_data(&gnetif) != NULL)
+    {
+      dhcp_stop(&gnetif);
+    }
     IP4_ADDR(&ipaddr,  cfg->ip[0],      cfg->ip[1],      cfg->ip[2],      cfg->ip[3]);
     IP4_ADDR(&netmask, cfg->netmask[0], cfg->netmask[1], cfg->netmask[2], cfg->netmask[3]);
     IP4_ADDR(&gw,      cfg->gateway[0], cfg->gateway[1], cfg->gateway[2], cfg->gateway[3]);
@@ -103,14 +126,20 @@ void MX_LWIP_Init(void)
            cfg->ip[0], cfg->ip[1], cfg->ip[2], cfg->ip[3],
            cfg->netmask[0], cfg->netmask[1], cfg->netmask[2], cfg->netmask[3]);
   }
-  else
+  else /* NET_DHCP */
   {
-    /* Start DHCP negotiation for a network interface (IPv4) */
-    dhcp_start(&gnetif);
-    printf("[LwIP] DHCP demarre\r\n");
+    /* Repartir d'une adresse nulle puis (re)lancer le DHCP. */
+    if (netif_dhcp_data(&gnetif) == NULL)
+    {
+      ip_addr_set_zero_ip4(&gnetif.ip_addr);
+      ip_addr_set_zero_ip4(&gnetif.netmask);
+      ip_addr_set_zero_ip4(&gnetif.gw);
+      dhcp_start(&gnetif);
+      printf("[LwIP] DHCP demarre\r\n");
+    }
   }
-/* USER CODE END 3 */
 }
+/* USER CODE END ApplyNetworkConfig */
 
 #ifdef USE_OBSOLETE_USER_CODE_SECTION_4
 /* Kept to help code migration. (See new 4_1, 4_2... sections) */
