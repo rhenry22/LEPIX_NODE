@@ -6,6 +6,7 @@
 #include "lwip/igmp.h"
 #include "lwip/ip_addr.h"
 #include <string.h>
+#include <stdbool.h>
 
 /* ─── Offsets E1.31 (repris de la biblio sACN) ───────────────────────────── */
 #define OFF_IDENT           4    /* "ASC-E1.17\0..." (12 octets)     */
@@ -51,12 +52,67 @@ static void sacn_universe_group(uint16_t universe, ip_addr_t *out)
     IP4_ADDR(out, 239, 255, (universe >> 8) & 0xFF, universe & 0xFF);
 }
 
+/* Univers actuellement rejoints (pour pouvoir les quitter au changement).
+ * Taille = nombre max de sorties routables ; ajuster si besoin. */
+#define SACN_MAX_JOINED  8
+static uint16_t s_joined[SACN_MAX_JOINED];
+static uint8_t  s_joined_count = 0;
+
+static bool joined_contains(uint16_t u)
+{
+    for (uint8_t i = 0; i < s_joined_count; i++)
+        if (s_joined[i] == u) return true;
+    return false;
+}
+
 void sacn_rx_join_universe(uint16_t universe)
+{
+    if (universe == 0 || universe > 63999) return;
+    if (joined_contains(universe)) return;              /* deja rejoint */
+    ip_addr_t grp;
+    sacn_universe_group(universe, &grp);
+    if (igmp_joingroup(IP_ADDR_ANY, ip_2_ip4(&grp)) == ERR_OK &&
+        s_joined_count < SACN_MAX_JOINED) {
+        s_joined[s_joined_count++] = universe;
+    }
+}
+
+void sacn_rx_leave_universe(uint16_t universe)
 {
     if (universe == 0 || universe > 63999) return;
     ip_addr_t grp;
     sacn_universe_group(universe, &grp);
-    igmp_joingroup(IP_ADDR_ANY, ip_2_ip4(&grp));
+    igmp_leavegroup(IP_ADDR_ANY, ip_2_ip4(&grp));
+    /* Retire de la table (compactage). */
+    for (uint8_t i = 0; i < s_joined_count; i++) {
+        if (s_joined[i] == universe) {
+            s_joined[i] = s_joined[--s_joined_count];
+            break;
+        }
+    }
+}
+
+void sacn_rx_set_universes(const uint16_t *universes, uint8_t count)
+{
+    if (universes == NULL) return;
+
+    /* 1) Quitter les univers rejoints qui ne sont plus demandes.
+     *    On itere sur une copie car sacn_rx_leave_universe modifie s_joined. */
+    uint16_t old[SACN_MAX_JOINED];
+    uint8_t  old_count = s_joined_count;
+    for (uint8_t i = 0; i < old_count; i++) old[i] = s_joined[i];
+
+    for (uint8_t i = 0; i < old_count; i++) {
+        bool still = false;
+        for (uint8_t j = 0; j < count; j++)
+            if (universes[j] == old[i]) { still = true; break; }
+        if (!still)
+            sacn_rx_leave_universe(old[i]);
+    }
+
+    /* 2) Rejoindre les nouveaux (join est idempotent). */
+    for (uint8_t j = 0; j < count; j++)
+        sacn_rx_join_universe(universes[j]);
 }
 
 static void sacn_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,

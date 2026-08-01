@@ -303,9 +303,12 @@ int main(void)
   sacn_rx_set_callback(dmx_to_ws2815);
   {
     DeviceConfig_t *cfg = Config_Get();
+    uint16_t univ[MAX_OUTPUTS];
+    uint8_t  nu = 0;
     for (uint8_t i = 0; i < MAX_OUTPUTS; i++)
       if (cfg->outputs[i].enabled)
-        sacn_rx_join_universe(cfg->outputs[i].universe);
+        univ[nu++] = cfg->outputs[i].universe;
+    sacn_rx_set_universes(univ, nu);   /* meme chemin que l'application a chaud */
   }
   printf("sACN Initialized\r\n");
 

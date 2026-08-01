@@ -14,6 +14,7 @@
 #include "web_ui.h"
 #include "config.h"
 #include "ws2815.h"   /* WS2815_MAX_LEDS */
+#include "sacn_rx.h"  /* sacn_rx_set_universes (application a chaud) */
 #include "lwip/apps/httpd.h"
 #include "lwip/apps/fs.h"
 #include "lwip/netif.h"
@@ -458,6 +459,21 @@ static const char *cgi_save(int index, int n, char *keys[], char *vals[])
     }
 
     Config_Save();  /* persiste sur SD (no-op si SD absente) */
+
+    /* Application a chaud (sans reboot) : le routage des sorties (enabled,
+     * universe, led_count) est relu a chaque trame, donc deja effectif.
+     * Seul le sACN doit re-souscrire aux groupes multicast des univers. */
+    {
+        uint16_t univ[MAX_OUTPUTS];
+        uint8_t  nu = 0;
+        for (int i = 0; i < MAX_OUTPUTS; i++)
+            if (cfg->outputs[i].enabled)
+                univ[nu++] = cfg->outputs[i].universe;
+        sacn_rx_set_universes(univ, nu);
+    }
+
+    /* NB : les changements reseau (IP/masque/passerelle) ne sont PAS
+     * appliques a chaud ici — ils necessitent toujours un redemarrage. */
 
     /* Redirection vers la page de config (rechargée avec les nouvelles valeurs) */
     return "/config";

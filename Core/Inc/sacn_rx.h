@@ -27,4 +27,13 @@ void sacn_rx_set_callback(sacn_dmx_cb_t cb);
 /* Rejoint le groupe multicast d'un univers (1..63999). */
 void sacn_rx_join_universe(uint16_t universe);
 
+/* Quitte le groupe multicast d'un univers. */
+void sacn_rx_leave_universe(uint16_t universe);
+
+/* Synchronise les souscriptions multicast avec la liste d'univers voulue :
+ * quitte ceux qui n'y sont plus, rejoint les nouveaux. Idempotent — à
+ * appeler apres tout changement de config (ex. /save de l'UI web) pour
+ * appliquer a chaud les nouveaux univers sACN sans redemarrer. */
+void sacn_rx_set_universes(const uint16_t *universes, uint8_t count);
+
 #endif /* SACN_RX_H */
