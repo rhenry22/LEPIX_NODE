@@ -56,6 +56,7 @@
 #include "sd_selftest.h"
 #include "dmx.h"
 #include "gpio_test.h"
+#include "watchdog.h"
 
 /* USER CODE END Includes */
 
@@ -329,12 +330,18 @@ int main(void)
 
   uint32_t last_tick = HAL_GetTick();
 
+  /* Watchdog demarre APRES les inits lentes (sequence WS2815 ~10 s, SD) :
+   * a partir d'ici la boucle doit rafraichir au moins tous les ~2 s. */
+  Watchdog_Init();
+  printf("Watchdog IWDG : ON (~2s)\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
-  
+
   while (1)
   {
+    Watchdog_Refresh();   /* recharge le watchdog a chaque iteration */
     /* Pompe LwIP (mode raw, pas de FreeRTOS) */
     MX_LWIP_Process();
     /* USER CODE BEGIN WHILE */
