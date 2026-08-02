@@ -35,6 +35,15 @@ TEST_TIMEOUT_S = 600
 
 MODE_LED, MODE_DMX = 0, 1
 
+# Formats pixel — miroir de PixelFormat_t / PixelFormat_BytesPerPixel dans
+# Core/Inc/config.h. Informatif pour l'instant : le driver reel emet
+# toujours en GRB 3 octets quel que soit ce reglage (voir web_ui.c).
+PIXEL_FMT_RGB, PIXEL_FMT_GRB, PIXEL_FMT_BRG = 0, 1, 2
+PIXEL_FMT_RGBW, PIXEL_FMT_GRBW, PIXEL_FMT_RGBWW = 3, 4, 5
+PIXEL_FMT_COUNT = 6
+PIXEL_FMT_NAMES = {0: "RGB", 1: "GRB", 2: "BRG", 3: "RGBW", 4: "GRBW", 5: "RGBWW"}
+PIXEL_FMT_BYTES = {0: 3, 1: 3, 2: 3, 3: 4, 4: 4, 5: 5}
+
 
 # ─────────────────────────────────────────────────────────────────────────
 #  État simulé — équivalent de Config_Get() / WebUI_Stats_t / s_dmx_val[]
@@ -50,7 +59,8 @@ class State:
         self.gateway = [2, 0, 0, 1]
         self.protocol = PROTO_SACN
         self.outputs = [
-            {"enabled": True, "universe": i, "led_count": 120} for i in range(MAX_OUTPUTS)
+            {"enabled": True, "universe": i, "led_count": 120, "pixel_format": PIXEL_FMT_GRB}
+            for i in range(MAX_OUTPUTS)
         ]
         self.artnet_packets = 0
         self.artnet_last_ms = 0
@@ -230,7 +240,7 @@ def build_dmx():
               " document.getElementById('inf').textContent=j.len?"
               "  (j.len+' canaux — trame il y a '+(j.age/1000).toFixed(1)+' s'):"
               "  'aucune trame recue pour cette sortie';"
-              "}catch(e){}setTimeout(poll,500);}"
+              "}catch(e){}setTimeout(poll,200);}"  # 5 Hz
               "cv.onmousemove=e=>{if(!last)return;const r=cv.getBoundingClientRect();"
               " const cx2=Math.floor((e.clientX-r.left)/r.width*32);"
               " const cy=Math.floor((e.clientY-r.top)/r.height*16);"
@@ -263,6 +273,11 @@ def build_groupes():
             age = (S.now_ms() - S.dmx_ms[i]) if length else 0
             recent = length and age < 5000
             frame_desc = "aucune" if not length else f"il y a {age/1000:.1f} s"
+            pf_row = ""
+            if not is_dmx:
+                pf = o["pixel_format"]
+                pf_row = (f"<tr><th>Format pixel</th><td>{PIXEL_FMT_NAMES[pf]} "
+                          f"({PIXEL_FMT_BYTES[pf]} octets/px)</td></tr>")
             n += (f"<div class=card><h3>Sortie {i+1}"
                   f"<span class='pill {'on' if o['enabled'] else 'no'}'>"
                   f"{'ACTIVE' if o['enabled'] else 'COUPEE'}</span>"
@@ -272,6 +287,7 @@ def build_groupes():
                   f"<tr><th>Univers</th><td>{o['universe']}</td></tr>"
                   f"<tr><th>{'Port physique' if is_dmx else 'LEDs'}</th>"
                   f"<td>{i if is_dmx else o['led_count']}</td></tr>"
+                  f"{pf_row}"
                   f"<tr><th>Protocole entree</th><td>{PROTO_NAMES[S.protocol]}</td></tr>"
                   f"<tr><th>Derniere trame</th><td>{frame_desc}</td></tr>"
                   f"</table>"
@@ -328,13 +344,24 @@ def build_config():
               f"<option value=0 {'selected' if S.protocol==0 else ''}>Art-Net</option>"
               f"<option value=1 {'selected' if S.protocol==1 else ''}>sACN</option>"
               f"<option value=2 {'selected' if S.protocol==2 else ''}>DMX (UART)</option></select>")
-        n += "<h2>Sorties</h2><table><tr><th>#</th><th>Active</th><th>Univers</th><th>LEDs</th></tr>"
+        n += ("<h2>Sorties</h2><table><tr><th>#</th><th>Active</th><th>Univers</th>"
+              "<th>LEDs</th><th>Format pixel</th></tr>")
         for i, o in enumerate(S.outputs):
+            pf_opts = "".join(
+                f"<option value={f} {'selected' if o['pixel_format']==f else ''}>"
+                f"{PIXEL_FMT_NAMES[f]} ({PIXEL_FMT_BYTES[f]} o/px)</option>"
+                for f in range(PIXEL_FMT_COUNT))
             n += (f"<tr><td>{i+1}</td>"
                   f"<td><input type=checkbox name=e{i} {'checked' if o['enabled'] else ''}></td>"
                   f"<td><input name=u{i} value={o['universe']} size=6></td>"
-                  f"<td><input name=l{i} value={o['led_count']} size=6></td></tr>")
-        n += (f"</table><p><button type=submit>Enregistrer</button></p></form>"
+                  f"<td><input name=l{i} value={o['led_count']} size=6></td>"
+                  f"<td><select name=pf{i}>{pf_opts}</select></td></tr>")
+        n += ("</table>"
+              '<p style=color:#78828c;font-size:12px;margin:6px 0 0>'
+              'Format pixel : ordre des canaux du flux DMX pour cette sortie. '
+              'Valeur enregistree et affichee dans Sorties — le driver de sortie '
+              'utilise pour l\'instant toujours GRB 3 octets quel que soit ce reglage.</p>')
+        n += (f"<p><button type=submit>Enregistrer</button></p></form>"
               f"<p style=color:#78828c;font-size:12px>Config_Save() simule : {S.save_count} appel(s)</p>"
               + FOOTER)
         return n
@@ -373,6 +400,13 @@ def cgi_save(params):
                 try:
                     l = int(params[f"l{i}"][0])
                     o["led_count"] = max(0, min(WS2815_MAX_LEDS, l))
+                except ValueError:
+                    pass
+            if f"pf{i}" in params:
+                try:
+                    pf = int(params[f"pf{i}"][0])
+                    if 0 <= pf < PIXEL_FMT_COUNT:
+                        o["pixel_format"] = pf
                 except ValueError:
                     pass
         S.save_count += 1  # simule le Config_Save() differe (WebUI_Task)

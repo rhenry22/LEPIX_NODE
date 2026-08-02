@@ -21,13 +21,56 @@ typedef enum {
     NET_STATIC,
 } NetMode_t;
 
+/* Format pixel par sortie — nombre d'octets et ordre des canaux dans le
+ * flux DMX/Art-Net/sACN reçu pour cette sortie. Affiché/éditable dans la
+ * Web UI (onglet Configuration) et dans /groupes ; PAS ENCORE branché au
+ * driver DMA (Core/Src/ws2815.c émet toujours en GRB 3 octets fixe — voir
+ * commentaire dans ws2815.h). Valeur purement informative pour l'instant,
+ * pensée pour préparer un futur driver multi-format. */
+typedef enum {
+    PIXEL_FMT_RGB = 0,
+    PIXEL_FMT_GRB,      /* défaut WS2812/WS2815 */
+    PIXEL_FMT_BRG,
+    PIXEL_FMT_RGBW,
+    PIXEL_FMT_GRBW,
+    PIXEL_FMT_RGBWW,    /* RGB + blanc chaud + blanc froid (5 octets) */
+} PixelFormat_t;
+
+#define PIXEL_FMT_COUNT 6
+
+/* Nombre d'octets par pixel pour un format donné. */
+static inline uint8_t PixelFormat_BytesPerPixel(PixelFormat_t f)
+{
+    switch (f) {
+        case PIXEL_FMT_RGBW:
+        case PIXEL_FMT_GRBW:  return 4;
+        case PIXEL_FMT_RGBWW: return 5;
+        default:              return 3;   /* RGB / GRB / BRG */
+    }
+}
+
+/* Nom court pour affichage (Web UI, CLI). */
+static inline const char *PixelFormat_Name(PixelFormat_t f)
+{
+    switch (f) {
+        case PIXEL_FMT_RGB:   return "RGB";
+        case PIXEL_FMT_GRB:   return "GRB";
+        case PIXEL_FMT_BRG:   return "BRG";
+        case PIXEL_FMT_RGBW:  return "RGBW";
+        case PIXEL_FMT_GRBW:  return "GRBW";
+        case PIXEL_FMT_RGBWW: return "RGBWW";
+        default:              return "?";
+    }
+}
+
 /* Per-output configuration */
 typedef struct {
-    bool     enabled;
-    uint16_t universe;      /* Art-Net / sACN universe 0-32767 */
-    uint16_t led_count;     /* 1-512 */
-    uint8_t  max_current_A; /* 0-5 amps */
-    uint8_t  dmx_channel;   /* start channel for DMX mode */
+    bool          enabled;
+    uint16_t      universe;      /* Art-Net / sACN universe 0-32767 */
+    uint16_t      led_count;     /* 1-512 */
+    uint8_t       max_current_A; /* 0-5 amps */
+    uint8_t       dmx_channel;   /* start channel for DMX mode */
+    PixelFormat_t pixel_format;  /* RGB/GRB/RGBW/... — voir note ci-dessus */
 } OutputConfig_t;
 
 /* Full device configuration */
@@ -63,10 +106,10 @@ typedef struct {
     .protocol   = PROTO_SACN, \
     .dmx_uart   = 2, \
     .outputs    = { \
-        {true,  0, 120, 5, 1}, \
-        {true,  1, 120, 5, 1}, \
-        {true,  2, 120, 5, 1}, \
-        {true,  3, 120, 5, 1}, \
+        {true,  0, 120, 5, 1, PIXEL_FMT_GRB}, \
+        {true,  1, 120, 5, 1, PIXEL_FMT_GRB}, \
+        {true,  2, 120, 5, 1, PIXEL_FMT_GRB}, \
+        {true,  3, 120, 5, 1, PIXEL_FMT_GRB}, \
     }, \
 }
 

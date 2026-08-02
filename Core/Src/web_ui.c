@@ -353,7 +353,7 @@ static void build_dmx(webui_page_t *p)
         " document.getElementById('inf').textContent=j.len?\n"
         "  (j.len+' canaux — trame il y a '+(j.age/1000).toFixed(1)+' s'):\n"
         "  'aucune trame recue pour cette sortie';\n"
-        "}catch(e){}setTimeout(poll,500);}\n"
+        "}catch(e){}setTimeout(poll,200);}\n"  /* 5 Hz */
         "cv.onmousemove=e=>{if(!last)return;const r=cv.getBoundingClientRect();\n"
         " const cx2=Math.floor((e.clientX-r.left)/r.width*32);\n"
         " const cy=Math.floor((e.clientY-r.top)/r.height*16);\n"
@@ -430,18 +430,26 @@ static void build_groupes(webui_page_t *p)
             "</h3>"
             "<table>"
             "<tr><th>Univers</th><td>%u</td></tr>"
-            "<tr><th>%s</th><td>%u</td></tr>"
-            "<tr><th>Protocole entree</th><td>%s</td></tr>"
-            "<tr><th>Derniere trame</th><td>%s</td></tr>"
-            "</table>"
-            "<p><a href='/dmx' style=color:#90caf9>Voir la matrice des canaux &rarr;</a></p>"
-            "</div>",
+            "<tr><th>%s</th><td>%u</td></tr>",
             i + 1,
             o->enabled ? "on" : "no", o->enabled ? "ACTIVE" : "COUPEE",
             recent ? "on" : "no", recent ? "TRAME RECENTE" : "SILENCE",
             o->universe,
             is_dmx_mode ? "Port physique" : "LEDs",
-            is_dmx_mode ? (unsigned)i : o->led_count,
+            is_dmx_mode ? (unsigned)i : o->led_count);
+
+        if (!is_dmx_mode)
+            n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+                "<tr><th>Format pixel</th><td>%s (%u octets/px)</td></tr>",
+                PixelFormat_Name(o->pixel_format),
+                PixelFormat_BytesPerPixel(o->pixel_format));
+
+        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+            "<tr><th>Protocole entree</th><td>%s</td></tr>"
+            "<tr><th>Derniere trame</th><td>%s</td></tr>"
+            "</table>"
+            "<p><a href='/dmx' style=color:#90caf9>Voir la matrice des canaux &rarr;</a></p>"
+            "</div>",
             proto_name(cfg->protocol),
             frame_desc);
     }
@@ -560,19 +568,33 @@ static void build_config(webui_page_t *p)
         cfg->protocol == PROTO_DMX_UART ? "selected" : "");
 
     n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n, "<h2>Sorties</h2><table>"
-        "<tr><th>#</th><th>Active</th><th>Univers</th><th>LEDs</th></tr>");
+        "<tr><th>#</th><th>Active</th><th>Univers</th><th>LEDs</th><th>Format pixel</th></tr>");
     for (int i = 0; i < MAX_OUTPUTS; i++) {
         OutputConfig_t *o = &cfg->outputs[i];
         n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
             "<tr><td>%d</td>"
             "<td><input type=checkbox name=e%d %s></td>"
             "<td><input name=u%d value=%u size=6></td>"
-            "<td><input name=l%d value=%u size=6></td></tr>",
+            "<td><input name=l%d value=%u size=6></td>"
+            "<td><select name=pf%d>",
             i + 1,
             i, o->enabled ? "checked" : "",
             i, o->universe,
-            i, o->led_count);
+            i, o->led_count,
+            i);
+        for (int f = 0; f < PIXEL_FMT_COUNT; f++)
+            n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+                "<option value=%d %s>%s (%u o/px)</option>",
+                f, (o->pixel_format == f) ? "selected" : "",
+                PixelFormat_Name((PixelFormat_t)f),
+                PixelFormat_BytesPerPixel((PixelFormat_t)f));
+        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n, "</select></td></tr>");
     }
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "<p style=color:#78828c;font-size:12px;margin:6px 0 0>"
+        "Format pixel : ordre des canaux du flux DMX pour cette sortie. "
+        "Valeur enregistree et affichee dans Sorties — le driver de sortie "
+        "utilise pour l'instant toujours GRB 3 octets quel que soit ce reglage.</p>");
     n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
         "</table><p><button type=submit>Enregistrer</button></p>"
         "</form></main></body></html>");
@@ -639,6 +661,13 @@ static const char *cgi_save(int index, int n, char *keys[], char *vals[])
             if (leds < 0) leds = 0;
             if (leds > WS2815_MAX_LEDS) leds = WS2815_MAX_LEDS;
             cfg->outputs[i].led_count = (uint16_t)leds;
+        }
+
+        snprintf(key, sizeof(key), "pf%d", i);
+        if ((v = find_param(n, keys, vals, key)) != NULL) {
+            int pf = atoi(v);
+            if (pf >= 0 && pf < PIXEL_FMT_COUNT)
+                cfg->outputs[i].pixel_format = (PixelFormat_t)pf;
         }
     }
 

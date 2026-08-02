@@ -100,6 +100,15 @@ void Config_Load(void)
         g_config.outputs[i].led_count    = (uint16_t)parse_uint(section, "led_count");
         g_config.outputs[i].max_current_A= (uint8_t)parse_uint(section, "max_current_A");
         g_config.outputs[i].dmx_channel  = (uint8_t)parse_uint(section, "dmx_channel");
+
+        /* pixel_format absent (config.json d'avant cette version) -> GRB */
+        if (strstr(section, "\"pixel_format\":")) {
+            uint32_t pf = parse_uint(section, "pixel_format");
+            g_config.outputs[i].pixel_format =
+                (pf < PIXEL_FMT_COUNT) ? (PixelFormat_t)pf : PIXEL_FMT_GRB;
+        } else {
+            g_config.outputs[i].pixel_format = PIXEL_FMT_GRB;
+        }
     }
 
     g_config_from_sd = true;
@@ -137,13 +146,14 @@ void Config_Save(void)
         n += snprintf(buf + n, sizeof(buf) - n,
             "  \"output%d\": {"
             "\"enabled\":%u, \"universe\":%u, \"led_count\":%u, "
-            "\"max_current_A\":%u, \"dmx_channel\":%u}%s\r\n",
+            "\"max_current_A\":%u, \"dmx_channel\":%u, \"pixel_format\":%u}%s\r\n",
             i,
             g_config.outputs[i].enabled,
             g_config.outputs[i].universe,
             g_config.outputs[i].led_count,
             g_config.outputs[i].max_current_A,
             g_config.outputs[i].dmx_channel,
+            g_config.outputs[i].pixel_format,
             (i < MAX_OUTPUTS - 1) ? "," : ""
         );
     }

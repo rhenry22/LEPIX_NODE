@@ -3,7 +3,9 @@
 
 Le format produit est exactement celui du parseur maison du firmware
 (Core/Src/config.c) : cles a plat, valeurs numeriques, CRLF.
-Rappels : protocole 0=artnet 1=sacn 2=dmx ; net_mode 0=dhcp 1=statique.
+Rappels : protocole 0=artnet 1=sacn 2=dmx ; net_mode 0=dhcp 1=statique ;
+pixel_format 0=RGB 1=GRB 2=BRG 3=RGBW 4=GRBW 5=RGBWW (voir config.h ;
+purement informatif pour l'instant, le driver reel emet toujours en GRB).
 La carte doit etre en FAT16/FAT32 (pas d'exFAT).
 
 Exemples :
@@ -18,6 +20,7 @@ import os
 import sys
 
 PROTOS = {"artnet": 0, "sacn": 1, "dmx": 2}
+PIXEL_FORMATS = {"rgb": 0, "grb": 1, "brg": 2, "rgbw": 3, "grbw": 4, "rgbww": 5}
 CONFIG_VERSION = 1
 MAX_OUTPUTS = 4
 
@@ -60,6 +63,8 @@ def main():
     ap.add_argument("--max-current", type=int, default=5, help="limite en A (0-5)")
     ap.add_argument("--disable", default="",
                     help="sorties a desactiver, ex : 3,4")
+    ap.add_argument("--pixel-format", choices=PIXEL_FORMATS, default="grb",
+                    help="format pixel des 4 sorties (defaut : grb — WS2815 standard)")
     args = ap.parse_args()
 
     universes = [int(u) for u in args.universes.split(",")]
@@ -85,7 +90,7 @@ def main():
         sep = "," if i < MAX_OUTPUTS - 1 else ""
         lines.append(f'  "output{i}": {{"enabled":{en}, "universe":{universes[i]}, '
                      f'"led_count":{args.leds}, "max_current_A":{args.max_current}, '
-                     f'"dmx_channel":1}}{sep}')
+                     f'"dmx_channel":1, "pixel_format":{PIXEL_FORMATS[args.pixel_format]}}}{sep}')
     lines.append("}")
     content = "\r\n".join(lines) + "\r\n"
 
