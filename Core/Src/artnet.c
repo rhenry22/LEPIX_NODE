@@ -15,6 +15,7 @@
 #include "ws2815.h"
 #include "web_ui.h"
 #include "merge.h"
+#include "log_capture.h"
 
 extern struct netif gnetif;
 
@@ -124,6 +125,9 @@ static void artnet_recv_cb(void *arg,
 
     /* ---- Monitoring (interface web) ---- */
     WebUI_NotifyArtnet(universe);
+
+    /* Commande CLI "log" : capture sur donnees brutes, avant fusion HTP. */
+    LogCapture_OnFrame(LOG_SRC_ARTNET, universe, pkt->data, dmx_len);
 
     /* ---- Merge HTP : source identifiee par l'IP emettrice (4 octets +
      *      zeros pour completer les 16 octets d'identifiant). ---- */

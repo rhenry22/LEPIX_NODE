@@ -41,6 +41,8 @@ Core/Src/config.c \
 Core/Src/mode_select.c \
 Core/Src/sd_selftest.c \
 Core/Src/dmx.c \
+Core/Src/cli.c \
+Core/Src/log_capture.c \
 Core/Src/gpio_test.c \
 Core/Src/watchdog.c \
 Core/Src/merge.c \

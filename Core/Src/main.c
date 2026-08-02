@@ -57,6 +57,8 @@
 #include "dmx.h"
 #include "gpio_test.h"
 #include "test_seq.h"
+#include "cli.h"
+#include "log_capture.h"
 #include "watchdog.h"
 #include "merge.h"
 
@@ -263,6 +265,8 @@ int main(void)
   Menu_Init();            // clears screen, shows main menu
 #endif
 
+  CLI_Init();             // console de config sur USART1 (DB9, 115200 8N1)
+
   /* Aiguillage selon le jumper PA5/PA6 (lu par Mode_Init) :
    *  - MODE_DMX : sortie DMX512/RDM sur XLR (USART2 PD5/6, dir PD7)
    *  - MODE_LED : 4 chaines WS2815 sur GPIOD (PD15/13/11/9), TIM1+DMA2 */
@@ -348,6 +352,8 @@ int main(void)
 #ifdef ENABLE_WEB_UI
     WebUI_Task();          /* consomme la sauvegarde SD differee (/save) */
 #endif
+    CLI_Task();             // commandes de configuration recues sur USART1
+    LogCapture_Task();       // imprime les trames capturees par "log"
     /* Pompe LwIP (mode raw, pas de FreeRTOS) */
     MX_LWIP_Process();
     /* USER CODE BEGIN WHILE */

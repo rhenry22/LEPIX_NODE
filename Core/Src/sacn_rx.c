@@ -3,6 +3,7 @@
 #include "sacn_rx.h"
 #include "web_ui.h"
 #include "merge.h"
+#include "log_capture.h"
 #include "lwip/udp.h"
 #include "lwip/igmp.h"
 #include "lwip/ip_addr.h"
@@ -153,6 +154,9 @@ static void sacn_recv_cb(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     s_last_seq[si] = seq;
 
     WebUI_NotifySacn(universe);
+
+    /* Commande CLI "log" : capture sur donnees brutes, avant fusion HTP. */
+    LogCapture_OnFrame(LOG_SRC_SACN, universe, &buf[OFF_DMX_DATA], slots);
 
     /* Merge HTP : source identifiee par le CID E1.31 (16 octets, offset 22). */
     Merge_Submit(universe, &buf[OFF_CID], &buf[OFF_DMX_DATA], slots);
