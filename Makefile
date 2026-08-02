@@ -392,7 +392,7 @@ $(BUILD_DIR):
 # compilation separee par sous-partie
 # (ne produit que les .o du groupe, pas d'edition de liens)
 #######################################
-.PHONY: core drivers lwip middlewares
+.PHONY: core drivers lwip middlewares webserv
 core: $(CORE_OBJ)
 	@echo "== Core compile ($(words $(CORE_OBJ)) objets) =="
 drivers: $(DRIVERS_OBJ)
@@ -404,6 +404,19 @@ middlewares: $(MIDDLEWARES_OBJ)
 
 flash:
 	dfu-util -a0 -s 0x8000000 -D $(BUILD_DIR)/$(TARGET).bin -R
+
+#######################################
+# web UI local test server
+#######################################
+# Rejoue en Python/HTTP la meme structure de pages que Core/Src/web_ui.c
+# pour valider mise en page/navigation/JS sans flasher. Voir l'entete de
+# tools/webserv_sim.py pour ce qui n'est PAS reproduit (contrainte memoire
+# 6 Ko, httpd raw LwIP, persistance SD reelle).
+WEBSERV_PORT ?= 8080
+WEBSERV_MODE ?= led
+webserv:
+	python3 tools/webserv_sim.py --port $(WEBSERV_PORT) --mode $(WEBSERV_MODE)
+
 #######################################
 # clean up
 #######################################
