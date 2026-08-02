@@ -547,8 +547,19 @@ static void dmx_to_ws2815(uint16_t universe, uint8_t *data, uint16_t len)
     RX_LED_SET_ON();
     rx_led_last_ms = HAL_GetTick();
 
-    /* Instantané pour la matrice de canaux de l'interface web (/dmx) */
+    /* Instantané pour la matrice de canaux de l'interface web (/dmx) :
+     * doit refléter le flux réseau réel même pendant un test (c'est un
+     * outil de diagnostic), donc appelé avant la garde ci-dessous. */
     WebUI_NotifyDmxData(universe, data, len);
+
+    /* Séquence de test active (/test) : ce callback s'exécute en réaction
+     * immédiate à chaque trame reçue, hors de la boucle principale — sans
+     * cette garde, le trafic réseau écraserait en continu all_chains[]
+     * (mode LED) ou les slots DMX (mode DMX) entre deux rafraîchissements
+     * de TestSeq_Task(), rendant le test instable ou totalement invisible
+     * malgré le bandeau "les sorties ne refletent pas le reseau". */
+    if (TestSeq_IsActive())
+        return;
 
     if (Mode_Get() == MODE_DMX) {
         /* 2 ports DMX : port i suit l'univers de outputs[i] (i=0,1). */

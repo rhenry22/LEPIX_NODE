@@ -340,7 +340,12 @@ def build_config():
               f"<tr><th>Masque</th><td><input name=mk value={'.'.join(map(str,S.netmask))}></td></tr>"
               f"<tr><th>Passerelle</th><td><input name=gw value={'.'.join(map(str,S.gateway))}></td></tr>"
               f"</table>")
-        n += (f"<h2>Protocole</h2><select name=pr>"
+        n += ("<h2>Protocole</h2>"
+              '<p style=color:#78828c;font-size:12px;margin:0 0 6px>'
+              'Art-Net et sACN sont recus simultanement et fusionnes (HTP) — ce '
+              'reglage est indicatif (affichage/fixture perte de signal), il ne '
+              'coupe aucun des deux protocoles.</p>'
+              f"<select name=pr>"
               f"<option value=0 {'selected' if S.protocol==0 else ''}>Art-Net</option>"
               f"<option value=1 {'selected' if S.protocol==1 else ''}>sACN</option>"
               f"<option value=2 {'selected' if S.protocol==2 else ''}>DMX (UART)</option></select>")

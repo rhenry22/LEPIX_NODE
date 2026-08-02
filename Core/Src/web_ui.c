@@ -559,7 +559,12 @@ static void build_config(webui_page_t *p)
         cfg->gateway[0], cfg->gateway[1], cfg->gateway[2], cfg->gateway[3]);
 
     n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
-        "<h2>Protocole</h2><select name=pr>"
+        "<h2>Protocole</h2>"
+        "<p style=color:#78828c;font-size:12px;margin:0 0 6px>"
+        "Art-Net et sACN sont recus simultanement et fusionnes (HTP) — ce "
+        "reglage est indicatif (affichage/fixture perte de signal), il ne "
+        "coupe aucun des deux protocoles.</p>"
+        "<select name=pr>"
         "<option value=0 %s>Art-Net</option>"
         "<option value=1 %s>sACN</option>"
         "<option value=2 %s>DMX (UART)</option></select>",
