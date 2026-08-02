@@ -35,4 +35,9 @@ void WebUI_GetStats(WebUI_Stats_t *out);
  * trame dans le slot de chaque sortie dont l'univers correspond. */
 void WebUI_NotifyDmxData(uint16_t universe, const uint8_t *data, uint16_t len);
 
+/* Stabilité : Config_Save() (accès SD) n'est jamais appelé depuis le CGI —
+ * le CGI se contente de lever ce flag, consommé par WebUI_Task() dans la
+ * boucle principale, hors du contexte réseau. À appeler à chaque tour. */
+void WebUI_Task(void);
+
 #endif /* WEB_UI_H */

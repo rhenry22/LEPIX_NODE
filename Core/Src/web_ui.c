@@ -16,6 +16,8 @@
 #include "ws2815.h"   /* WS2815_MAX_LEDS */
 #include "sacn_rx.h"  /* sacn_rx_set_universes (application a chaud) */
 #include "lwip.h"     /* MX_LWIP_ApplyNetworkConfig (reseau a chaud)  */
+#include "mode_select.h"
+#include "test_seq.h"
 #include "lwip/apps/httpd.h"
 #include "lwip/apps/fs.h"
 #include "lwip/netif.h"
@@ -93,21 +95,38 @@ void WebUI_NotifyDmxData(uint16_t universe, const uint8_t *data, uint16_t len)
  *  deux connexions TCP concurrentes.
  * ───────────────────────────────────────────────────────────────────────── */
 
-#define WEBUI_BUF_SIZE   6144   /* la page /dmx (HTML+JS) approche 4 Ko */
-#define WEBUI_NUM_BUFS   2
+#define WEBUI_BUF_SIZE     6144   /* la page /dmx (HTML+JS) approche 4 Ko */
+#define WEBUI_NUM_BUFS     2
+#define WEBUI_BUF_STALE_MS 15000u /* un buffer non refermé au-delà est repris
+                                    * de force : évite qu'une connexion TCP
+                                    * jamais close (client coupé, etc.) ne
+                                    * finisse par affamer les 2 buffers et
+                                    * geler toute l'UI. */
 
 typedef struct {
-    int    used;
-    char   buf[WEBUI_BUF_SIZE];
+    int      used;
+    uint32_t opened_ms;
+    char     buf[WEBUI_BUF_SIZE];
 } webui_page_t;
 
 static webui_page_t s_pages[WEBUI_NUM_BUFS];
 
 static webui_page_t *page_alloc(void)
 {
+    uint32_t now = HAL_GetTick();
     for (int i = 0; i < WEBUI_NUM_BUFS; i++) {
         if (!s_pages[i].used) {
-            s_pages[i].used = 1;
+            s_pages[i].used      = 1;
+            s_pages[i].opened_ms = now;
+            return &s_pages[i];
+        }
+    }
+    /* Aucun buffer libre : reprendre de force le plus ancien s'il traîne
+     * depuis trop longtemps (connexion mal fermée côté client/httpd). */
+    for (int i = 0; i < WEBUI_NUM_BUFS; i++) {
+        if (now - s_pages[i].opened_ms >= WEBUI_BUF_STALE_MS) {
+            s_pages[i].used      = 1;
+            s_pages[i].opened_ms = now;
             return &s_pages[i];
         }
     }
@@ -164,17 +183,33 @@ static int emit_header(char *b, int cap, const char *title,
         ".ok{color:#4caf50;font-weight:600}.off{color:#78828c}"
         ".pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:13px;font-weight:600}"
         ".pill.on{background:#14331c;color:#4caf50}.pill.no{background:#2a2020;color:#c86}"
+        ".card{background:#161a20;border-radius:8px;padding:14px 16px;margin:8px 0}"
+        ".card h3{margin:0 0 6px;font-size:15px;display:flex;align-items:center;gap:8px}"
+        ".card label{display:block;font-size:12px;color:#78828c;margin:8px 0 2px}"
+        ".warnbar{background:#3a2010;color:#f5b26b;border:1px solid #6b3a12;border-radius:6px;"
+        "padding:10px 14px;margin:0 0 16px;font-weight:600}"
         "</style></head><body>"
+        "%s"
         "<header>LEPIX Node</header><nav>"
         "<a href=/ class=%s>Statut</a>"
         "<a href=/flux class=%s>Reception</a>"
         "<a href=/dmx class=%s>Canaux</a>"
+        "<a href=/groupes class=%s>Sorties</a>"
+        "<a href=/test class=%s>Test</a>"
         "<a href=/config class=%s>Configuration</a>"
         "</nav><main>",
         title,
+        TestSeq_IsActive()
+            ? "<div style=background:#c0392b;color:#fff;text-align:center;"
+              "padding:6px;font-weight:600;font-size:13px>"
+              "SEQUENCE DE TEST EN COURS — les sorties ne refletent pas le reseau"
+              "</div>"
+            : "",
         active == 0 ? "on" : "",
         active == 1 ? "on" : "",
         active == 2 ? "on" : "",
+        active == 4 ? "on" : "",
+        active == 5 ? "on" : "",
         active == 3 ? "on" : "");
     return n;
 }
@@ -353,6 +388,146 @@ static void build_dmxdata(webui_page_t *p, int idx)
     p->buf[WEBUI_BUF_SIZE - 1] = '\0';
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+ *  Onglet "Sorties" : hiérarchie par groupe — une carte par sortie physique
+ *  avec son ID, son univers, son protocole actif, son état et un lien
+ *  direct vers sa matrice de canaux. Vue de synthèse, lecture seule
+ *  (l'édition reste sur /config pour ne pas dupliquer la logique de save).
+ * ───────────────────────────────────────────────────────────────────────── */
+static void build_groupes(webui_page_t *p)
+{
+    DeviceConfig_t *cfg = Config_Get();
+    WebUI_Stats_t st;
+    WebUI_GetStats(&st);
+    uint32_t now = HAL_GetTick();
+    bool is_dmx_mode = (Mode_Get() == MODE_DMX);
+
+    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Sorties", 2, 4);
+
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "<h2>Sorties (%s)</h2>",
+        is_dmx_mode ? "mode DMX filaire — 2 ports" : "mode LED — 4 chaines WS2815");
+
+    for (int i = 0; i < MAX_OUTPUTS; i++) {
+        if (is_dmx_mode && i >= 2)
+            break;   /* seuls les ports 0/1 existent en mode DMX */
+
+        OutputConfig_t *o = &cfg->outputs[i];
+        uint16_t len = s_dmx_len[i];
+        uint32_t age = len ? (now - s_dmx_ms[i]) : 0;
+        bool recent = len && (age < 5000);
+        char frame_desc[32];
+        if (!len)
+            snprintf(frame_desc, sizeof(frame_desc), "aucune");
+        else
+            snprintf(frame_desc, sizeof(frame_desc), "il y a %lu.%lu s",
+                     (unsigned long)(age / 1000), (unsigned long)((age % 1000) / 100));
+
+        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+            "<div class=card><h3>Sortie %d"
+            "<span class='pill %s'>%s</span>"
+            "<span class='pill %s'>%s</span>"
+            "</h3>"
+            "<table>"
+            "<tr><th>Univers</th><td>%u</td></tr>"
+            "<tr><th>%s</th><td>%u</td></tr>"
+            "<tr><th>Protocole entree</th><td>%s</td></tr>"
+            "<tr><th>Derniere trame</th><td>%s</td></tr>"
+            "</table>"
+            "<p><a href='/dmx' style=color:#90caf9>Voir la matrice des canaux &rarr;</a></p>"
+            "</div>",
+            i + 1,
+            o->enabled ? "on" : "no", o->enabled ? "ACTIVE" : "COUPEE",
+            recent ? "on" : "no", recent ? "TRAME RECENTE" : "SILENCE",
+            o->universe,
+            is_dmx_mode ? "Port physique" : "LEDs",
+            is_dmx_mode ? (unsigned)i : o->led_count,
+            proto_name(cfg->protocol),
+            frame_desc);
+    }
+
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "<p style=color:#78828c;font-size:13px>Rafraichissement auto toutes les 2 s. "
+        "Pour editer univers/LEDs/activation, voir <a href=/config style=color:#90caf9>Configuration</a>.</p>"
+        "</main></body></html>");
+
+    p->buf[WEBUI_BUF_SIZE - 1] = '\0';
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ *  Onglet "Test" : séquences de test (chenillard, degrade, flash, couleur
+ *  unie) injectees via test_seq.c, prioritaires sur le flux reseau tant
+ *  qu'actives. CGI /testctl?pattern=..&out=..&rgb=..&action=start|stop.
+ * ───────────────────────────────────────────────────────────────────────── */
+static const char *pattern_name(TestPattern_t p)
+{
+    switch (p) {
+        case TEST_PATTERN_SOLID:   return "Couleur / valeur unie";
+        case TEST_PATTERN_CHASE:   return "Chenillard";
+        case TEST_PATTERN_RAINBOW: return "Degrade";
+        case TEST_PATTERN_FLASH:   return "Flash";
+        default:                   return "Aucun";
+    }
+}
+
+static void build_test(webui_page_t *p)
+{
+    DeviceConfig_t *cfg = Config_Get();
+    bool active = TestSeq_IsActive();
+    TestPattern_t cur_pattern; uint8_t cur_out; uint32_t remaining_ms;
+    TestSeq_GetStatus(&cur_pattern, &cur_out, &remaining_ms);
+    bool is_dmx_mode = (Mode_Get() == MODE_DMX);
+
+    int n = emit_header(p->buf, WEBUI_BUF_SIZE, "Test", active ? 2 : 0, 5);
+
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "<h2>Sequence de test</h2>"
+        "<p style=color:#78828c>Injecte un motif directement sur les sorties, "
+        "sans attendre de flux reseau. Coupure automatique apres 10 min "
+        "d'inactivite operateur, par securite.</p>");
+
+    if (active) {
+        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+            "<div class=warnbar>Test actif : %s sur %s — arret automatique dans %lu s</div>"
+            "<form action=/testctl method=get>"
+            "<input type=hidden name=action value=stop>"
+            "<button type=submit style=background:#c0392b>Arreter le test</button>"
+            "</form>",
+            pattern_name(cur_pattern),
+            cur_out == TEST_SEQ_ALL_OUTPUTS ? "toutes les sorties" : "une sortie",
+            (unsigned long)(remaining_ms / 1000));
+    }
+
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "<h2>Lancer un test</h2>"
+        "<form action=/testctl method=get>"
+        "<input type=hidden name=action value=start>"
+        "<label>Motif</label><select name=pattern>"
+        "<option value=1>Couleur / valeur unie</option>"
+        "<option value=2>Chenillard</option>"
+        "<option value=3 %s>Degrade (LED uniquement)</option>"
+        "<option value=4>Flash</option>"
+        "</select>"
+        "<label>Sortie / port cible</label><select name=out>"
+        "<option value=255>Toutes</option>",
+        is_dmx_mode ? "disabled" : "");
+    for (int i = 0; i < MAX_OUTPUTS; i++) {
+        if (is_dmx_mode && i >= 2) break;
+        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+            "<option value=%d>%d — univers %u</option>",
+            i, i + 1, cfg->outputs[i].universe);
+    }
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "</select>"
+        "<label>Couleur (motif Couleur unie, mode LED)</label>"
+        "<input type=color name=rgb value=#ffffff>"
+        "<p><button type=submit>Lancer</button></p>"
+        "</form>"
+        "</main></body></html>");
+
+    p->buf[WEBUI_BUF_SIZE - 1] = '\0';
+}
+
 /* Formulaire de configuration. Un seul GET /save reprend tous les champs. */
 static void build_config(webui_page_t *p)
 {
@@ -409,6 +584,8 @@ static void build_config(webui_page_t *p)
  *  CGI : GET /save?nm=..&ip=..&...
  * ───────────────────────────────────────────────────────────────────────── */
 
+static volatile bool s_save_pending = false;
+
 static const char *find_param(int n, char *keys[], char *vals[], const char *k)
 {
     for (int i = 0; i < n; i++)
@@ -447,8 +624,14 @@ static const char *cgi_save(int index, int n, char *keys[], char *vals[])
         cfg->outputs[i].enabled = (find_param(n, keys, vals, key) != NULL);
 
         snprintf(key, sizeof(key), "u%d", i);
-        if ((v = find_param(n, keys, vals, key)) != NULL)
-            cfg->outputs[i].universe = (uint16_t)atoi(v);
+        if ((v = find_param(n, keys, vals, key)) != NULL) {
+            /* Univers sACN/Art-Net : 0-63999 (borne large mais finie,
+             * evite qu'une valeur aberrante ne se propage a la config). */
+            long u = atol(v);
+            if (u < 0) u = 0;
+            if (u > 63999) u = 63999;
+            cfg->outputs[i].universe = (uint16_t)u;
+        }
 
         snprintf(key, sizeof(key), "l%d", i);
         if ((v = find_param(n, keys, vals, key)) != NULL) {
@@ -459,7 +642,11 @@ static const char *cgi_save(int index, int n, char *keys[], char *vals[])
         }
     }
 
-    Config_Save();  /* persiste sur SD (no-op si SD absente) */
+    /* Stabilité : ne PAS appeler Config_Save() ici. L'accès SD (FatFs)
+     * peut prendre plusieurs dizaines de ms, en plein traitement CGI donc
+     * en plein MX_LWIP_Process() — un bloqueur potentiel de la pile réseau.
+     * On lève un flag consommé par WebUI_Task() dans la boucle principale. */
+    s_save_pending = true;
 
     /* Application a chaud (sans reboot) : le routage des sorties (enabled,
      * universe, led_count) est relu a chaque trame, donc deja effectif.
@@ -482,8 +669,44 @@ static const char *cgi_save(int index, int n, char *keys[], char *vals[])
     return "/config";
 }
 
+/* CGI /testctl?action=start&pattern=N&out=N&rgb=#rrggbb
+ *          /testctl?action=stop */
+static const char *cgi_testctl(int index, int n, char *keys[], char *vals[])
+{
+    (void)index;
+    const char *v = find_param(n, keys, vals, "action");
+
+    if (v && strcmp(v, "stop") == 0) {
+        TestSeq_Stop();
+        return "/test";
+    }
+
+    TestPattern_t pattern = TEST_PATTERN_SOLID;
+    if ((v = find_param(n, keys, vals, "pattern")) != NULL) {
+        int pv = atoi(v);
+        if (pv >= TEST_PATTERN_SOLID && pv <= TEST_PATTERN_FLASH)
+            pattern = (TestPattern_t)pv;
+    }
+
+    uint8_t out = TEST_SEQ_ALL_OUTPUTS;
+    if ((v = find_param(n, keys, vals, "out")) != NULL) {
+        int ov = atoi(v);
+        if (ov >= 0 && ov < MAX_OUTPUTS)
+            out = (uint8_t)ov;
+    }
+
+    uint32_t rgb = 0xFFFFFF;
+    if ((v = find_param(n, keys, vals, "rgb")) != NULL && v[0] == '#') {
+        rgb = (uint32_t)strtoul(v + 1, NULL, 16);
+    }
+
+    TestSeq_Start(pattern, out, rgb);
+    return "/test";
+}
+
 static const tCGI s_cgis[] = {
-    { "/save", cgi_save },
+    { "/save",    cgi_save },
+    { "/testctl", cgi_testctl },
 };
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -517,6 +740,14 @@ int fs_open_custom(struct fs_file *file, const char *name)
         p = page_alloc();
         if (!p) return 0;
         build_dmxdata(p, name[8] - '0');
+    } else if (strcmp(name, "/groupes") == 0 || strcmp(name, "/groupes.html") == 0) {
+        p = page_alloc();
+        if (!p) return 0;
+        build_groupes(p);
+    } else if (strcmp(name, "/test") == 0 || strcmp(name, "/test.html") == 0) {
+        p = page_alloc();
+        if (!p) return 0;
+        build_test(p);
     } else {
         return 0;   /* non géré -> 404 */
     }
@@ -566,4 +797,12 @@ void WebUI_Init(void)
 {
     httpd_init();
     http_set_cgi_handlers(s_cgis, LWIP_ARRAYSIZE(s_cgis));
+}
+
+void WebUI_Task(void)
+{
+    if (s_save_pending) {
+        s_save_pending = false;
+        Config_Save();   /* accès SD hors contexte réseau */
+    }
 }

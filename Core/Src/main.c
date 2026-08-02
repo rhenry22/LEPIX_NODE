@@ -56,6 +56,7 @@
 #include "sd_selftest.h"
 #include "dmx.h"
 #include "gpio_test.h"
+#include "test_seq.h"
 #include "watchdog.h"
 #include "merge.h"
 
@@ -344,6 +345,9 @@ int main(void)
   while (1)
   {
     Watchdog_Refresh();   /* recharge le watchdog a chaque iteration */
+#ifdef ENABLE_WEB_UI
+    WebUI_Task();          /* consomme la sauvegarde SD differee (/save) */
+#endif
     /* Pompe LwIP (mode raw, pas de FreeRTOS) */
     MX_LWIP_Process();
     /* USER CODE BEGIN WHILE */
@@ -358,7 +362,16 @@ int main(void)
 #endif
     MX_LWIP_Process();
 
-    if (Mode_Get() == MODE_DMX) {
+    /* Séquence de test (onglet /test) : prioritaire sur le flux réseau tant
+     * qu'active. TestSeq_Task() gère elle-même LED (all_chains) vs DMX
+     * (DMX_SetSlots/Commit) selon Mode_Get(), et pousse ses propres trames. */
+    if (TestSeq_Task()) {
+        /* Un test est actif : ne pas laisser le réseau écraser la sortie
+         * ce tour-ci, mais garder DMX_Task() pour le flux continu 40 Hz
+         * (le pattern de test a déjà écrit les slots avant Commit). */
+        if (Mode_Get() == MODE_DMX)
+            DMX_Task();
+    } else if (Mode_Get() == MODE_DMX) {
         /* Rafraîchissement DMX512 à 40 Hz (flux continu vers le XLR) */
         DMX_Task();
     } else {
