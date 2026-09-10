@@ -16,6 +16,7 @@
 #include "web_ui.h"
 #include "merge.h"
 #include "log_capture.h"
+#include "config.h"
 
 extern struct netif gnetif;
 
@@ -24,8 +25,17 @@ extern struct netif gnetif;
 /* ------------------------------------------------------------------ */
 #define ARTNET_PORT         6454
 #define ARTNET_ID           "Art-Net"
-#define ARTNET_OPCODE_DMX   0x5000   /* OpDmx (little-endian : 0x00 0x50) */
+#define ARTNET_OPCODE_DMX   0x5000   /* OpDmx (little-endian : 0x00 0x50)   */
+#define ARTNET_OPCODE_POLL  0x2000   /* OpPoll (little-endian : 0x00 0x20)  */
 #define ARTNET_DMX_CHANNELS 512
+
+/* ArtPollReply : taille et identite du node annoncees aux controleurs. */
+#define ARTNET_POLLREPLY_SIZE  239
+#define ARTNET_SHORT_NAME      "LEPIX_NODE"
+#define ARTNET_LONG_NAME       "LEPIX Art-Net/sACN Node (STM32F407)"
+
+/* PCB conserve pour pouvoir emettre les ArtPollReply. */
+static struct udp_pcb *s_pcb = NULL;
 
 /* ------------------------------------------------------------------ */
 /*  Handle UART debug (déclaré extern dans main.c par CubeMX)          */
@@ -81,6 +91,79 @@ typedef struct __attribute__((packed)) {
 } ArtDmx_t;
 
 /* ------------------------------------------------------------------ */
+/*  ArtPollReply : rend le node visible dans les controleurs Art-Net   */
+/*  (grandMA, QLC+, Resolume...). Format E1.20 / Art-Net 4, 239 octets. */
+/*  Offsets repris de la spec Art-Net (reference : projet pixfrog).     */
+/* ------------------------------------------------------------------ */
+static void artnet_copy_bounded(uint8_t *dst, int cap, const char *src)
+{
+    int i = 0;
+    if (src) {
+        for (; i < cap - 1 && src[i]; i++)
+            dst[i] = (uint8_t)src[i];
+    }
+    for (; i < cap; i++)
+        dst[i] = 0;   /* padding + terminaison */
+}
+
+static void artnet_send_poll_reply(const ip_addr_t *dst_addr, u16_t dst_port)
+{
+    if (s_pcb == NULL)
+        return;
+
+    uint8_t pkt[ARTNET_POLLREPLY_SIZE];
+    memset(pkt, 0, sizeof(pkt));
+
+    /* IP locale + MAC depuis le netif. */
+    const ip4_addr_t *ip4 = netif_ip4_addr(&gnetif);
+    uint32_t ip_be = ip4_addr_get_u32(ip4);   /* deja en network order */
+    const uint8_t *mac = gnetif.hwaddr;
+
+    /* Univers annonces : ceux des 4 sorties (nibble bas de sub_uni). */
+    DeviceConfig_t *cfg = Config_Get();
+
+    memcpy(pkt, ARTNET_ID, 8);          /* "Art-Net\0"                       */
+    pkt[8]  = 0x00; pkt[9] = 0x21;      /* OpPollReply (0x2100 LE)           */
+    memcpy(pkt + 10, &ip_be, 4);        /* IP du node                        */
+    pkt[14] = 0x36; pkt[15] = 0x19;     /* port 6454 (LE)                    */
+    pkt[16] = 0x00; pkt[17] = 0x01;     /* VersInfo H/L                      */
+    pkt[18] = 0x00;                     /* NetSwitch                         */
+    pkt[19] = 0x00;                     /* SubSwitch                         */
+    pkt[20] = 0x00; pkt[21] = 0x00;     /* Oem (inconnu)                     */
+    pkt[22] = 0x00;                     /* UbeaVersion                       */
+    pkt[23] = 0xD0;                     /* Status1 : indicateurs normaux     */
+    pkt[24] = 0xFF; pkt[25] = 0xFF;     /* EstaMan = 0xFFFF (inconnu)        */
+
+    artnet_copy_bounded(pkt + 26,  18, ARTNET_SHORT_NAME);
+    artnet_copy_bounded(pkt + 44,  64, ARTNET_LONG_NAME);
+    artnet_copy_bounded(pkt + 108, 64, "OK");   /* NodeReport                */
+
+    pkt[172] = 0x00; pkt[173] = 0x04;   /* NumPorts = 4                      */
+    for (uint8_t pnum = 0; pnum < 4; pnum++) {
+        if (cfg->outputs[pnum].enabled) {
+            pkt[174 + pnum] = 0x80;     /* PortType : sortie DMX512          */
+            pkt[182 + pnum] = 0x80;     /* GoodOutputA : emission active     */
+        }
+        pkt[190 + pnum] = (uint8_t)(cfg->outputs[pnum].universe & 0x0F); /* SwOut */
+    }
+    pkt[200] = 0x00;                    /* Style : StNode                    */
+
+    memcpy(pkt + 201, mac, 6);          /* MAC                               */
+    memcpy(pkt + 207, &ip_be, 4);       /* BindIp                            */
+    pkt[211] = 0x01;                    /* BindIndex (primaire)              */
+    pkt[212] = 0x08;                    /* Status2 : DHCP capable            */
+
+    struct pbuf *pb = pbuf_alloc(PBUF_TRANSPORT, sizeof(pkt), PBUF_RAM);
+    if (pb == NULL)
+        return;
+    memcpy(pb->payload, pkt, sizeof(pkt));
+    /* Reponse a l'emetteur (unicast) ; les controleurs l'acceptent aussi
+     * en broadcast, mais l'unicast vers le poller est le plus sur. */
+    udp_sendto(s_pcb, pb, dst_addr, dst_port);
+    pbuf_free(pb);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Callback LwIP UDP                                                   */
 /* ------------------------------------------------------------------ */
 static void artnet_recv_cb(void *arg,
@@ -109,6 +192,12 @@ static void artnet_recv_cb(void *arg,
     /* Vérification de l'ID "Art-Net" */
     if (memcmp(pkt->id, ARTNET_ID, 7) != 0)
         goto done;
+
+    /* ArtPoll : un controleur cherche les nodes -> repondre par ArtPollReply */
+    if (pkt->opcode == ARTNET_OPCODE_POLL) {
+        artnet_send_poll_reply(addr, ARTNET_PORT);
+        goto done;
+    }
 
     /* Vérification OpCode OpDmx (0x5000 little-endian) */
     if (pkt->opcode != ARTNET_OPCODE_DMX)
@@ -161,6 +250,7 @@ void artnet_init(void)
         return;
     }
 
+    s_pcb = pcb;   /* conserve pour emettre les ArtPollReply */
     udp_recv(pcb, artnet_recv_cb, NULL);
 
     debug_printf("[ArtNet] Ecoute sur %s:" ARTNET_PORT_STR "\r\n",
