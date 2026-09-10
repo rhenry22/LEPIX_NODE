@@ -93,12 +93,13 @@ typedef struct {
 } DeviceConfig_t;
 
 /* Default values */
-/* Défauts = IP statique 2.0.0.3/24 (convention Art-Net réseau 2.x.x.x)
- * même sans carte SD. Le dernier octet est surchargé au boot selon le
- * mode (jumper) : node DMX -> .3, node LED -> .4 (voir main.c). */
+/* Défauts = DHCP pour le moment (adresse fournie par le serveur du réseau).
+ * Les champs IP/netmask/gateway ci-dessous servent de repli si l'on
+ * repasse en statique. En DHCP, la surcharge IP-par-mode de main.c
+ * (dernier octet .3/.4) reste sans effet. */
 #define CONFIG_DEFAULT { \
     .version    = CONFIG_VERSION, \
-    .net_mode   = NET_STATIC, \
+    .net_mode   = NET_DHCP, \
     .ip         = {2, 0, 0, 3}, \
     .netmask    = {255, 255, 255, 0}, \
     .gateway    = {2, 0, 0, 1}, \
