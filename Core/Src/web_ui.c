@@ -744,6 +744,92 @@ static const tCGI s_cgis[] = {
 };
 
 /* ─────────────────────────────────────────────────────────────────────────
+ *  API REST/JSON (inspiree de pixfrog) — telemetrie et config lisibles par
+ *  un script ou une future SPA. En-tete HTTP JSON genere a la main.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+static int emit_json_header(char *b, int cap)
+{
+    return snprintf(b, cap,
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: application/json\r\n"
+        "Access-Control-Allow-Origin: *\r\n"   /* lecture cross-origin (dashboard) */
+        "Connection: close\r\n"
+        "\r\n");
+}
+
+/* GET /api/status : telemetrie live (reseau, compteurs, sorties). */
+static void build_api_status(webui_page_t *p)
+{
+    DeviceConfig_t *cfg = Config_Get();
+    WebUI_Stats_t st;
+    WebUI_GetStats(&st);
+
+    int link = netif_is_link_up(&gnetif);
+    uint32_t up_s = HAL_GetTick() / 1000u;
+
+    int n = emit_json_header(p->buf, WEBUI_BUF_SIZE);
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "{"
+        "\"link\":%s,"
+        "\"ip\":\"%s\","
+        "\"mode\":\"%s\","
+        "\"uptime_s\":%lu,"
+        "\"protocol\":\"%s\","
+        "\"artnet_rx\":%lu,"
+        "\"artnet_universe\":%u,"
+        "\"sacn_rx\":%lu,"
+        "\"sacn_universe\":%u,"
+        "\"outputs\":[",
+        link ? "true" : "false",
+        ip4addr_ntoa(netif_ip4_addr(&gnetif)),
+        cfg->net_mode == NET_DHCP ? "dhcp" : "static",
+        (unsigned long)up_s,
+        proto_name(cfg->protocol),
+        (unsigned long)st.artnet_packets, st.artnet_last_universe,
+        (unsigned long)st.sacn_packets,   st.sacn_last_universe);
+
+    for (int i = 0; i < MAX_OUTPUTS; i++) {
+        OutputConfig_t *o = &cfg->outputs[i];
+        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+            "%s{\"enabled\":%s,\"universe\":%u,\"led_count\":%u}",
+            i ? "," : "",
+            o->enabled ? "true" : "false", o->universe, o->led_count);
+    }
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n, "]}");
+    p->buf[WEBUI_BUF_SIZE - 1] = '\0';
+}
+
+/* GET /api/config : configuration courante en JSON. */
+static void build_api_config(webui_page_t *p)
+{
+    DeviceConfig_t *cfg = Config_Get();
+    int n = emit_json_header(p->buf, WEBUI_BUF_SIZE);
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+        "{"
+        "\"net_mode\":%u,"
+        "\"ip\":\"%u.%u.%u.%u\","
+        "\"netmask\":\"%u.%u.%u.%u\","
+        "\"gateway\":\"%u.%u.%u.%u\","
+        "\"protocol\":%u,"
+        "\"outputs\":[",
+        cfg->net_mode,
+        cfg->ip[0], cfg->ip[1], cfg->ip[2], cfg->ip[3],
+        cfg->netmask[0], cfg->netmask[1], cfg->netmask[2], cfg->netmask[3],
+        cfg->gateway[0], cfg->gateway[1], cfg->gateway[2], cfg->gateway[3],
+        cfg->protocol);
+    for (int i = 0; i < MAX_OUTPUTS; i++) {
+        OutputConfig_t *o = &cfg->outputs[i];
+        n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n,
+            "%s{\"enabled\":%u,\"universe\":%u,\"led_count\":%u,\"max_current_A\":%u}",
+            i ? "," : "",
+            o->enabled, o->universe, o->led_count, o->max_current_A);
+    }
+    n += snprintf(p->buf + n, WEBUI_BUF_SIZE - n, "]}");
+    p->buf[WEBUI_BUF_SIZE - 1] = '\0';
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
  *  Hooks « custom files » du httpd
  * ───────────────────────────────────────────────────────────────────────── */
 
@@ -782,6 +868,14 @@ int fs_open_custom(struct fs_file *file, const char *name)
         p = page_alloc();
         if (!p) return 0;
         build_test(p);
+    } else if (strcmp(name, "/api/status") == 0) {
+        p = page_alloc();
+        if (!p) return 0;
+        build_api_status(p);
+    } else if (strcmp(name, "/api/config") == 0) {
+        p = page_alloc();
+        if (!p) return 0;
+        build_api_config(p);
     } else {
         return 0;   /* non géré -> 404 */
     }
